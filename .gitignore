@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Logs and runtime leftovers (the real runtime state lives in %LOCALAPPDATA%\minis, never here)
+*.log
+*.pid
+
+# Local overrides and local data
+/minis.json
+/art/hand/
+/qa/local/
+
+# Large preview reels: anything over ~5 MB is regenerated with tools/make_previews.py,
+# not committed. (git cannot filter by size; add a path here if a reel grows past that.)
+
+# Editors / OS
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+.DS_Store
