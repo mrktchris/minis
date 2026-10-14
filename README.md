@@ -13,14 +13,19 @@ Everything is visual. It reads numbers, it never touches your agents, your windo
 
 ## Features
 
-- **Auto-detection**: Claude Code and Codex from their local session transcripts (numbers and enums only), seven
+- **Auto-detection**: Claude Code and Codex from their local session transcripts (numbers and enums only), eleven
   other programs from the process table. No hooks, no config edits, nothing installed into your agents.
+  `python minis.py detect` shows what is seen right now and how.
 - **Two slots, a director**: at most two fighters at a time, assigned by recency, kept stable; a program that vanishes
-  keeps its slot for a few seconds; a slot with nothing to show hides.
+  keeps its slot for a few seconds. **Dormant partner** (V5.1): the most recently used other program keeps its slot
+  for 24 h after it went quiet, asleep and dimmed, until a different program becomes active; with nothing else to
+  show, a generic **sparring bot** takes the empty side, so one fighter is never alone on the stage.
 - **Live HUD plate** per fighter: program name, state (`working idle done waiting? sleeping limit`), context fill of
   the active session as a 10-segment bar, and a plan figure with a reset countdown when it can be trusted.
 - **Bouts from usage**: clash when either is working, spar or ranged duel when neither is, a handoff when one
-  finishes a task, a KO and a consoling visit when one hits its limit, nothing when one is asleep.
+  finishes a task, a KO and a consoling visit when one hits its limit. **Rival mode** (V5.1, on by default): a
+  sleeping partner is woken every 8-15 min for a best-of-3 and goes back to sleep; while you are working, a short
+  exchange every 3-6 min instead. The plate keeps saying `sleeping` throughout.
 - **Matches**: best-of-3 rounds with HP, `ROUND / FIGHT! / K.O. / WINNER` banners, hit, block, dust and KO effects,
   and one anime-homage ultimate per character. Winners are drawn by a health score (`decided`) or evenly (`random`).
 - **Scoreboard widget**: W-L per character, mode, a 7-day context sparkline, HP bars during a match, three buttons.
@@ -73,7 +78,10 @@ the stage is black), taken by `tools/arena_capture.py`; nothing on the desktop i
   (`~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/.../rollout-*.jsonl`); the other programs are matched from the
   process table through ctypes and are *working* while their process tree uses more than 15% of one core.
 - The director (`minis_core/director.py`) picks at most two sources by recency and writes `assign.json` atomically.
-  A slot keeps its source until another one is active **and** its own has been idle for more than 60 s.
+  A slot keeps its source until another one is active **and** its own has been idle for more than 60 s. A source
+  that stops being reported stays a candidate for `dormant_hours` (24) after its last activity, so the slot keeps it
+  asleep (`"dormant": true`); what the director has seen survives a restart in `seen.json` (source id, last
+  activity, character, program - nothing else). A lone fighter gets the `sparring` pseudo-source as a partner.
 - Each slot process runs a fighter (`minis.py`, `minis_core/brain.py`), draws a per-pixel-alpha layered window over
   the taskbar, and talks to the other slot through one small JSON file each (`bus/a.json`, `bus/b.json`). Both sides
   compute the same bout timeline from the same invite, so a strike's contact frame and the other fighter's hit
@@ -118,14 +126,17 @@ python minis.py pause | resume   freeze every fighter on one frame (plates keep 
 python minis.py plates on|off    show or hide both HUD plates
 python minis.py winners decided|random   how match winners are drawn (default: decided)
 python minis.py demo [spar|clash|ranged|match]   start one bout now
+python minis.py rival on|off     rival mode: wake a sleeping partner (or the sparring bot) for a match now and then
+python minis.py detect           which known AI programs the sources see right now, and how (names and numbers only)
 python minis.py monitors         list monitors for the arena
 python minis.py arena --monitor N [--freeze] [--seconds S]   arena mode on monitor N; `arena stop` to leave
 python minis.py selftest-gui     real-desktop check: both windows visible over the taskbar, survive a taskbar raise
-python -m unittest discover -s tests          281 tests (8 skipped unless MINIS_INTEGRATION=1)
+python -m unittest discover -s tests          314 tests (11 skipped unless MINIS_INTEGRATION=1)
 ```
 
 Right-click a fighter or its plate for *Quit this mini / Hide for 1 hour / Hide (Show) HUD plates / Pause all
-animations / Start a bout now / Start a match now / Winners: decided <-> random / Arena mode...*.
+animations / Start a bout now / Start a match now / Winners: decided <-> random / Arena mode... / Rival mode: on <->
+off*.
 
 The roam zone defaults to screen x 40-900, the empty stretch left of centred taskbar icons measured on the author's
 2560x1440 display at 100% DPI. A different icon layout needs a different `zone` in `minis.json` next to `minis.py`
@@ -191,6 +202,28 @@ talking. The same planner drives spar, clash, the taskbar match and the arena.
 - **Matches**: best-of-3, both at 100 HP; damage = move power x 12 (12 / 24 / 36), a super 24, the ultimate 40; a
   round ends at 0 HP or after 25 s. `decided` weights each exchange by `(100 - ctx%) + 20 if not at the limit + 10
   if working`; `random` is even. W-L per character lands in `record.json`.
+
+### Dormant partner, sparring bot and rival mode (V5.1)
+
+The promise is *two fighters, battles from what is being used*. Before V5.1 the second slot emptied the moment its
+program stopped being reported (Codex's newest session file older than 24 h, a desktop app closed), and one fighter
+stood alone for hours with nothing to fight.
+
+- **Dormant partner.** The director remembers every source it has seen (`seen.json`: id, last activity, character,
+  program). A source that is no longer reported stays a candidate for `dormant_hours` (default 24) after its last
+  activity, ranked as idle since then. So the most recently used other program keeps its slot, drawn asleep and
+  dimmed with `ctx -` on its plate, and is replaced only when a *different* program becomes active (a program that
+  is merely running idle does not displace it). It takes whichever slot is empty, normally `b`.
+- **Sparring bot.** With one fighter and no dormant candidate, the pseudo-source `sparring` fills the other slot:
+  generic skin, plate `Sparring bot`, state `sleeping`, no numbers, no detector behind it. Any real program, even an
+  idle one, takes the slot back. Two empty slots stay empty (nothing is being used, nothing is shown).
+  `"sparring_bot": false` in `minis.json` turns it off; `"ignore_sources": ["grok"]` keeps a program off the stage.
+- **Rival mode** (`rival`, default on; `minis.py rival on|off`, the right-click menu). A sleeping partner, dormant
+  or bot, still fights: the awake fighter (whichever slot) invites it every `rival_min`-`rival_max` minutes (8-15)
+  to a best-of-3; the sleeper plays `wake`, walks out lit, fights with the full V5 choreography, walks home and goes
+  back to `sleep`. While the awake fighter is `working` it is a short exchange (the clash choreography) every
+  `rival_spar_min`-`rival_spar_max` minutes (3-6) instead. W-L lands in `record.json` as for any match; the plate
+  keeps telling the truth (`sleeping`, `ctx -`) before, during and after. Off means the sleeper is left alone.
 
 ### Beams and energy FX
 

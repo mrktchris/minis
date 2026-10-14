@@ -276,3 +276,103 @@ appeared; the kamehameha played as one static frame set with no extension or tra
 - Supers come from the hit meter (72); the share is tuned by test, not by eye.  Hitstop on strikes is 50 % of `hitstop_ms` because the
   sheets already hold the hit frame.
 - `test_art.py` and `tests/fixtures/v5_frame_hashes.json` changed under this run (ART agent); they passed at the end.
+
+## V5.1 (2026-10-14): dormant partner, sparring bot, rival mode, `detect` - engine half
+
+Live finding that started it: `minis.py status` showed slot `b` as `(no assignment: hidden)` for ~6.8 h (bus age 24,315 s). Only Claude Code
+was in use; Codex's newest session file was older than `stale_session_hours` (24 h), so its transcript source reported nothing, the director
+freed the slot after the 6 s grace, and the fighter hid.  One fighter stood alone and nothing fought - against the product promise
+(*two at a time, battles from what is being used*).  Verified read-only first: `assign.json` `{"b": null}`, `bus/b.json` `state=gone` since
+the 23:57 restart, `Sources(cfg).poll()` returned only `claude`, `codex has_path False`.
+
+### Built
+
+- `minis_core/director.py`: a `seen` memory (source -> last activity, character, program; persisted to `seen.json` by the `Runner`, at
+  most every 30 s, loaded at start).  A source no detector reports stays a candidate for `dormant_hours` (24) after its last activity,
+  ranked as idle since then, so it keeps its slot (`"dormant": true` in `assign.json`) and is displaced only by a program that is
+  *active* (the V3 rule: active newcomer, occupant idle > 60 s); a program that was never active is not remembered.  `sparring_bot`
+  (default on): a lone fighter gets the pseudo-source `sparring` (`{'source': 'sparring', 'character': 'generic', 'program':
+  'Sparring bot', 'bot': True}`), re-decided every step so any real source - even an idle one - takes the slot back; two empty slots
+  stay empty.
+- `minis_core/sources.py`: `NullDetector` for `sparring` (nothing is scanned for it; its plate is `sleeping`, `ctx -`);
+  `describe()` behind `minis.py detect`; `ignore_sources` config (a listed program is never reported); four programs found installed
+  here and missed by the table: Copilot CLI (`@github/copilot` under node), Qwen Code (`@qwen-code/qwen-code`), Perplexity
+  (`perplexity.exe`), Grok Bot (`grok bot.exe`).  Not added on purpose: `emdash.exe`, `happy.exe` (they host Claude / Codex: a third
+  fighter for the same work), `claude-devtools.exe` (a viewer), `pi` and `openclaw` npm shims (ambiguous name / an always-on gateway).
+- `minis_core/brain.py` rival mode: `rival` flag (control.json, config default on), `next_rival` / `next_rival_spar` timers
+  (`rival_min`-`rival_max` 8-15 min, `rival_spar_min`-`rival_spar_max` 3-6 min).  The awake fighter - either slot - invites a partner
+  whose bus state is `sleeping`: a `match` while it is idle / waiting / done, a `clash` while it is working.  `_plan` adds the sleeper's
+  `wake` duration to `t0` and marks `wake=<slot>`; the sleeper accepts a rival (or demo) invite while asleep, plays `wake`, holds
+  (`hold_until`) before walking, fights lit (`dim` only at home), walks home and plays `sleep` again.  Timers reset after every bout
+  and on resume.  Bout notes say `match-rival` / `clash-rival`.
+- `minis.py`: `rival on|off`, `detect`, menu entry 9 *Rival mode: on <-> off*, `status` tags `(dormant partner ...)` /
+  `(sparring bot ...)`, the brain reads the toggle every 0.5 s with the others.  `tools/taskbar_capture.py`: grabs only the given
+  taskbar rectangle (default `4,1392,936,1440`) for N seconds -> three PNG stills + a GIF; `--demo <kind>` asks for a bout first.
+- Config keys: `dormant_hours`, `sparring_bot`, `rival`, `rival_min`, `rival_max`, `rival_spar_min`, `rival_spar_max`, `ignore_sources`.
+
+### Verified (with the evidence)
+
+| claim | evidence |
+| --- | --- |
+| unit suite | `python -m unittest discover -s tests`: **314 tests OK, 11 skipped** (was 281 / 8); new: `test_director` 12 (dormant, bot, seen.json), `test_core.Rival` 8, `test_sources` 5, `test_minis` 5 |
+| two real processes, rival | `MINIS_INTEGRATION=1` `RivalWithASleepingPartner` (new): slot a idle Claude, slot b the sparring bot, rival timers 6 s: `match-rival` on both sides, 32 hit / contact notes, b's bus `state` = `sleeping` and `ctx` = `None` in every sample, `wake` before `walk`, record written once (`claude > generic`, `where: taskbar`), b back `home` / `sleep` - 3/3 OK, 51 s |
+| existing integration | `TwoRealProcesses` 4/4 (clash from usage + demo spar, contact / reaction pairs matched), `ArenaWithTwoSlots` 4/4 on its own (3 rounds, winner recorded, slots hid and returned, no file left).  One earlier run of the arena class errored (`record.json` missing in its temp dir) while the unit suite, `selftest-gui` and a live match ran in parallel on the same PC: the arena's 80 s cap passed before the match ended; green when run alone.  Final serial run of all three classes: see the line below the table |
+| detect, live | `python minis.py detect` (below): 2 of 13 known programs seen - Claude Code (transcript 9 min old, ctx 77%) and Grok (`grok bot.exe`, idle, 1% CPU); Codex: no session file within 24 h; the other ten: not running, with the exe / command each would match |
+| dormant / bot on the live director | with Grok on the table the director gave slot b to Grok (live, idle) - the correct answer, not the bot.  To put the dormant path on the real taskbar a local `minis.json` (`ignore_sources: ["grok"]`, rival timers 0.4-0.6 min) was used, then removed |
+| live taskbar | `stop`, `start`, `selftest-gui --keep`: PASS (3,824 px visible, left 1,585 / right 2,239, 3,870 after the raise tick), `status`: both slots assigned and visible; with the local config: `b ... state=sleeping mode=home anim=sleep -> Sparring bot as generic (sparring bot: stand-in, shown asleep)` |
+| rival matches on the live taskbar | slot logs: `bout 683e77a8:1 match-rival` 07:04:58, `result ... generic>claude` 07:05:54, `bout 683e77a8:2 match-rival` 07:06:27, `result ... claude>generic` 07:07:30, a third at 07:08:04; `record.json` gained `generic 1-0` then `1-1` |
+| captures (taskbar rows only, bbox 4,1392,936,1440) | in the HQ preview inbox outside this repo, `<inbox>\minis-previews\2026-10-14\`: `rival-1.png` (3 s: both at the middle, Claude's beam about to land, scoreboard `Claude C. 9-11 vs Sparring . 0-0`, round 0:0), `rival-2.png` (14 s: the bot lit and striking, plates `Claude idle ctx 77%` / `Sparring bot sleeping ctx -`), `rival-3.png` (30 s: round score 0:1, HP bars), `rival-match.gif` (40 s, 200 frames at 5 fps: wake-out, round 1, a beam hit with the flash, the round-end banner) |
+
+`MINIS_INTEGRATION=1`, final: the serial run of all three classes gave 10/11 - `TwoRealProcesses` 4/4 (clash, clash, spar-demo; 13 pairs matched),
+`RivalWithASleepingPartner` 3/3 (28 hit / contact notes, record `generic > claude`), `ArenaWithTwoSlots` 3/4 with the same `record.json`
+error as before.  Cause found and fixed in the test, not the engine: the arena harness leaves at `ARENA_S` = 80 s, and a best-of-3 whose
+rounds go the full 25 s takes ~95 s of real time (the arena's physics run on the wall clock, so the length varies run to run; the lone
+pass earlier had 3 rounds and squeaked in).  `ARENA_S` is now 120 s and the sampler stops 6 s after the arena actually exits instead of
+waiting for the cap.  Re-run of the class: **4/4 OK in 101 s** (3 rounds, winner b, 7 cracks, 2 shattered, cpu 4.7 %), so the whole
+opt-in suite stands at 11/11 across the final runs.
+
+`python minis.py detect` on this PC (it only ever prints names and numbers, so nothing was redacted):
+
+```
+claude      Claude Code  claude    idle      transcript, newest session file 9 min old, ctx 77%
+codex       Codex        codex     -         no session file within 24 h
+cursor      Cursor       cursor    -         not running (would match exe cursor.exe)
+windsurf    Windsurf     generic   -         not running (would match exe windsurf.exe)
+ollama      Ollama       ollama    -         not running (would match exe ollama.exe / ollama app.exe)
+lmstudio    LM Studio    lmstudio  -         not running (would match exe lm studio.exe)
+gemini      Gemini       gemini    -         not running (would match exe gemini.exe; command gemini / @google/gemini-cli)
+aider       aider        generic   -         not running (would match exe aider.exe; command aider)
+opencode    opencode     generic   -         not running (would match exe opencode.exe; command opencode / opencode-ai)
+copilot     Copilot CLI  generic   -         not running (would match command copilot / @github/copilot)
+qwen        Qwen Code    generic   -         not running (would match command qwen / @qwen-code/qwen-code)
+perplexity  Perplexity   generic   -         not running (would match exe perplexity.exe)
+grok        Grok         generic   idle      process: grok bot.exe, cpu 1% of one core
+2 of 13 known programs seen: Claude Code, Grok
+```
+
+Installed here (exe names only, from Program Files / Program Files (x86) / `%LOCALAPPDATA%\Programs` and the npm shim folder):
+`cursor.exe`, `lm studio.exe`, `opencode.exe` (already in the table); `perplexity.exe`, `grok bot.exe`, `copilot`, `qwen` (added);
+`emdash.exe`, `happy.exe`, `claude-devtools.exe`, `openclaw`, `pi` (left out, reasons above).  Ollama, Windsurf, aider and Gemini CLI
+are not installed on this PC, so their rules could only be checked against the synthetic process table in `tests/test_sources.py`.
+
+### Decisions the brief left open
+
+- The sparring bot sleeps (dimmed, `sleeping`, `ctx -`) and fights on the rival cadence, rather than standing awake on the normal
+  two-live-programs cadence (a spar every 45-90 s, a clash every 20-40 s): the brief specified the calmer schedule for a non-live
+  partner, and a bot brawling every half minute next to a working fighter is a distraction.
+- "Short spar exchanges while working" use the clash choreography (two exchanges, fist bump, ~10 s), which is what *short exchange
+  while working* already means in this codebase; a spar (bows, four exchanges, handshake) is twice as long.
+- The dormant partner takes whichever slot is empty (normally `b`); the two are never swapped sides just to put the sleeper on the right.
+- Codex here has been quiet for more than 24 h, which is also `dormant_hours`, so on this PC the slot shows the sparring bot (or Grok,
+  while Grok Bot runs), not a sleeping Codex; a `"dormant_hours": 72` in `minis.json` would keep Codex instead.
+
+### Not done / not verified
+
+- The scoreboard widget shortens long names to fit 44 px: `Sparring bot` shows as `Sparring .` beside its record, as `Claude Code`
+  shows as `Claude C.` - pre-existing behaviour, left alone.
+- W-L for every generic-skin program (aider, opencode, Grok, the bot) lands on one `generic` line of `record.json`: the record is per
+  character, as before.
+- Rival timers and the dormant window were only run at their defaults in the unit tests (`test_default_timers_are_minutes...`);
+  the live and two-process runs used shortened timers.
+- Arenas were started on monitor 2 by someone else during this session (06:55 and 07:01, `arena.log`); the `claude > codex` arena
+  record at 06:56 is theirs, not from any test here.
