@@ -1,0 +1,769 @@
+"""The planner: one Brain per fighter slot.  Pure logic with an injected clock, so it is testable and the preview
+simulator can run two brains against each other without any window.
+
+Slots, not names: slot `a` lives in the left half of the zone, slot `b` in the right half.  Which character a slot shows
+(claude, codex, gemini, ...) is decided by the director; the brain only knows its Atlas and reads its signature moves
+(`strike`, `special`, `super`) from the atlas metadata.
+
+Coordination between the two *separate* processes is only a tiny event slot in each one's bus file:
+  invite {seq, run, mt, kind, plan}  ->  the other replies  accept {seq, run, mt, for, bout}   (or ignores it)
+  cancel {bout}                          either side aborts a bout (drag, own limit, pause, partner gone)
+Both sides derive the SAME timeline from the plan (positions, start time t0, seeded choices, both characters), so a
+punch's contact frame and the other fighter's hit reaction line up without any shared process.
+
+Times passed in are monotonic seconds (system-wide on Windows, so both processes agree); wall-clock time is only used
+for bus staleness, outside this module.
+"""
+from __future__ import annotations
+import math, random
+from collections import deque
+
+from . import config as cfgmod, rounds
+from .effects import EffectPlayer
+
+LEFT, RIGHT = 'a', 'b'
+SLOTS = (LEFT, RIGHT)
+AWAKE = ('working', 'idle', 'done', 'waiting')      # states that can take part in a bout (not sleeping, not limit)
+STRIKES = ('jab', 'cross', 'uppercut', 'low_kick', 'roundhouse')
+NEEDS = {
+    'spar': ('bow', 'block', 'block_hit', 'hit', 'hit_heavy', 'fistbump', 'highfive'),
+    'clash': ('block', 'block_hit', 'hit', 'hit_heavy', 'fistbump'),
+    'ranged': ('block', 'block_hit', 'taunt'),
+    'handoff': ('handoff_give', 'handoff_take', 'review', 'thumbs_up', 'fistbump', 'wait'),
+    'console': ('console', 'wave'),
+    'match': rounds.NEEDS,
+}
+BOUT_KINDS = ('spar', 'clash', 'ranged', 'match')
+
+
+def other(slot):
+    return RIGHT if slot == LEFT else LEFT
+
+
+def strike_pool(atlas):
+    pool = [m for m in STRIKES if m in atlas.anim]
+    s = atlas.signature()['strike']
+    if s and s not in pool:
+        pool.append(s)
+    return pool
+
+
+def kind_possible(kind, atlases_by_slot, plan=None):
+    """Every move the timeline will play exists for the fighter that plays it."""
+    for slot, a in atlases_by_slot.items():
+        if any(n not in a.anim for n in NEEDS[kind] if kind != 'console'):
+            return False
+        if kind in ('spar', 'clash', 'match') and len(strike_pool(a)) < 1:
+            return False
+        if kind == 'ranged':
+            sp = a.signature()['special']
+            if not sp or 'proj_frame' not in a.anim[sp] or a.proj is None:
+                return False
+    if kind == 'console' and plan is not None:
+        v = atlases_by_slot[plan['visitor']]
+        return all(n in v.anim for n in NEEDS['console'])
+    if kind == 'handoff' and plan is not None:
+        g, t = atlases_by_slot[plan['giver']], atlases_by_slot[plan['taker']]
+        return 'release_frame' in g.anim['handoff_give'] and 'grab_frame' in t.anim['handoff_take']
+    return True
+
+
+# ---------------------------------------------------------------- timelines (pure, deterministic)
+def make_timeline(kind, plan, atlases, fx=None):
+    """-> ({slot: [(t_abs, anim, opts)]}, t_end, projectiles[list of dict]).  Same inputs -> same output on both sides.
+    `atlases` maps character -> Atlas; plan['chars'] maps slot -> character (absent: the slot ids are the characters).
+    Entries whose anim starts with '@' are directives (rounds.py): @hp, @fx, @banner, @record."""
+    if kind == 'match':
+        tl, t_end, summary = rounds.make_match(plan, atlases, fx)
+        make_timeline.last_summary = summary
+        return tl, t_end, []
+    t0 = plan['t0']
+    rng = random.Random(plan['seed'])
+    chars = plan.get('chars') or {}
+    A = lambda s: atlases[chars.get(s, s)]
+    left, right = plan['left'], plan['right']
+    tl = {left: [], right: []}
+    projs = []
+    tot = lambda w, n: A(w).total_ms(n) / 1000.0
+    cont = lambda w, n: A(w).contact_ms(n) / 1000.0
+
+    if kind in ('spar', 'clash'):
+        bows = kind == 'spar'
+        t = t0
+        if bows:
+            for w in (left, right):
+                tl[w].append((t0, 'bow', {}))
+            t = t0 + max(tot(left, 'bow'), tot(right, 'bow')) + 0.45
+        pool = {w: strike_pool(A(w)) for w in (left, right)}
+        order = [left, right, left, right] if bows else [left, right]
+        for k, att in enumerate(order):
+            dfn = right if att == left else left
+            move = rng.choice(pool[att][:4] if k < 2 else pool[att])
+            react = 'block_hit' if move in ('jab', 'cross', 'low_kick') and rng.random() < 0.7 else ('hit_heavy' if A(att).anim[move].get('power', 1) >= 3 else 'hit')
+            tc = t + cont(att, move)
+            tl[att].append((t, move, {'contact': tc}))
+            tl[att].append((t + tot(att, move), 'idle', {}))
+            if react == 'block_hit':
+                tl[dfn].append((max(t0, tc - 0.2), 'block', {}))
+            tl[dfn].append((tc, react, {'react_to': move}))
+            tl[dfn].append((tc + tot(dfn, react), 'idle', {}))
+            t = tc + max(tot(att, move) - cont(att, move), tot(dfn, react)) + 0.35
+        tf = t
+        end_move = rng.choice(['fistbump', 'highfive']) if bows else 'fistbump'
+        for w in (left, right):
+            tl[w].append((tf, end_move, {'contact': tf + cont(w, end_move)}))
+            if bows:
+                tl[w].append((tf + tot(w, end_move) + 0.1, 'bow', {}))
+            else:
+                tl[w].append((tf + tot(w, end_move) + 0.1, 'idle', {}))
+        t_end = tf + tot(left, end_move) + 0.1 + (max(tot(left, 'bow'), tot(right, 'bow')) if bows else 0.0) + 0.3
+
+    elif kind == 'handoff':
+        giver, taker = plan['giver'], plan['taker']
+        rel = A(giver).start_ms('handoff_give', A(giver).anim['handoff_give']['release_frame']) / 1000.0
+        grab = A(taker).start_ms('handoff_take', A(taker).anim['handoff_take']['grab_frame']) / 1000.0
+        ts = t0 + max(0.0, rel - grab)
+        tg = t0 + max(0.0, grab - rel)
+        tl[giver].append((tg, 'handoff_give', {}))
+        tl[giver].append((tg + tot(giver, 'handoff_give'), 'wait', {}))
+        tl[taker].append((ts, 'handoff_take', {}))
+        t_rev = ts + tot(taker, 'handoff_take')
+        tl[taker].append((t_rev, 'review', {}))
+        tl[taker].append((t_rev + 6.0, 'thumbs_up', {}))           # the reviewer approves
+        t_f = t_rev + 6.0 + tot(taker, 'thumbs_up') + 0.2
+        for w in (giver, taker):
+            tl[w].append((t_f, 'fistbump', {'contact': t_f + cont(w, 'fistbump')}))
+            tl[w].append((t_f + tot(w, 'fistbump') + 0.05, 'idle', {}))
+        t_end = t_f + tot(giver, 'fistbump') + 0.4
+
+    elif kind == 'console':
+        visitor = plan['visitor']
+        t = t0
+        for _ in range(2):
+            tl[visitor].append((t, 'console', {}))
+            t += tot(visitor, 'console')
+        tl[visitor].append((t, 'wave', {}))
+        t += tot(visitor, 'wave') + 0.3
+        t_end = t
+
+    elif kind == 'ranged':
+        t = t0 + 0.4
+        spec = {w: A(w).signature()['special'] for w in (left, right)}
+        for att in (left, right):
+            dfn = right if att == left else left
+            mv = spec[att]
+            spawn = t + A(att).start_ms(mv, A(att).anim[mv]['proj_frame']) / 1000.0
+            speed = A(att).meta['projectile']['speed']
+            dist = abs(plan['pos'][dfn] - plan['pos'][att]) - 12
+            arrive = spawn + dist / speed
+            direction = 1 if att == left else -1
+            tl[att].append((t, mv, {}))
+            tl[att].append((t + tot(att, mv), 'idle', {}))
+            projs.append(dict(owner=att, spawn=spawn, arrive=arrive, dir=direction, x0=plan['pos'][att], speed=speed, move=mv))
+            tl[dfn].append((max(t0, arrive - 0.6), 'block', {}))
+            tl[dfn].append((arrive, 'block_hit', {'react_to': mv}))
+            tl[dfn].append((arrive + tot(dfn, 'block_hit'), 'idle', {}))
+            t = arrive + 0.9
+        for w in (left, right):
+            tl[w].append((t, 'taunt', {}))
+        t_end = t + tot(left, 'taunt') + 0.3
+    else:
+        raise ValueError(kind)
+    for w in tl:
+        tl[w].sort(key=lambda s: s[0])
+    return tl, t_end, projs
+
+
+# ---------------------------------------------------------------- the brain
+class Brain:
+    def __init__(self, slot, atlas, atlases, cfg, rng, now, zone=None, run=None, fx=None, record=None):
+        self.slot = self.who = slot
+        self.atlas, self.atlases, self.cfg, self.rng = atlas, atlases, cfg, rng
+        self.character = atlas.character
+        self.sig = atlas.signature()
+        if fx is None:
+            from . import fx as fxmod
+            fx = fxmod.default()
+        self.fx = fx
+        self.fxp = EffectPlayer(fx, res=atlas.res)
+        self.record = record or rounds.record_result          # (winner_char, loser_char) -> record.json
+        self.winners = 'decided'                              # control.json `winners`, set by the owner each tick
+        self.hp = None                                        # HP while a match plays, else None
+        self.round = None                                     # {'n', 'wins': {slot: n}} while a match plays
+        self.banner = None                                    # {'kind', 'until', 'x'} (the left side draws the texts)
+        self.last_match = None                                # summary of the last match this side played
+        self.eye = (0, 0)                                     # pupil offset toward the cursor while idle (set by the owner)
+        self.run = run or '%08x' % rng.getrandbits(32)         # a restarted process gets a new run id
+        z0, z1 = zone or cfgmod.fight_zone(cfg)              # the roam zone minus the fixed HUD plate strip
+        self.zone = (z0, z1)
+        mid = (z0 + z1) / 2.0
+        gap = cfg['gap_px']
+        self.home = (z0 + 12, mid - gap) if slot == LEFT else (mid + gap, z1 - 12)
+        self.x = (self.home[0] + self.home[1]) / 2.0
+        self.home_x = self.x
+        self.facing = 1 if slot == LEFT else -1
+        self.mode = 'home'
+        self.anim, self.anim_t0, self.anim_loop = 'idle', now, True
+        self.prev_state = None
+        self.snap = None
+        self.partner = None
+        self.seq = 0
+        self.seen_key = None
+        self.event = None
+        self.pending = None
+        self.walk_target = self.x
+        self.walk_then = None
+        self.script = None          # dict(kind, plan, tl, t_end, projs)
+        self.script_i = -1
+        self.bout = None            # id of the bout being walked to / played / negotiated
+        self.paused = False
+        self.next_bout = now + rng.uniform(cfg['bout_min_s'], cfg['bout_max_s'])
+        self.next_clash = now + rng.uniform(cfg.get('clash_min_s', 20), cfg.get('clash_max_s', 40))
+        self.next_flourish = now + rng.uniform(6, 10)
+        self.next_wander = now + rng.uniform(10, 20)
+        self.work_variant, self.work_switch = 'work', now + 10
+        self.next_shrug = now + rng.uniform(10, 16)
+        self.next_shadow = now + rng.uniform(cfg.get('shadowbox_min_s', 3), cfg.get('shadowbox_max_s', 6))
+        self.next_console = now + rng.uniform(cfg.get('console_min_s', 40), cfg.get('console_max_s', 80))
+        self.next_match = now + rng.uniform(cfg.get('match_min_s', 180), cfg.get('match_max_s', 360))
+        self.demo = None            # {'kind', 'until'}: a bout asked for by the user, sent as soon as both are free
+        self.ko_until = 0.0
+        self.stun_until = 0.0        # dizzy after a fast drag / a throw landing
+        self.throw_state = None      # a Shift-drag throw in flight
+        self.last_now = now
+        self.hit_log = deque(maxlen=64)           # (time, kind) for tests and the preview; bounded for a long-running process
+        self.contact_log = deque(maxlen=64)
+        self.bout_log = deque(maxlen=64)          # (what, bout id, t, move); bout_log_n counts every note ever made
+        self.bout_log_n = 0
+
+    # -------------------------------------------------------------- animation plumbing
+    def play(self, name, now, loop=None):
+        if name not in self.atlas.anim:
+            name, loop = 'idle', None
+        if name == self.anim and self.anim_loop and (loop is None or loop):
+            return
+        self.anim, self.anim_t0 = name, now
+        self.anim_loop = self.atlas.anim[name]['loop'] if loop is None else loop
+
+    def frame(self, now):
+        return self.atlas.locate(self.anim, (now - self.anim_t0) * 1000.0, self.anim_loop)
+
+    def _work_anims(self):
+        ctx = (self.snap.ctx_pct or 0) if self.snap else 0
+        return ['powerup'] if ctx >= 70 else ['work', 'type']        # past 70% context it is visibly charging up
+
+    def base_anim(self):
+        s = self.state()
+        if s == 'limit':
+            return 'dizzy'
+        if s == 'working':
+            return self.work_variant
+        if s == 'waiting':
+            return 'wait'
+        if s == 'sleeping':
+            return 'sleep'
+        return 'rage' if (self.snap and (self.snap.ctx_pct or 0) >= 85) else 'idle'
+
+    def state(self):
+        return self.snap.state if self.snap else 'idle'
+
+    # -------------------------------------------------------------- public API
+    def tick(self, now, snap, partner):
+        dt = max(0.0, now - self.last_now)
+        self.last_now = now
+        self.snap, self.partner = snap, partner
+        if self.paused:
+            return
+        for ev in snap.events:
+            self._own_event(ev, now)
+        self._partner_events(now)
+        if self.bout and self.partner is None:                    # partner vanished mid-bout: abort, do not wait
+            self.abort(now, emit=False)
+        if self.state() == 'limit' and self.mode == 'walk' and self.walk_then != 'home' and not self._demo_bout():
+            self.abort(now)                                       # knocked out on the way to a bout: stop where it stands
+            self.mode, self.walk_then = 'home', None              # (walking home is fine; _tick_home sends it there)
+        if self.demo:
+            self._try_demo(now)
+        if self.pending and now > self.pending['deadline']:
+            self.pending, self.bout = None, None
+            self._goto(self.home_x, now, then='home')
+            self.next_bout = now + 20
+        if self.mode != 'home':
+            self._alert(now, False)
+        if self.mode == 'script':
+            self._tick_script(now)
+        elif self.mode == 'walk':
+            self._tick_walk(now, dt)
+        else:
+            self._tick_home(now, dt)
+        idx, done = self.frame(now)
+        if done and not self.anim_loop:
+            self.play(self.base_anim() if self.mode == 'home' else 'idle', now)
+
+    def publish(self):
+        return dict(state=self.state(), mode=self.mode, x=round(self.x, 1), facing=self.facing, anim=self.anim,
+                    ctx=(self.snap.ctx_pct if self.snap else None), event=self.event, character=self.character,
+                    run=self.run, paused=self.paused, bout=self.bout, hp=self.hp,
+                    round=(self.round or {}).get('n'), wins=(self.round or {}).get('wins'))
+
+    def view(self, now):
+        dim = self.snap is not None and self.snap.state == 'sleeping'
+        if self.paused:                                           # one static frame: nothing to animate, nothing to redraw
+            return dict(anim='idle', frame=0, x=self.x, facing=self.facing, dim=dim, proj=None, fx=[], banner=None, shake=(0, 0), busy=False)
+        idx, _ = self.frame(now)
+        self.fxp.tick(now)
+        if self.banner and now >= self.banner['until']:
+            self.banner = None
+        banner = None
+        if self.banner:
+            try:
+                im = self.fx.banner(self.banner['kind'])
+                k = self.atlas.res / float(self.fx.res)
+                if k != 1.0:
+                    from PIL import Image
+                    im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.NEAREST)
+                banner = (im, self.banner['x'])
+            except (ValueError, OSError):
+                banner = None
+        fxp = self.fxp.placements(now)
+        v = dict(anim=self.anim, frame=idx, x=self.x, facing=self.facing, dim=dim, proj=None, fx=fxp, banner=banner,
+                 shake=self.fxp.shake(now), busy=bool(fxp or banner), eye=(self.eye if self.anim == 'idle' and self.mode == 'home' else (0, 0)))
+        if self.script and self.script['projs']:
+            for p in self.script['projs']:
+                if p['owner'] == self.slot and p['spawn'] <= now <= p['arrive']:
+                    pos = p['x0'] + p['dir'] * p['speed'] * (now - p['spawn'])
+                    v['proj'] = dict(x=pos, dir=p['dir'], frame=int((now - p['spawn']) * 8), kind=p['move'])
+        return v
+
+    def drag_to(self, x, now):
+        """Mouse drag: place the fighter inside its own half (the two never overlap and never cover the plates),
+        cancel any bout (telling the partner), give it a breather."""
+        self.x = max(self.home[0], min(self.home[1], x))
+        self.home_x = self.x
+        if self.mode != 'home' or self.bout:
+            self.abort(now)
+            self.mode, self.walk_then = 'home', None
+            self.play('idle', now)
+        self.next_bout = max(self.next_bout, now + 10)
+
+    def set_paused(self, paused, now):
+        if paused == self.paused:
+            return
+        if paused:
+            self.abort(now)
+            self.mode, self.walk_then = 'home', None              # freeze where it stands; home_x is kept, so on
+        else:                                                     # resume a fighter caught mid-bout walks back home
+            self.prev_state = None                                # re-pick the state animation on resume
+            self.anim, self.anim_t0, self.anim_loop = 'idle', now, True
+            self.next_bout = now + self.rng.uniform(self.cfg['bout_min_s'], self.cfg['bout_max_s'])
+            self.next_clash = now + self.rng.uniform(self.cfg.get('clash_min_s', 20), self.cfg.get('clash_max_s', 40))
+        self.paused = paused
+
+    def set_atlas(self, atlas, now):
+        """The director gave this slot a different character: drop any bout and start fresh in the new skin."""
+        self.abort(now)
+        self.mode, self.walk_then = 'home', None
+        self.atlas, self.character, self.sig = atlas, atlas.character, atlas.signature()
+        self.anim, self.anim_t0, self.anim_loop = 'idle', now, True
+        self.prev_state = None
+
+    def abort(self, now, emit=True):
+        """Leave the current bout (scripted, negotiated or being walked to) and head home."""
+        if self.bout is None and self.script is None and self.pending is None:
+            return
+        if emit and self.bout:
+            self._emit('cancel', now, bout=self.bout)
+        self.script, self.pending, self.bout = None, None, None
+        self._end_match_visuals()
+        self._goto(self.home_x, now, then='home')
+        self.next_bout = max(self.next_bout, now + 20)
+
+    def _end_match_visuals(self):
+        self.hp = self.round = self.banner = None
+        self.fxp.clear()
+
+    # -------------------------------------------------------------- on-demand bout (minis.py demo / menu)
+    def request_demo(self, kind, now, wait_s=12.0):
+        """Start a bout as soon as both fighters are home and free, whatever their states.  Only the choreography is
+        forced; the snapshot (and so the plate) is untouched."""
+        self.demo = dict(kind=kind if kind in BOUT_KINDS else 'spar', until=now + wait_s)
+
+    def _demo_bout(self):
+        plan = (self.script or {}).get('plan') or (self.pending or {}).get('plan') or {}
+        return bool(plan.get('demo'))
+
+    def _free_any(self):
+        return not (self.paused or self.mode != 'home' or self.script or self.pending or self.bout)
+
+    def _try_demo(self, now):
+        if now > self.demo['until']:
+            self.demo = None
+            return
+        if self._free_any() and self.partner and self._partner_home():
+            kind = self.demo['kind']
+            if self._send_invite(kind, now, demo=True) or (kind != 'spar' and self._send_invite('spar', now, demo=True)):
+                self.demo = None
+
+    # -------------------------------------------------------------- events
+    def _emit(self, typ, now, **kw):
+        self.seq += 1
+        self.event = dict(seq=self.seq, type=typ, run=self.run, mt=round(now, 3), **kw)
+
+    def _own_event(self, ev, now):
+        if ev == 'finished':
+            self._emit('finished', now)
+        elif ev == 'limit':
+            cancels = self.bout
+            if self.mode != 'home' or self.bout:
+                self.abort(now, emit=False)                        # one event slot: the limit event carries the cancel
+                self.mode, self.walk_then = 'home', None           # KO'd where it stands
+            self._emit('limit', now, cancels=cancels)
+            self.ko_until = now + 6.0
+
+    def _partner_home(self):
+        p = self.partner
+        return bool(p) and p.get('mode') == 'home' and not p.get('paused')
+
+    def free_for(self, kind):
+        """Actually free: at home, not in or negotiating a bout, awake, not at its limit, and in a state the bout allows."""
+        if self.paused or self.mode != 'home' or self.script or self.pending or self.bout:
+            return False
+        st = self.state()
+        if st in ('sleeping', 'limit'):
+            return False
+        if kind in ('clash', 'match'):
+            return st in ('working', 'waiting', 'idle', 'done')
+        if kind in ('handoff', 'console'):
+            return st in ('idle', 'done', 'waiting', 'working')
+        return st in ('idle', 'done', 'waiting')
+
+    def _partner_events(self, now):
+        p = self.partner
+        if not p or not isinstance(p.get('event'), dict):
+            return
+        ev = p['event']
+        key = (ev.get('run'), ev.get('seq'))
+        if key == self.seen_key:
+            return
+        self.seen_key = key
+        mt = ev.get('mt')
+        if not isinstance(mt, (int, float)) or now - mt > self.cfg.get('event_max_age_s', 3.0) or mt - now > 2.0:
+            return                                                # replayed after a restart, or simply too old
+        t = ev.get('type')
+        if t == 'finished':
+            if self.free_for('handoff') and self._partner_home():
+                self._send_invite('handoff', now, giver=other(self.slot), taker=self.slot)
+        elif t == 'limit':
+            if self.bout and ev.get('cancels') == self.bout:
+                self.abort(now, emit=False)
+            elif self.free_for('console') and self._partner_home():
+                self._send_invite('console', now, visitor=self.slot)
+        elif t == 'invite':
+            plan = ev.get('plan') or {}
+            kind = plan.get('kind')
+            if kind == 'console' or kind not in NEEDS:            # the fighter on the floor just keeps being KO'd
+                return
+            if self.slot not in (plan.get('left'), plan.get('right')) or now > plan.get('deadline', 0):
+                return
+            if (plan.get('chars') or {}).get(self.slot, self.character) != self.character:
+                return                                            # planned for a skin this slot no longer wears
+            if self.free_for(kind) or (plan.get('demo') and self._free_any()):
+                self._accept(ev, now)
+        elif t == 'accept':
+            if self.pending and ev.get('for') == self.pending['seq'] and ev.get('bout', self.pending['plan']['id']) == self.pending['plan']['id']:
+                plan = self.pending['plan']
+                self.pending = None
+                self._commit(plan['kind'], plan, now)
+        elif t == 'cancel':
+            if self.bout and ev.get('bout') == self.bout:
+                self.abort(now, emit=False)
+
+    # -------------------------------------------------------------- bout negotiation
+    def _plan(self, kind, now, **kw):
+        me, you = self.slot, other(self.slot)
+        pos = {me: self.x, you: float(self.partner['x'])}
+        left = LEFT if pos[LEFT] <= pos[RIGHT] else RIGHT
+        right = other(left)
+        gap = {'spar': self.cfg['gap_px'], 'clash': self.cfg['gap_px'], 'match': self.cfg['gap_px'], 'handoff': 24, 'console': 22, 'ranged': 150}[kind]
+        z0, z1 = self.zone
+        mid = (z0 + z1) / 2.0                         # bouts happen in the middle of the fighting zone, never near the plates
+        target = {left: mid - gap / 2.0, right: mid + gap / 2.0}
+        if kind == 'console':
+            vis = kw['visitor']
+            target = {vis: pos[other(vis)] + (-gap if pos[vis] < pos[other(vis)] else gap), other(vis): pos[other(vis)]}
+        walk = max(abs(target[w] - pos[w]) for w in SLOTS) / float(self.cfg['walk_px_s'])
+        chars = {me: self.character, you: self.partner.get('character') or self.character}
+        plan = dict(kind=kind, left=left, right=right, pos=target, t0=now + walk + 1.0, seed=self.seq + 1 + int(now) % 997,
+                    chars=chars, id=f'{self.run}:{self.seq + 1}', deadline=now + self.cfg.get('invite_window_s', 3.0), **kw)
+        if kind == 'match':                                     # both sides derive HP, attackers and the winner from these
+            plan['mode'] = self.winners if self.winners in rounds.MODES else 'decided'
+            plan['scores'] = {me: round(rounds.score_of_snapshot(self.snap), 1), you: round(rounds.score_of_bus(self.partner), 1)}
+        return plan
+
+    def _possible(self, kind, plan):
+        try:
+            by_slot = {s: self.atlases[c] for s, c in plan['chars'].items()}
+            return kind_possible(kind, by_slot, plan)
+        except Exception:
+            return False
+
+    def _send_invite(self, kind, now, **kw):
+        if not self.partner:
+            return False
+        plan = self._plan(kind, now, **kw)
+        if not self._possible(kind, plan):
+            return False
+        self._emit('invite', now, kind=kind, plan=plan)
+        self.bout = plan['id']
+        if kind == 'console':                    # one-sided: no handshake needed
+            self._commit(kind, plan, now)
+            return True
+        self.pending = dict(seq=self.seq, deadline=plan['deadline'], plan=plan)
+        self._goto(plan['pos'][self.slot], now, then='wait')
+        return True
+
+    def _accept(self, ev, now):
+        plan = ev['plan']
+        if not self._possible(plan['kind'], plan):
+            return
+        self._emit('accept', now, **{'for': ev['seq']}, kind=plan['kind'], bout=plan.get('id'))
+        self._commit(plan['kind'], plan, now)
+
+    def _bout_note(self, what, t, name):
+        """Content-free bout record (for the slot log and the two-process test): what, bout id, monotonic time, move."""
+        self.bout_log.append((what, self.bout, round(t, 3), name))
+        self.bout_log_n += 1
+
+    def _commit(self, kind, plan, now):
+        tl, t_end, projs = make_timeline(kind, plan, self.atlases, self.fx)
+        self.script = dict(kind=kind, plan=plan, tl=tl.get(self.slot, []), t_end=t_end, projs=projs)
+        if kind == 'match':
+            self.last_match = getattr(make_timeline, 'last_summary', None)
+        self.script_i = -1
+        self.bout = plan.get('id') or self.bout or 'local'
+        self._bout_note('bout', plan['t0'], kind + ('-demo' if plan.get('demo') else ''))
+        self._goto(plan['pos'][self.slot], now, then='script')
+        if kind == 'console':
+            self.next_console = now + self.rng.uniform(self.cfg.get('console_min_s', 40), self.cfg.get('console_max_s', 80))
+
+    # -------------------------------------------------------------- movement
+    def _goto(self, x, now, then):
+        z0, z1 = self.zone
+        self.walk_target = max(z0, min(z1, x))
+        self.walk_then = then
+        self.mode = 'walk'
+
+    def _face_partner(self):
+        if self.partner and abs(float(self.partner['x']) - self.x) > 4:
+            self.facing = 1 if float(self.partner['x']) > self.x else -1
+
+    def _tick_walk(self, now, dt):
+        d = self.walk_target - self.x
+        if abs(d) <= 0.8 or self.walk_then in ('wait', 'script') and abs(d) <= 1.5:
+            self.x = self.walk_target
+            then = self.walk_then
+            if then == 'script' and self.script:
+                self.mode = 'script'
+                self.play('idle', now)
+            elif then == 'wait':
+                self.play('idle', now)
+                self._face_partner()
+            else:
+                self.mode = 'home'
+                self.play(self.base_anim(), now)
+            return
+        step = min(abs(d), self.cfg['walk_px_s'] * dt)
+        self.x += math.copysign(step, d)
+        mv = 1 if d > 0 else -1
+        if self.walk_then == 'home' and not self.partner:
+            self.facing = mv
+            self.play('walk', now)
+        else:
+            if self.partner:
+                self._face_partner()
+            else:
+                self.facing = mv
+            self.play('walk' if mv == self.facing else 'walk_back', now)
+
+    # -------------------------------------------------------------- script playback
+    def _tick_script(self, now):
+        sc = self.script
+        if sc is None:
+            self._goto(self.home_x, now, then='home')
+            return
+        if self.partner:
+            self._face_partner()
+        tl = sc['tl']
+        while self.script_i + 1 < len(tl) and tl[self.script_i + 1][0] <= now:
+            self.script_i += 1
+            t_abs, name, opts = tl[self.script_i]
+            if name.startswith('@'):
+                self._directive(name, t_abs, opts, now)
+                continue
+            self.play(name, t_abs, loop=None)
+            if 'hp' in opts and isinstance(opts['hp'], dict):
+                self.hp = opts['hp'].get(self.slot)
+            if 'contact' in opts:
+                self.contact_log.append((opts['contact'], name))
+                self._bout_note('contact', opts['contact'], name)
+            if 'react_to' in opts:
+                self.hit_log.append((t_abs, name))
+                self._bout_note('hit', t_abs, name)
+        if now >= sc['t_end']:
+            self.script, self.bout = None, None
+            self._end_match_visuals()
+            self._goto(self.home_x, now, then='home')
+            self.next_bout = now + self.rng.uniform(self.cfg['bout_min_s'], self.cfg['bout_max_s'])
+            self.next_clash = now + self.rng.uniform(self.cfg.get('clash_min_s', 20), self.cfg.get('clash_max_s', 40))
+
+    def _directive(self, name, t_abs, opts, now):
+        """Timeline directives (rounds.py): HP, effects, banner texts, the record.  Every side runs @hp / @fx; only the
+        left side of the plan carries @banner and @record, so texts are drawn once and the record is written once."""
+        if name == '@hp':
+            self.hp = (opts.get('hp') or {}).get(self.slot)
+            self.round = dict(n=opts.get('round'), wins=opts.get('wins') or {})
+        elif name == '@fx':
+            if now - t_abs <= 0.5:                               # a stale directive (after a hiccup) is skipped, not replayed late
+                until = opts.get('until')
+                self.fxp.spawn(opts['fx'], t_abs, self.x, self.atlas.ground_y, self.facing, owner=self.slot, anchor=opts.get('anchor'),
+                               hand=self.atlas.hand(opts.get('move') or opts['fx']),
+                               fade_ms=(max(1.0, (until - t_abs) * 1000.0) if until else None))
+        elif name == '@banner':
+            plan = (self.script or {}).get('plan') or {}
+            over = opts.get('over')
+            if over is None:
+                x = (float(plan['pos'][LEFT]) + float(plan['pos'][RIGHT])) / 2.0
+            else:
+                x = self.x if over == self.slot else float(plan['pos'].get(over, self.x))
+            self.banner = dict(kind=opts['banner'], until=opts['until'], x=x)
+        elif name == '@record':
+            chars = opts.get('chars') or {}
+            try:
+                self.record(chars.get(opts['winner'], opts['winner']), chars.get(opts['loser'], opts['loser']))
+            except Exception:
+                pass
+            self._bout_note('result', t_abs, f"{chars.get(opts['winner'], '?')}>{chars.get(opts['loser'], '?')}")
+
+    # -------------------------------------------------------------- home behaviour
+    def stun(self, now, seconds=1.4):
+        """A fast drag leaves the fighter dizzy for a moment (micro-interaction; nothing else changes)."""
+        if self.paused:
+            return
+        self.abort(now)
+        self.mode, self.walk_then = 'home', None
+        self.play('dizzy', now, loop=True)
+        self.stun_until = now + seconds
+
+    def throw(self, vx, now):
+        """Shift-drag release: a short arc in the drag direction (inside its own half), then a dizzy landing."""
+        if self.paused:
+            return
+        self.abort(now)
+        self.mode, self.walk_then = 'home', None
+        lo, hi = self.home
+        self.throw_state = dict(vx=float(vx), t0=now, dur=0.55, x0=self.x, target=max(lo, min(hi, self.x + vx * 0.4)))
+        self.play('jump', now, loop=False)
+
+    def _tick_throw(self, now, dt):
+        th = self.throw_state
+        k = min(1.0, (now - th['t0']) / th['dur'])
+        self.x = th['x0'] + (th['target'] - th['x0']) * (1 - (1 - k) ** 2)
+        self.facing = 1 if th['vx'] > 0 else -1
+        if k >= 1.0:
+            self.throw_state = None
+            self.home_x = self.x
+            self.play('dizzy', now, loop=True)
+            self.stun_until = now + 1.0
+
+    def _alert(self, now, want):
+        have = any(i.tag == 'alert' for i in self.fxp.active)
+        if want and not have:
+            self.fxp.spawn('alert', now, self.x, self.atlas.ground_y, self.facing, owner=self.slot, tag='alert')
+        elif have and not want:
+            self.fxp.clear(tag='alert')
+
+    def _tick_home(self, now, dt):
+        st = self.state()
+        self._alert(now, st == 'waiting' and self.mode == 'home')
+        if self.throw_state is not None:
+            self._tick_throw(now, dt)
+            return
+        if now < self.stun_until:
+            if self.anim != 'dizzy':
+                self.play('dizzy', now, loop=True)
+            return
+        if self.anim == 'dizzy' and st != 'limit' and self.prev_state == st:
+            self.play(self.base_anim(), now)
+        if st != self.prev_state:
+            was_asleep = self.prev_state == 'sleeping'
+            self.prev_state = st
+            if was_asleep and st != 'sleeping':
+                self.play('wake', now, loop=False)             # stretch and yawn, then whatever comes next
+            elif st == 'done':
+                self.play('victory', now, loop=False)
+            elif st == 'limit':
+                self.ko_until = now + 6.0
+                self.play('ko', now)
+            elif st == 'working':
+                self.work_variant, self.work_switch = self._work_anims()[0], now + self.rng.uniform(8, 14)
+                self.play(self.work_variant, now)
+            else:
+                self.play(self.base_anim(), now)
+        if st == 'limit' and self.anim == 'ko' and now >= self.ko_until:
+            self.play('getup', now, loop=False)
+        if st == 'working' and now >= self.work_switch:
+            opts = self._work_anims()
+            self.work_variant = opts[(opts.index(self.work_variant) + 1) % len(opts)] if self.work_variant in opts else opts[0]
+            self.work_switch = now + self.rng.uniform(8, 14)
+            self.play(self.work_variant, now)
+        if st == 'waiting' and self.anim == 'wait' and now >= self.next_shrug:
+            self.next_shrug = now + self.rng.uniform(10, 16)
+            self.play('shrug', now, loop=False)
+        if st == 'working' and self.anim == self.work_variant and now >= self.next_shadow:
+            self.next_shadow = now + self.rng.uniform(self.cfg.get('shadowbox_min_s', 3), self.cfg.get('shadowbox_max_s', 6))
+            pool = strike_pool(self.atlas)
+            if pool:                                              # shadowboxing: a strike in the air, then back to work
+                self.play(self.rng.choice(pool), now, loop=False)
+        if st in ('idle', 'done', 'waiting', 'working') and self.partner:
+            self._face_partner()
+        lo, hi = self.home
+        if not (lo - 2 <= self.x <= hi + 2) and not (st == 'limit' and self.anim in ('ko', 'getup')):
+            # outside its own half (knocked out mid-bout, an old drag, a resize): walk back, so the two never overlap
+            self.home_x = max(lo, min(hi, self.home_x))
+            self._goto(self.home_x, now, then='home')
+            return
+        p = self.partner
+        pst = p.get('state') if p else None
+        # usage-driven bouts.  Only slot `a` starts timed bouts, so the two never invite each other at the same moment.
+        if self.slot == LEFT and p and self._partner_home() and st in AWAKE and pst in AWAKE:
+            if now >= self.next_match and self.free_for('match'):   # now and then a full best-of-3 match, whatever the states
+                self.next_match = now + self.rng.uniform(self.cfg.get('match_min_s', 180), self.cfg.get('match_max_s', 360))
+                if self._send_invite('match', now):
+                    return
+            if 'working' in (st, pst):                            # anyone working: short clashes
+                if now >= self.next_clash and self.free_for('clash'):
+                    self.next_clash = now + self.rng.uniform(self.cfg.get('clash_min_s', 20), self.cfg.get('clash_max_s', 40))
+                    if self._send_invite('clash', now):
+                        return
+            elif now >= self.next_bout and self.free_for('spar'):  # nobody working: spar or a ranged duel
+                kind = self.rng.choice(self.cfg.get('bout_kinds', ['spar', 'spar', 'ranged']))
+                self.next_bout = now + 30
+                if self._send_invite(kind, now) or (kind != 'spar' and self._send_invite('spar', now)):
+                    return
+        # a knocked-out partner gets a visit now and then (the first one comes from its limit event)
+        if p and pst == 'limit' and now >= self.next_console and self.free_for('console') and self._partner_home():
+            self.next_console = now + self.rng.uniform(self.cfg.get('console_min_s', 40), self.cfg.get('console_max_s', 80))
+            if self._send_invite('console', now, visitor=self.slot):
+                return
+        if st == 'idle' and self.anim in ('idle', 'rage'):
+            ctx = (self.snap.ctx_pct or 0) if self.snap else 0
+            want = 'rage' if ctx >= 85 else 'idle'
+            if self.anim != want:
+                self.play(want, now)
+            if now >= self.next_flourish and self.anim == 'idle':
+                sup = self.sig['super']
+                self.play(sup if (sup and self.rng.random() < 0.25) else 'idle_flourish', now, loop=False)
+                self.next_flourish = now + self.rng.uniform(6, 10)
+            elif now >= self.next_wander:
+                self.next_wander = now + self.rng.uniform(12, 25)
+                self._goto(self.rng.uniform(*self.home), now, then='home')
