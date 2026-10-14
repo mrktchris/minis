@@ -36,11 +36,18 @@ RULES = [
     dict(source='gemini', program='Gemini', character='gemini', exe=('gemini.exe',), cmd=('gemini', '@google/gemini-cli')),
     dict(source='aider', program='aider', character='generic', exe=('aider.exe',), cmd=('aider',)),
     dict(source='opencode', program='opencode', character='generic', exe=('opencode.exe',), cmd=('opencode', 'opencode-ai')),
+    # V5.1: found installed on the author's PC and missed before (npm shims run under node.exe: matched by package path)
+    dict(source='copilot', program='Copilot CLI', character='generic', cmd=('copilot', '@github/copilot')),
+    dict(source='qwen', program='Qwen Code', character='generic', cmd=('qwen', '@qwen-code/qwen-code')),
+    dict(source='perplexity', program='Perplexity', character='generic', exe=('perplexity.exe',)),
+    dict(source='grok', program='Grok', character='generic', exe=('grok bot.exe',)),
 ]
-PROGRAM = {'claude': 'Claude Code', 'codex': 'Codex'}
+SPARRING = 'sparring'                                 # the director's stand-in partner: no detector ever reports it
+PROGRAM = {'claude': 'Claude Code', 'codex': 'Codex', SPARRING: 'Sparring bot'}
 for _r in RULES:
     PROGRAM.setdefault(_r['source'], _r.get('program', _r['source']))
 CHARACTER = {r['source']: r.get('character', r['source']) for r in RULES}
+CHARACTER[SPARRING] = 'generic'
 
 
 @dataclass
@@ -122,6 +129,7 @@ class ProcessScanner:
         self._cpu = {}           # (pid, create) -> last cpu seconds
         self.groups = {}         # source -> dict(samples=deque[(t, cum)], cum, last_active, first_seen, tr)
         self.claimed = {}        # source -> pid count (diagnostics)
+        self.matched = {}        # source -> sorted image names of its root processes (diagnostics: `minis.py detect`)
 
     def _classify(self, pid, name, create):
         key = (pid, create)
@@ -169,6 +177,7 @@ class ProcessScanner:
         for pid, src in owner.items():
             roots.setdefault(src, []).append(pid)
         self.claimed = {s: len(v) for s, v in roots.items() if s in TRANSCRIPT_SOURCES}
+        self.matched = {s: sorted({names[p] for p in v}) for s, v in roots.items()}      # source -> image names only (diagnostics)
         seen_keys = set()
         out = {}
         for src, rs in roots.items():
@@ -246,7 +255,7 @@ class Sources:
             TranscriptSource('claude', cfg, clock), TranscriptSource('codex', cfg, clock), ProcessSource(cfg)]
 
     def poll(self, now):
-        out, ids = [], set()
+        out, ids = [], set(self.cfg.get('ignore_sources') or ())          # ignored programs are never reported at all
         for d in self.detectors:
             try:
                 acts = d.poll(now)
@@ -259,8 +268,74 @@ class Sources:
         return out
 
 
+class NullDetector:
+    """Never sees anything: the sparring bot's slot shows `sleeping` with no numbers, and nothing is scanned for it."""
+
+    def poll(self, now):
+        return []
+
+
 def detector_for(source_id, cfg, clock=time.time):
     """The single detector a fighter slot runs for its assigned source."""
+    if source_id == SPARRING:
+        return NullDetector()
     if source_id in TRANSCRIPT_SOURCES:
         return TranscriptSource(source_id, cfg, clock)
     return ProcessSource(cfg, only=source_id)
+
+
+# ------------------------------------------------------------------ diagnostics (`minis.py detect`)
+def _age(seconds):
+    if seconds is None:
+        return '-'
+    s = int(seconds)
+    if s < 90:
+        return f'{s} s'
+    if s < 5400:
+        return f'{s // 60} min'
+    return f'{s / 3600:.1f} h'
+
+
+def describe(cfg, now=None, srcs=None):
+    """-> [dict(source, program, character, state, how)] for every program in the table: what the detectors see right now
+    and how (a transcript's age and context, or the matched image names and CPU rate).  Names and numbers only: no window
+    title, no path, nothing beyond the executable's file name."""
+    now = time.time() if now is None else now
+    srcs = srcs or Sources(cfg)
+    acts = {a.source_id: a for a in srcs.poll(now)}
+    rows = []
+    scanner = None
+    for d in srcs.detectors:
+        if isinstance(d, ProcessSource):
+            scanner = d.scanner
+    for sid in TRANSCRIPT_SOURCES:
+        tr = next((d.tracker for d in srcs.detectors if isinstance(d, TranscriptSource) and d.source_id == sid), None)
+        a = acts.get(sid)
+        if a is not None:
+            how = f'transcript, newest session file {_age(now - (a.last_active or now))} old'
+            if a.ctx_pct is not None:
+                how += f', ctx {int(round(a.ctx_pct))}%'
+        elif tr is not None and tr.path is None:
+            how = f"no session file within {cfg['stale_session_hours']} h"
+        else:
+            how = 'transcript sources not polled'
+        rows.append(dict(source=sid, program=PROGRAM[sid], character=CHARACTER.get(sid, sid), state=a.state if a else '-', how=how))
+    seen_rules = set()
+    for r in RULES:
+        sid = r['source']
+        if sid in TRANSCRIPT_SOURCES or sid in seen_rules:
+            continue
+        seen_rules.add(sid)
+        a = acts.get(sid)
+        if a is not None and scanner is not None:
+            names = ', '.join(scanner.matched.get(sid, [])) or 'process tree'
+            rate = (scanner.groups.get(sid) or {}).get('rate', 0.0)
+            how = f'process: {names}, cpu {rate:.0f}% of one core'
+            if a.last_active:
+                how += f', last working {_age(now - a.last_active)} ago'
+        else:
+            by = [f"exe {' / '.join(r2['exe'])}" for r2 in RULES if r2['source'] == sid and r2.get('exe')]
+            by += [f"command {' / '.join(r2['cmd'])}" for r2 in RULES if r2['source'] == sid and r2.get('cmd')]
+            how = 'not running (would match ' + '; '.join(by) + ')'
+        rows.append(dict(source=sid, program=PROGRAM.get(sid, sid), character=CHARACTER.get(sid, 'generic'), state=a.state if a else '-', how=how))
+    return rows

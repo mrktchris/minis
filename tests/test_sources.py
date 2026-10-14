@@ -171,6 +171,69 @@ class Registry(Isolated):
         self.assertIsInstance(d, S.ProcessSource)
         self.assertEqual(d.only, 'cursor')
 
+    def test_ignored_sources_are_never_reported(self):
+        class Two:
+            def poll(self, now):
+                return [S.Activity('grok', 'Grok', 'generic'), S.Activity('claude', 'Claude Code', 'claude')]
+        reg = S.Sources(dict(CFG, ignore_sources=['grok']), detectors=[Two()])
+        self.assertEqual([a.source_id for a in reg.poll(1.0)], ['claude'])
+        self.assertEqual([a.source_id for a in S.Sources(CFG, detectors=[Two()]).poll(1.0)], ['grok', 'claude'])
+
+    def test_sparring_bot_has_a_null_detector_and_a_name(self):
+        d = S.detector_for(S.SPARRING, CFG)
+        self.assertIsInstance(d, S.NullDetector)
+        self.assertEqual(d.poll(1.0), [])
+        self.assertEqual((S.PROGRAM[S.SPARRING], S.CHARACTER[S.SPARRING]), ('Sparring bot', 'generic'))
+        self.assertFalse(any(r['source'] == S.SPARRING for r in S.RULES))              # no process can ever claim it
+
+
+class NewPrograms(unittest.TestCase):
+    """V5.1: programs found installed on the author's PC that the table missed (`minis.py detect`)."""
+
+    def test_npm_clis_are_matched_by_package_path_under_node(self):
+        i = FakeInfo()
+        i.add(10, 1, 'node.exe', argv=['node.exe', r'C:\Users\u\AppData\Roaming\npm\node_modules\@github\copilot\index.js'])
+        i.add(11, 1, 'node.exe', argv=['node.exe', r'C:\Users\u\AppData\Roaming\npm\node_modules\@qwen-code\qwen-code\cli.js'])
+        i.add(12, 1, 'node.exe', argv=['node.exe', 'copilot'])
+        i.add(13, 1, 'node.exe', argv=['node.exe', r'C:\x\pi.js'])                        # not in the table: never shows
+        self.assertEqual([a.source_id for a in scan_ids(i)], ['copilot', 'qwen'])
+        by = {a.source_id: a for a in scan_ids(i)}
+        self.assertEqual((by['copilot'].program, by['copilot'].character), ('Copilot CLI', 'generic'))
+        self.assertEqual(by['qwen'].program, 'Qwen Code')
+
+    def test_desktop_apps_by_image_name(self):
+        i = FakeInfo()
+        i.add(10, 1, 'perplexity.exe')
+        i.add(11, 1, 'grok bot.exe')
+        i.add(12, 1, 'lm studio.exe')
+        i.add(13, 1, 'cursor.exe')
+        i.add(14, 1, 'opencode.exe')
+        i.add(15, 1, 'claude-devtools.exe')                                                # a viewer, not an agent
+        i.add(16, 1, 'emdash.exe')                                                         # hosts Claude + Codex: never a third fighter
+        self.assertEqual([a.source_id for a in scan_ids(i)], ['cursor', 'grok', 'lmstudio', 'opencode', 'perplexity'])
+
+    def test_describe_names_programs_and_numbers_only(self):
+        i = FakeInfo()
+        i.add(10, 1, 'cursor.exe', path=r'C:\Users\secret-project\cursor\cursor.exe')
+        i.add(11, 10, 'cursor.exe', path=r'C:\Users\secret-project\cursor\cursor.exe', argv=['cursor.exe', r'C:\secret-project\notes.md'])
+        sc = S.ProcessScanner(CPU, i)
+        srcs = S.Sources(CPU, detectors=[S.ProcessSource(CPU, sc)])
+        srcs.poll(100.0)
+        i.burn(11, 1.5)
+        rows = S.describe(CPU, 103.0, srcs)
+        by = {r['source']: r for r in rows}
+        self.assertEqual({r['source'] for r in S.RULES} | set(S.TRANSCRIPT_SOURCES), set(by))
+        self.assertEqual(by['cursor']['state'], 'working')
+        self.assertIn('process: cursor.exe, cpu 50% of one core', by['cursor']['how'])
+        self.assertEqual(by['copilot']['state'], '-')
+        self.assertIn('would match command copilot / @github/copilot', by['copilot']['how'])
+        self.assertEqual(by['claude']['how'], 'transcript sources not polled')
+        text = ' '.join(f"{r['program']} {r['character']} {r['state']} {r['how']}" for r in rows)
+        self.assertNotIn('secret-project', text)
+        self.assertNotIn('notes.md', text)
+        self.assertNotIn('\\', text)
+        self.assertNotIn(':', text.replace(': ', ''))                                      # no drive letters, no paths
+
     def test_activity_snapshot_carries_numbers_and_events(self):
         s = S.Activity('codex', 'Codex', 'codex', 'working', 12.0, 3.0, 'wk', '1d 2h', 5.0, ['finished']).snapshot()
         self.assertEqual((s.state, s.ctx_pct, s.plan_pct, s.plan_label, s.events), ('working', 12.0, 3.0, 'wk', ['finished']))
