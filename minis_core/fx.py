@@ -3,7 +3,11 @@
 Schema (docs/V4-WORKORDER.md, "Shared interfaces"):
   {"res": 2, "effects": {"<name>": {"frames": [{"x","y","w","h","ms"}], "anchor": "hand|ground|center", "offset": [dx, dy],
                                      "loop": false, "layer": "front|back", "hit_frame": n,
-                                     "travel": {"speed": px/s} | null, "shake": {"frames": n, "amp": px} | null}}}
+                                     "travel": {"speed": px/s} | null, "shake": {"frames": n, "amp": px} | null,
+                                     "grow": {"from_w": px, "to_w": px, "ms": n} | absent, "flash": true | absent}}}
+`grow` (V5, optional): a beam that extends from its anchor edge from `from_w` to `to_w` pixels over `ms`, holds, then
+retracts / fades over the last frame (`retract_ms` overrides).  `flash` (optional): a one-frame white screen flash on the
+effect's hit frame.  Both are read when present; an effect without them plays exactly as before.
 `res` is optional; a sheet without it is taken as RES 2 (built beside assets_hd).  Frames are crops from fx.png.
 
 Where the sheet is looked for (first hit wins, then per-character sheets are merged on top):
@@ -37,7 +41,7 @@ class Effect:
     """One effect: frames [(RGBA, ms)] at `res`, plus placement and playback metadata."""
 
     def __init__(self, name, frames, anchor='center', offset=(0, 0), loop=False, layer='front', hit_frame=None,
-                 travel=None, shake=None, res=2, procedural=False):
+                 travel=None, shake=None, res=2, procedural=False, grow=None, flash=False):
         if not frames:
             raise ValueError(f'{name}: no frames')
         self.name, self.frames = name, [(im, max(1, int(ms))) for im, ms in frames]
@@ -49,7 +53,53 @@ class Effect:
         self.shake = dict(frames=int(shake.get('frames', 0)), amp=float(shake.get('amp', 0))) if isinstance(shake, dict) and shake.get('frames') else None
         self.res, self.procedural = max(1, int(res)), procedural
         self.total_ms = sum(ms for _, ms in self.frames)
+        self.grow = self._grow(grow)
+        self.flash = bool(flash)
         self._cache = {}
+
+    def _grow(self, g):
+        """{'from_w','to_w','ms','retract_ms'} in this effect's pixels, or None.  Bad values mean no growth, never an error."""
+        if not isinstance(g, dict):
+            return None
+        try:
+            w_full = max(im.width for im, _ in self.frames)
+            to_w = int(g.get('to_w', w_full))
+            from_w = int(g.get('from_w', 0))
+            ms = int(g.get('ms', 0))
+        except (TypeError, ValueError):
+            return None
+        if to_w <= 0 or ms <= 0:
+            return None
+        to_w = min(to_w, w_full)
+        from_w = max(0, min(from_w, to_w))
+        try:
+            retract = int(g.get('retract_ms', self.frames[-1][1]))
+        except (TypeError, ValueError):
+            retract = self.frames[-1][1]
+        retract = max(0, min(retract, max(0, self.total_ms - ms)))
+        return dict(from_w=from_w, to_w=to_w, ms=ms, retract_ms=retract)
+
+    def extent(self, elapsed_ms):
+        """-> (start, end, alpha) of the visible beam span in this effect's pixels from the anchor edge, for a growing
+        effect: extends from_w -> to_w over `ms`, holds, then the start edge races to the end while it fades.
+        None when the effect does not grow."""
+        g = self.grow
+        if g is None:
+            return None
+        el = max(0.0, float(elapsed_ms))
+        if el <= g['ms']:
+            return 0, g['from_w'] + (g['to_w'] - g['from_w']) * el / g['ms'], 1.0
+        t_ret = self.total_ms - g['retract_ms']
+        if g['retract_ms'] <= 0 or el < t_ret or self.loop:
+            return 0, g['to_w'], 1.0
+        k = min(1.0, (el - t_ret) / float(g['retract_ms']))
+        return g['to_w'] * k, g['to_w'], 1.0 - 0.85 * k
+
+    def hit_ms(self):
+        """Milliseconds from the start to the hit frame (0 without one)."""
+        if self.hit_frame is None:
+            return 0
+        return sum(ms for _, ms in self.frames[:self.hit_frame])
 
     def locate(self, elapsed_ms):
         """-> (frame index, finished)."""
@@ -299,7 +349,8 @@ class Fx:
                         raise ValueError('frame outside the sheet')
                     frames.append((sheet.crop(box), int(f.get('ms', 80))))
                 self.effects[name] = Effect(name, frames, e.get('anchor', 'center'), e.get('offset', (0, 0)), e.get('loop', False),
-                                            e.get('layer', 'front'), e.get('hit_frame'), e.get('travel'), e.get('shake'), res)
+                                            e.get('layer', 'front'), e.get('hit_frame'), e.get('travel'), e.get('shake'), res,
+                                            grow=e.get('grow'), flash=e.get('flash', False))
             except (KeyError, TypeError, ValueError) as err:
                 self.errors[f'{path.name}:{name}'] = type(err).__name__
         self.loaded_from.append(str(path))

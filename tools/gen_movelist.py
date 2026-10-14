@@ -7,7 +7,7 @@ sys.path.insert(0, ROOT)
 from minis_core.atlas import Atlas, available  # noqa: E402
 from minis_core.sources import RULES, PROGRAM  # noqa: E402
 
-brain_src = ''.join(open(os.path.join(ROOT, 'minis_core', f), encoding='utf-8').read() for f in ('brain.py', 'rounds.py', 'arena.py'))   # the planners that trigger moves
+brain_src = ''.join(open(os.path.join(ROOT, 'minis_core', f), encoding='utf-8').read() for f in ('brain.py', 'rounds.py', 'arena.py', 'choreo.py'))   # the planners that trigger moves
 CHARS = available()
 ORDER = ['claude', 'codex', 'gemini', 'cursor', 'ollama', 'lmstudio', 'generic']
 CHARS = [c for c in ORDER if c in CHARS] + [c for c in CHARS if c not in ORDER]

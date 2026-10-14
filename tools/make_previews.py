@@ -3,7 +3,7 @@ Contact sheets + move reels come from the real sprite sheets (every character on
 planner (headless, DEMO DATA, fake clock) with characters in both slots; plates are drawn by the real renderer.
 V4: 13-hd-ultimates.png (every character's ultimate at HD with its effects, both facings), 14-match.gif (a best-of-3
 match on the taskbar with HP, texts and effects) and 15-arena.png (a headless arena frame on a synthetic backdrop).
---quick skips the long reels."""
+--quick skips the long reels.  --match-gif <path> renders ONLY the match GIF (V5 choreography) to that path."""
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -17,12 +17,50 @@ from minis_core.telemetry import Snapshot
 
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
 quick = '--quick' in sys.argv
+match_gif = sys.argv[sys.argv.index('--match-gif') + 1] if '--match-gif' in sys.argv else None
+if match_gif:
+    args = [a for a in args if a != match_gif]
 out = args[0] if args else os.path.join(ROOT, 'qa', 'previews')
 os.makedirs(out, exist_ok=True)
 P = lambda n: os.path.join(out, n)
 ORDER = ['claude', 'codex', 'gemini', 'cursor', 'ollama', 'lmstudio', 'generic']
 CHARS = [c for c in ORDER if c in available()] + [c for c in available() if c not in ORDER]
 LIB = Library()
+PL = {LEFT: 380, RIGHT: 560}
+crop = (190, 770)           # 580 logical px wide window around the fighting area
+
+
+def segment(frames, flags, pad_before=3.0, pad_after=1.5, fps=10):
+    idx = [i for i, f in enumerate(flags) if f['script']]
+    if not idx:
+        return frames
+    a, b = max(0, idx[0] - int(pad_before * fps)), min(len(frames) - 1, idx[-1] + int(pad_after * fps))
+    return frames[a:b + 1]
+
+
+def idle():
+    return {LEFT: sim.FakeTelemetry(LEFT, [(0, 'idle', 38.0)]), RIGHT: sim.FakeTelemetry(RIGHT, [(0, 'idle', 24.0)], plan=(1.0, 'wk'))}
+
+
+def render_match_gif(path, seed=7, chars=None, fps=5):
+    """A best-of-3 match on the taskbar through the real planner (headless, DEMO DATA): HP, texts, effects, V5 choreography."""
+    chars = chars or {LEFT: 'claude', RIGHT: 'codex'}
+    brains, fr, ts = sim.run(50, idle(), seed=seed, cfg_over={'bout_min_s': 999, 'bout_max_s': 999, 'clash_min_s': 999, 'clash_max_s': 999,
+                                                            'match_min_s': 2, 'match_max_s': 3, 'scoreboard': False}, place=PL, collect=True, crop=crop,
+                             scale=3, chars=chars)
+    seg = segment(fr, sim.run.flags, pad_before=1.0, pad_after=1.0)
+    sim.save_gif(seg[::2], None, path, fps=fps)
+    summary = brains[LEFT].last_match or {}
+    return len(seg), summary
+
+
+if match_gif:
+    n, summary = render_match_gif(match_gif)
+    beats = summary.get('beats') or {}
+    import collections
+    picks = {s: collections.Counter(b['anim'] for b in v if b['kind'] in ('strike', 'special', 'super', 'ultimate', 'counter')).most_common(4) for s, v in beats.items()}
+    print('match gif', match_gif, n, 'frames; winner', summary.get('winner'), 'rounds', len(summary.get('rounds') or []), 'air', summary.get('air'), 'picks', picks)
+    sys.exit(0)
 
 # ---- 1. roster overview + contact sheets
 print(previews.roster_contact(P('01-roster.png'), CHARS))
@@ -40,18 +78,7 @@ if not quick:
 
 
 # ---- 3. interaction GIFs from the real planner
-def segment(frames, flags, pad_before=3.0, pad_after=1.5, fps=10):
-    idx = [i for i, f in enumerate(flags) if f['script']]
-    if not idx:
-        return frames
-    a, b = max(0, idx[0] - int(pad_before * fps)), min(len(frames) - 1, idx[-1] + int(pad_after * fps))
-    return frames[a:b + 1]
-
-
-PL = {LEFT: 380, RIGHT: 560}
-crop = (190, 770)           # 580 logical px wide window around the fighting area
 pick = lambda i: CHARS[i % len(CHARS)]
-idle = lambda: {LEFT: sim.FakeTelemetry(LEFT, [(0, 'idle', 38.0)]), RIGHT: sim.FakeTelemetry(RIGHT, [(0, 'idle', 24.0)], plan=(1.0, 'wk'))}
 working = lambda: {LEFT: sim.FakeTelemetry(LEFT, [(0, 'working', 41.0)]), RIGHT: sim.FakeTelemetry(RIGHT, [(0, 'working', 52.0)])}
 
 for name, tele, over, seed, secs, chars in (
@@ -139,12 +166,8 @@ for ch, ult, strip in rows:
 sheet.convert('RGB').save(P('13-hd-ultimates.png'))
 print('13-hd-ultimates', [r[1] for r in rows])
 
-brains, fr, ts = sim.run(50, idle(), seed=7, cfg_over={'bout_min_s': 999, 'bout_max_s': 999, 'clash_min_s': 999, 'clash_max_s': 999,
-                                                       'match_min_s': 2, 'match_max_s': 3, 'scoreboard': False}, place=PL, collect=True, crop=crop,
-                         scale=3, chars={LEFT: 'claude', RIGHT: 'codex'})
-seg = segment(fr, sim.run.flags, pad_before=1.0, pad_after=1.0)
-sim.save_gif(seg[::2], None, P('14-match.gif'), fps=5)
-print('14-match', len(seg))
+n_match, _ = render_match_gif(P('14-match.gif'))
+print('14-match', n_match)
 
 st = AR.Stage((0, 0, 1920, 1080), [(1, 300, 200, 1200, 800), (2, 1300, 300, 1800, 900)], floor_y=1032)
 ar = AR.Arena(st, {'a': HD['claude'], 'b': HD['codex']}, FX, seed=5, backdrop=AR.synthetic_backdrop(st.w, st.h), now=0.0, record=lambda *a, **k: None)

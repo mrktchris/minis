@@ -93,7 +93,7 @@ class Timeline(unittest.TestCase):
     def test_directives_and_texts(self):
         tl, t_end, s = rounds.make_match(plan(), ATL, fx.default())
         names = {n for w in tl for t, n, o in tl[w] if n.startswith('@')}
-        self.assertEqual(names, {'@hp', '@fx', '@banner', '@record'})
+        self.assertTrue({'@hp', '@fx', '@banner', '@record'} <= names <= {'@hp', '@fx', '@banner', '@record', '@shake', '@flash', '@whiff'}, names)
         banners = [o['banner'] for t, n, o in tl['a'] if n == '@banner']
         self.assertEqual(banners[:2], ['round1', 'fight'])
         self.assertIn('ko', banners)
@@ -102,7 +102,7 @@ class Timeline(unittest.TestCase):
         rec = [o for t, n, o in tl['a'] if n == '@record'][0]
         self.assertEqual((rec['winner'], rec['loser']), (s['winner'], s['loser']))
         self.assertEqual(rec['chars'], {'a': 'claude', 'b': 'codex'})
-        ults = [o for w in tl for t, n, o in tl[w] if n == '@fx' and o.get('kind') == 'ultimate']
+        ults = [o for w in tl for t, n, o in tl[w] if n == '@fx' and o.get('kind') == 'ultimate' and not o.get('impact')]   # the impact burst lands on the defender
         allowed = {n for a in (ATL['claude'], ATL['codex']) for _, n, _ in a.move_fx(a.ultimate())}
         self.assertTrue(ults and all(o['fx'] in allowed for o in ults), (ults, allowed))
 

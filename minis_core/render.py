@@ -186,15 +186,31 @@ def compose(style, atlas, view, snap, t, cfg, bounds=(0, 4000), show_plate=True)
     if view.get('banner'):
         bim, bx = view['banner']
         parts.append((bim, int(round(bx - bim.width / 2)), 0))
+    n_fight = len(parts)                          # everything so far belongs to the fight; the plate is never flashed over
     if show_plate and cfg.get('plate', True):
         pl = plate(style, snap, t)
         parts.append((pl, plate_x(hip, view['facing'], pl.width, bounds), 27))
     x0 = min(p[1] for p in parts)
     x1 = max(p[1] + p[0].width for p in parts)
     canvas = Image.new('RGBA', (x1 - x0, cell_h), (0, 0, 0, 0))
-    for im, sx, sy in parts:
+    for im, sx, sy in parts[:n_fight]:
+        _paste_clipped(canvas, im, sx - x0, sy)
+    flash = float(view.get('flash') or 0.0)
+    if flash > 0:                                 # V5: one-frame white flash over the fighter and its effects (plate-safe)
+        fx0 = min(p[1] for p in parts[:n_fight])
+        fx1 = max(p[1] + p[0].width for p in parts[:n_fight])
+        white = Image.new('RGBA', (fx1 - fx0, cell_h), (255, 255, 255, 255))
+        white.putalpha(_flash_mask(canvas, fx0 - x0, white.size, min(1.0, flash)))
+        canvas.alpha_composite(white, (fx0 - x0, 0))
+    for im, sx, sy in parts[n_fight:]:
         _paste_clipped(canvas, im, sx - x0, sy)
     return canvas, x0
+
+
+def _flash_mask(canvas, x, size, k):
+    """The flash whitens the drawn pixels (sprite + effects) by `k`, never the transparent taskbar around them."""
+    region = canvas.crop((x, 0, x + size[0], size[1])).getchannel('A')
+    return region.point(lambda v, k=k: int(v * k))
 
 
 def compose_full(style, atlas, view, snap, t, zone_w, cfg, win_x=0, show_plate=True):

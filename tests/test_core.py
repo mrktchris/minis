@@ -103,7 +103,7 @@ class Planner(unittest.TestCase):
                 if move in ('fistbump', 'highfive'):
                     continue
                 self.assertIn(round(tc, 2), hits[dfn], f'{move} contact at {tc} has no matching reaction')
-                self.assertIn(hits[dfn][round(tc, 2)], ('block_hit', 'hit', 'hit_heavy'))
+                self.assertIn(hits[dfn][round(tc, 2)], ('block_hit', 'hit', 'hit_heavy', 'parry', 'whiff', 'knockdown'))   # V5: every answer is logged at the contact instant
                 pairs += 1
         self.assertGreaterEqual(pairs, 4, 'a spar has at least four exchanges')
 

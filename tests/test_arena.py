@@ -46,8 +46,9 @@ def run(ar, comp=None, secs=120, fps=30, until_phase='done', hook=None):
 class Platforms(unittest.TestCase):
     def test_platforms_come_from_window_tops_clipped_plus_the_floor(self):
         st = AR.Stage(MON, WINS, floor_y=FLOOR)
-        self.assertEqual(st.platforms(), [(300, 1200, 200), (1300, 1800, 300), (0, 400, 500), (0, 1920, 1032)])
-        self.assertEqual([w['id'] for w in st.windows], [11, 12, 13])
+        self.assertEqual(st.platforms(), [(1300, 1800, 300), (0, 400, 500), (0, 1920, 1032)])   # window 11's top (200) is inside the HUD band: no platform
+        self.assertEqual([w['id'] for w in st.windows], [11, 12, 13])                         # ... but it still cracks
+        self.assertGreaterEqual(AR.MIN_PLATFORM_Y, AR.HUD_H + AR.SPRITE_H)
         self.assertEqual(st.window_at(500, 500)['id'], 11)
         self.assertIsNone(st.window_at(1250, 250))
         st.update([])

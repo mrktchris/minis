@@ -12,6 +12,17 @@ Timeline entries are (t, anim, opts) like every other bout; entries whose "anim"
   @fx      {'fx': name, 'anchor': optional}                           spawn an effect on this fighter
   @banner  {'banner': round1|round2|round3|fight|ko|winner, 'until': t, 'over': slot|None}   (left side only)
   @record  {'winner': slot, 'loser': slot, 'score': {slot: n}}        write record.json (left side only)
+  @shake   {'frames': n, 'amp': px}                                   the move's own screen shake on its hit frame (V5)
+  @flash   {'alpha': a}                                               one-frame white flash (an ultimate landing) (V5)
+  @whiff   {'react_to': move}                                         the attack missed: logged like a reaction, nothing plays (V5)
+Move entries may carry 'to' + 'slide_ms' (the fighter slides to that x while the move plays: dash-ins, backdashes,
+knockback) and 'hitstop' (ms both fighters freeze from the contact instant).
+
+V5 choreography (choreo.py): a seeded no-repeat picker weighted by category and situation; openers (dash-in jab, jump-in
+kick, sweep), defender answers (block, crouch block vs highs, parry -> counter, backdash whiff, getting hit), combos with
+hitstop, pressure vs spacing resets, specials at range (projectiles), a super when the hit meter fills, the ultimate once
+per match at a dramatic moment (round point / low HP) with flash + shake, knockdown -> getup on big hits, a taunt after a
+whiffed ultimate, and one air-to-air exchange per round.
 
 W/L per character go to %LOCALAPPDATA%\\minis\\record.json, written atomically; only character ids, never names of
 anything else.
@@ -20,8 +31,9 @@ from __future__ import annotations
 import json, random, time
 from pathlib import Path
 
-from . import config as cfgmod
+from . import choreo, config as cfgmod
 from .bus import write_json_atomic
+from .effects import EffectPlayer
 
 HP_MAX = 100
 DMG_PER_POWER = 12
@@ -68,11 +80,7 @@ def damage_of(atlas, move) -> int:
 
 # ---------------------------------------------------------------- the match timeline
 def strike_pool(atlas):
-    pool = [m for m in STRIKES if m in atlas.anim]
-    s = atlas.signature()['strike']
-    if s and s not in pool:
-        pool.append(s)
-    return pool
+    return choreo.strike_pool(atlas)
 
 
 def possible(atlases_by_slot) -> bool:
@@ -89,129 +97,393 @@ def _contact_s(atlas, move):
     return atlas.total_ms(move) * 0.6 / 1000.0            # a charge-then-release super / ultimate without hit_frame metadata
 
 
+# ---------------------------------------------------------------- shared bout machinery (V5: choreo.py drives both the match and spar / clash)
+CLOSE_EXTRA, FAR_EXTRA = 14, 40       # hip distance beyond gap_px that counts as "far"; where a spacing reset puts them
+KNOCK_SLIDE_MS = 180
+SPAN_PX = 90                          # a bout never drifts further than this from its centre (the zone is not in the plan)
+MIN_APART = 12
+
+
+class _Emitter:
+    """Per-slot timeline entries with a LAZY return to idle: a chained move (combo, counter) starting before the previous
+    move's return cancels that return, so the sorted timeline never idles a fighter mid-combo."""
+
+    def __init__(self, slots, t0):
+        self.tl = {s: [] for s in slots}
+        self.pending = {s: None for s in slots}
+        self.free = {s: t0 for s in slots}
+
+    def play(self, slot, t, anim, opts, dur, then='idle'):
+        p = self.pending[slot]
+        if p is not None and p[0] < t - 1e-6:                   # a return that would start with the next move is dropped
+            self.tl[slot].append((p[0], p[1], {}))
+        self.pending[slot] = (t + dur, then) if then else None
+        self.tl[slot].append((t, anim, opts))
+        self.free[slot] = t + dur
+
+    def directive(self, slot, t, name, opts):
+        self.tl[slot].append((t, name, opts))
+
+    def mark(self):
+        return {s: len(v) for s, v in self.tl.items()}, dict(self.pending), dict(self.free)
+
+    def rollback(self, m):
+        lens, pend, free = m
+        for s in self.tl:
+            del self.tl[s][lens[s]:]
+        self.pending, self.free = dict(pend), dict(free)
+
+    def finish(self):
+        for s, p in self.pending.items():
+            if p is not None:
+                self.tl[s].append((p[0], p[1], {}))
+            self.pending[s] = None
+
+
+class Bout:
+    """Plays choreo beats into an _Emitter with positions, HP, hit meters, projectiles and effects.  `friendly` (spar /
+    clash) has no HP, no supers / ultimates / knockdowns.  Deterministic in (plan, atlases, fx)."""
+
+    def __init__(self, plan, atlases, fx=None, friendly=False):
+        self.left, self.right = plan['left'], plan['right']
+        chars = plan.get('chars') or {}
+        self.A = {s: atlases[chars.get(s, s)] for s in (self.left, self.right)}
+        self.rng = random.Random(plan['seed'])
+        self.fx = fx
+        self.friendly = friendly
+        self.pos = {s: float(plan['pos'][s]) for s in (self.left, self.right)}
+        self.mid = (self.pos[self.left] + self.pos[self.right]) / 2.0
+        self.gap = max(MIN_APART, abs(self.pos[self.right] - self.pos[self.left])) or 24.0
+        self.span = float(plan.get('span', SPAN_PX))
+        self.facing = {self.left: 1, self.right: -1}
+        self.pick = {s: choreo.Picker(self.rng, self.A[s]) for s in (self.left, self.right)}
+        self.em = _Emitter((self.left, self.right), plan['t0'])
+        self.hp = {self.left: HP_MAX, self.right: HP_MAX}
+        self.meter = {self.left: 0.0, self.right: 0.0}
+        self.used_ult = {self.left: False, self.right: False}
+        self.wins = {self.left: 0, self.right: 0}
+        self.projs = []
+        self.beats = {self.left: [], self.right: []}        # every beat played, by the fighter that played it (tests, previews)
+        self.n_air = 0
+        self.last_att = None
+        self.last_hit = False
+
+    # ---- helpers
+    def other(self, s):
+        return self.right if s == self.left else self.left
+
+    def tot(self, s, n):
+        return self.A[s].total_ms(n) / 1000.0 if n in self.A[s].anim else 0.0
+
+    def dist(self):
+        return abs(self.pos[self.right] - self.pos[self.left])
+
+    def range(self):
+        return 'far' if self.dist() > self.gap + CLOSE_EXTRA else 'close'
+
+    def clamp(self, s, x):
+        lo, hi = self.mid - self.span, self.mid + self.span
+        x = max(lo, min(hi, x))
+        o = self.other(s)
+        if s == self.left:
+            x = min(x, self.pos[o] - MIN_APART)
+        else:
+            x = max(x, self.pos[o] + MIN_APART)
+        return x
+
+    def fx_reach(self, name):
+        if self.fx is None:
+            return 0.0
+        return EffectPlayer(self.fx, res=self.A[self.left].res).reach(name)
+
+    def fx_lead(self, name):
+        return _fx_hit_s(self.fx.get(name)) if self.fx is not None else 0.0
+
+    def main_fx(self, s, move):
+        """The move's own effect (named after it) from its `fx` list, else its last listed effect."""
+        sched = self.A[s].move_fx(move)
+        for off, name, until in sched:
+            if name == move:
+                return name
+        return sched[-1][1] if sched else None
+
+    # ---- one exchange
+    def exchange(self, att, t, k, dramatic=False, air=False):
+        """Plays one exchange starting at `t`.  -> (t_next, ko_loser, played) ; `played` False when nothing fits."""
+        dfn = self.other(att)
+        A, D = self.A[att], self.A[dfn]
+        ult = A.ultimate()
+        reach = self.fx_reach(self.main_fx(att, ult)) if ult else 0.0
+        sit = dict(range=self.range(), meter=self.meter[att], ult_ok=(not self.friendly and not self.used_ult[att]), dramatic=dramatic,
+                   friendly=self.friendly, air=air, k=k, ult_reaches=reach >= self.dist() - 10)
+        ex = choreo.plan_exchange(self.rng, self.pick[att], self.pick[dfn], sit)
+        if air:
+            self.n_air += 1
+        em, tot = self.em, self.tot
+        t = max(t, em.free[att], em.free[dfn])
+        ko = None
+        if air and 'jump' in D.anim:                          # air-to-air: the defender is up there too
+            em.play(dfn, t, 'jump', {}, tot(dfn, 'jump'))
+        for b in ex['beats']:
+            who = att if b['who'] == 'att' else dfn
+            tgt = self.other(who)
+            if b['kind'] == 'move':
+                t = max(t, em.free[who])
+                dur = tot(who, b['anim'])
+                if b['dx'] > 0:
+                    x = self.pos[tgt] - self.facing[who] * self.gap
+                else:
+                    x = self.pos[who] - self.facing[who] * (FAR_EXTRA if b['anim'] == 'backdash' else FAR_EXTRA * 0.75)
+                x = self.clamp(who, x)
+                em.play(who, t, b['anim'], {'to': x, 'slide_ms': int(dur * 1000)}, dur)
+                self.pos[who] = x
+                if b['anim'] in ('dash', 'backdash') and self.fx is not None:
+                    em.directive(who, t, '@fx', {'fx': 'dust', 'anchor': 'ground'})
+                t = t + dur * (0.45 if b['anim'] == 'jump' else 1.0) + 0.03     # a jump-in kick leaves the apex, not the landing
+                self.beats[who].append(b)
+                continue
+            if b['kind'] == 'emote':
+                t = max(t, em.free[who]) + 0.1
+                em.play(who, t, b['anim'], {}, tot(who, b['anim']))
+                self.beats[who].append(b)
+                continue
+            # ---- an attack beat (strike / special / super / ultimate / counter)
+            kind, move = b['kind'], b['anim']
+            t = max(t, em.free[who])
+            if kind == 'special' and not choreo.has_projectile(self.A[who], move):
+                continue
+            if self.dist() > self.gap + CLOSE_EXTRA and kind in ('strike', 'counter', 'super') and 'dash' in self.A[who].anim and not air:
+                dur = tot(who, 'dash')                         # never swing at the air: close in first
+                x = self.clamp(who, self.pos[tgt] - self.facing[who] * self.gap)
+                em.play(who, t, 'dash', {'to': x, 'slide_ms': int(dur * 1000)}, dur)
+                self.pos[who] = x
+                t += dur + 0.03
+            cont = _contact_s(self.A[who], move)
+            tc = t + cont
+            proj = None
+            if kind == 'special':
+                a = self.A[who].anim[move]
+                spawn = t + self.A[who].start_ms(move, a['proj_frame']) / 1000.0
+                speed = float(self.A[who].meta['projectile']['speed'])
+                arrive = spawn + max(0.0, self.dist() - 12) / speed
+                tc = max(tc, arrive)
+                proj = dict(owner=who, spawn=spawn, arrive=arrive, dir=self.facing[who], x0=self.pos[who], speed=speed, move=move)
+            elif kind == 'ultimate' and self.fx is not None:
+                name = self.main_fx(who, move)
+                if name:
+                    e = self.fx.get(name)
+                    k_px = self.A[who].res / float(e.res)
+                    spawn = max(t, t + [off for off, n, u in self.A[who].move_fx(move) if n == name][0] - self.fx_lead(name))
+                    if e.grow:
+                        tc = max(tc, spawn + e.grow['ms'] / 1000.0 * min(1.0, self.dist() / max(1.0, e.grow['to_w'] * k_px)))
+                    elif e.travel:
+                        tc = max(tc, spawn + max(0.0, self.dist() - 16) / (e.travel['speed'] * k_px))
+            dmg = b['dmg']
+            outcome = b['outcome']
+            if outcome == 'hit' and not self.friendly:
+                self.hp[tgt] = max(0, self.hp[tgt] - dmg)
+                self.meter[who] += dmg
+                self.meter[tgt] += dmg / 2.0
+            if kind == 'super':
+                self.meter[who] = 0.0
+            if kind == 'ultimate':
+                self.used_ult[who] = True
+            react = b['react']
+            if outcome == 'hit' and not self.friendly and self.hp[tgt] <= 0:
+                react, ko = 'knockdown', tgt
+            hs = b['hitstop'] / 1000.0
+            opts = {'contact': tc, 'kind': kind, 'damage': dmg, 'hitstop': b['hitstop'], 'outcome': outcome}
+            em.play(who, t, move, opts, tot(who, move) + hs)
+            if kind in ('ultimate', 'super') or (kind == 'special' and self.fx is not None):
+                for off, fx_name, until in self.A[who].move_fx(move):
+                    if kind == 'special' and fx_name == move:
+                        continue                              # the projectile sprite is the special's own effect on the taskbar
+                    lead = self.fx_lead(fx_name) if fx_name == move else 0.0
+                    em.directive(who, max(t, t + off - lead), '@fx', {'fx': fx_name, 'kind': kind, 'move': move, 'until': (t + until) if until else None})
+            if proj is not None:
+                self.projs.append(proj)
+            # the defender
+            if b.get('pre'):
+                if b['pre'] == 'backdash':                     # whiff: gone before the hit frame
+                    x = self.clamp(tgt, self.pos[tgt] - self.facing[tgt] * FAR_EXTRA)
+                    dur = tot(tgt, 'backdash')
+                    em.play(tgt, max(em.free[tgt], tc - 0.15), 'backdash', {'to': x, 'slide_ms': int(dur * 1000)}, dur)
+                    self.pos[tgt] = x
+                else:
+                    em.play(tgt, max(em.free[tgt], tc - 0.25), b['pre'], {}, max(0.0, tc - max(em.free[tgt], tc - 0.25)), then=None)
+            sh = choreo.move_shake(self.A[who], move)
+            if react is None:
+                em.directive(tgt, tc, '@whiff', {'react_to': move})
+            else:
+                ropts = {'react_to': move, 'damage': dmg, 'hitstop': b['hitstop'], 'outcome': outcome}
+                if not self.friendly:
+                    ropts['hp'] = dict(self.hp)
+                knock = b['knock']
+                if knock:
+                    x = self.clamp(tgt, self.pos[tgt] + self.facing[who] * knock)
+                    ropts.update(to=x, slide_ms=KNOCK_SLIDE_MS)
+                    self.pos[tgt] = x
+                rdur = tot(tgt, react) + hs
+                em.play(tgt, tc, react, ropts, rdur, then=('ko' if react == 'knockdown' and ko else 'idle'))
+                if outcome in ('block', 'crouch_block', 'parry'):
+                    em.directive(tgt, tc, '@fx', {'fx': 'block_spark'})
+                elif outcome == 'hit':
+                    em.directive(tgt, tc, '@fx', {'fx': 'hit_heavy' if react in ('hit_heavy', 'knockdown') else 'hit_light'})
+                    if kind == 'ultimate':
+                        name = self.main_fx(who, move)
+                        imp = f'{move}_impact' if self.fx is not None and self.fx.has_art(f'{move}_impact') else 'explosion'
+                        em.directive(tgt, tc, '@fx', {'fx': imp, 'kind': kind, 'impact': True})
+                        for s in (who, tgt):
+                            em.directive(s, tc, '@flash', {'alpha': 0.6})
+                if sh and outcome == 'hit':
+                    for s in (who, tgt):
+                        em.directive(s, tc, '@shake', dict(sh))
+                if react == 'knockdown':
+                    em.directive(tgt, tc + 0.15, '@fx', {'fx': 'dust', 'anchor': 'ground'})
+                    if ko:
+                        t_stars = tc + tot(tgt, 'knockdown') + hs
+                        em.directive(tgt, t_stars, '@fx', {'fx': 'ko_stars', 'until': t_stars + 3.2})    # fades before the next round
+                    elif 'getup' in self.A[tgt].anim:
+                        tg = tc + rdur + 0.25
+                        em.play(tgt, tg, 'getup', {}, tot(tgt, 'getup'))
+            self.beats[who].append(dict(b, react=react))
+            t = tc + hs + 0.12 if kind != 'counter' else em.free[who]
+            if ko:
+                break
+            if b['kind'] == 'counter':
+                t = max(em.free[who], em.free[tgt])
+        if ex['beats'] and ex['beats'][-1]['kind'] == 'move':
+            pass
+        t_next = max(em.free[att], em.free[dfn]) + (0.25 if ex['range_after'] == 'close' else 0.5)
+        self.last_att = att
+        self.last_hit = any(b.get('outcome') == 'hit' and b['who'] == 'att' for b in ex['beats'])
+        return t_next, ko, ex
+
+
+def _fx_player_res(atlas):
+    return atlas.res
+
+
 def make_match(plan, atlases, fx=None):
-    """-> (timeline {slot: [(t, anim, opts)]}, t_end, summary).  Deterministic in `plan` (+ the atlases / fx on disk)."""
-    left, right = plan['left'], plan['right']
-    chars = plan.get('chars') or {}
-    A = {s: atlases[chars.get(s, s)] for s in (left, right)}
-    rng = random.Random(plan['seed'])
+    """-> (timeline {slot: [(t, anim, opts)]}, t_end, summary).  Deterministic in `plan` (+ the atlases / fx on disk).
+    summary carries winner, loser, wins, rounds, mode, p_left, projs (projectiles for the brain), beats (per slot)."""
+    bout = Bout(plan, atlases, fx, friendly=False)
+    left, right = bout.left, bout.right
+    A, rng, em, tot = bout.A, bout.rng, bout.em, bout.tot
     mode = plan.get('mode') if plan.get('mode') in MODES else 'decided'
     pl = p_left(mode, plan.get('scores') or {}, left, right)
-    tl = {left: [], right: []}
-    tot = lambda w, n: A[w].total_ms(n) / 1000.0
-    fx_lead = (lambda name: fx.get(name) and _fx_hit_s(fx.get(name))) if fx is not None else (lambda name: 0.0)
-    other = lambda w: right if w == left else left
+    other = bout.other
+    tl = em.tl
 
     def banner(t, kind, over=None):
         dur = BANNER_S.get(kind, BANNER_S['round'])
-        tl[left].append((t, '@banner', {'banner': kind, 'until': t + dur, 'over': over}))
+        em.directive(left, t, '@banner', {'banner': kind, 'until': t + dur, 'over': over})
 
-    wins = {left: 0, right: 0}
+    wins = bout.wins
     rounds = []
     t = plan['t0']
     n_round = 0
     ko_loser = None
     while max(wins.values()) < ROUNDS_TO_WIN:
         n_round += 1
-        hp = {left: HP_MAX, right: HP_MAX}
+        bout.hp = hp = {left: HP_MAX, right: HP_MAX}
+        for p in bout.pick.values():
+            p.new_round()
         if ko_loser is not None:                                   # the fallen fighter gets up before the next round
-            tl[ko_loser].append((t - tot(ko_loser, 'getup') - 0.1, 'getup', {}))
+            em.play(ko_loser, t - tot(ko_loser, 'getup') - 0.1, 'getup', {}, tot(ko_loser, 'getup'))
         for w in (left, right):
-            tl[w].append((t, '@hp', {'hp': dict(hp), 'round': n_round, 'wins': dict(wins)}))
-            tl[w].append((t, 'idle', {}))
+            em.directive(w, t, '@hp', {'hp': dict(hp), 'round': n_round, 'wins': dict(wins)})
+            em.play(w, t, 'idle', {}, 0.0, then=None)
         banner(t, f'round{min(3, n_round)}')
         banner(t + BANNER_S['round'], 'fight')
         t_round = t + BANNER_S['round'] + BANNER_S['fight'] + 0.1
         t = t_round
-        used_ult = {left: False, right: False}
         k = 0
         ko_loser = None
+        air_done = False
+        tc_last = t
         while True:
-            att = left if rng.random() < pl else right
+            if bout.last_att is not None and bout.last_hit and rng.random() < 0.45:
+                att = bout.last_att                                # pressure: the winner of the last exchange keeps coming
+            else:
+                att = left if rng.random() < pl else right
             dfn = other(att)
-            pool = strike_pool(A[att])
-            r = rng.random()
-            ult, sup = A[att].ultimate(), A[att].signature()['super']
-            if ult and not used_ult[att] and k >= 2 and r < 0.18:
-                move, kind = ult, 'ultimate'
-                used_ult[att] = True
-            elif sup and sup != ult and r < 0.30:
-                move, kind = sup, 'super'
-            else:
-                move, kind = rng.choice(pool), 'strike'
-            dmg = DMG_ULTIMATE if kind == 'ultimate' else (24 if kind == 'super' else damage_of(A[att], move))
-            cont = _contact_s(A[att], move)
-            blocked = kind == 'strike' and dmg <= 2 * DMG_PER_POWER and rng.random() < 0.3
-            tc = t + cont
-            if blocked:
-                react, dmg = 'block_hit', 0
-            else:
-                hp[dfn] = max(0, hp[dfn] - dmg)
-                react = 'knockdown' if hp[dfn] <= 0 else ('hit_heavy' if dmg >= 2 * DMG_PER_POWER else 'hit')
-            exchange_len = max(tot(att, move), cont + tot(dfn, react)) + 0.35
-            if t + exchange_len - t_round > ROUND_CAP_S and k > 0:
-                break                                              # time: the round is called on HP
-            # attacker (+ the effects its move asks for: charge glows, the beam / burst itself)
-            tl[att].append((t, move, {'contact': tc, 'kind': kind, 'damage': dmg}))
-            if kind in ('ultimate', 'super'):
-                for off, fx_name, until in A[att].move_fx(move):
-                    lead = fx_lead(fx_name) if fx_name == move else 0.0
-                    tl[att].append((max(t, t + off - lead), '@fx', {'fx': fx_name, 'kind': kind, 'move': move,
-                                                                    'until': (t + until) if until else None}))
-            tl[att].append((t + tot(att, move), 'idle', {}))
-            # defender
-            if blocked:
-                tl[dfn].append((max(t_round, tc - 0.2), 'block', {}))
-                tl[dfn].append((tc, '@fx', {'fx': 'block_spark'}))
-            else:
-                tl[dfn].append((tc, '@fx', {'fx': 'hit_heavy' if react in ('hit_heavy', 'knockdown') else 'hit_light'}))
-            tl[dfn].append((tc, react, {'react_to': move, 'damage': dmg, 'hp': dict(hp)}))
-            if react == 'knockdown':
-                tl[dfn].append((tc + 0.15, '@fx', {'fx': 'dust', 'anchor': 'ground'}))
-                tl[dfn].append((tc + tot(dfn, 'knockdown'), 'ko', {}))
-                tl[dfn].append((tc + tot(dfn, 'knockdown'), '@fx', {'fx': 'ko_stars'}))
-            else:
-                tl[dfn].append((tc + tot(dfn, react), 'idle', {}))
-            t = tc + max(tot(att, move) - cont, tot(dfn, react)) + 0.35
+            air = (not air_done and k >= 1 and rng.random() < 0.3) or (not air_done and k >= 4)
+            drama = choreo.dramatic(wins[att], hp[att], hp[dfn], k)
+            mark = em.mark()
+            saved = (dict(bout.pos), dict(bout.meter), dict(bout.used_ult), dict(hp), list(bout.projs), {s: list(v) for s, v in bout.beats.items()}, bout.n_air)
+            t_next, ko, ex = bout.exchange(att, t, k, dramatic=drama, air=air)
+            if t_next - t_round > ROUND_CAP_S and k > 0:
+                em.rollback(mark)                                  # time: the round is called on HP
+                bout.pos, bout.meter, bout.used_ult, hp, bout.projs, bout.beats, bout.n_air = saved[0], saved[1], saved[2], saved[3], saved[4], saved[5], saved[6]
+                bout.hp = hp
+                break
+            if air:
+                air_done = True
+            tc_last = max(em.free[att], em.free[dfn])
+            t = t_next
             k += 1
-            if hp[dfn] <= 0:
-                ko_loser = dfn
+            if ko is not None:
+                ko_loser = ko
                 break
         # ---- round result
         if ko_loser is not None:
             winner = other(ko_loser)
+            tc = em.free[ko_loser] - tot(ko_loser, 'knockdown')
             banner(tc, 'ko')
-            tl[winner].append((tc + 0.6, 'taunt', {}))
-            tl[winner].append((tc + 0.6 + tot(winner, 'taunt'), 'idle', {}))
-            t_end_round = tc + 0.6 + tot(winner, 'taunt')
+            em.play(winner, max(em.free[winner], tc + 0.6), 'taunt', {}, tot(winner, 'taunt'))
+            t_end_round = em.free[winner]
         else:
             if hp[left] == hp[right]:
                 winner = left if rng.random() < 0.5 else right
             else:
                 winner = left if hp[left] > hp[right] else right
-            tl[winner].append((t, 'taunt', {}))
-            tl[winner].append((t + tot(winner, 'taunt'), 'idle', {}))
-            t_end_round = t + tot(winner, 'taunt')
+            tw = max(em.free[left], em.free[right])
+            em.play(winner, tw, 'taunt', {}, tot(winner, 'taunt'))
+            t_end_round = em.free[winner]
         wins[winner] += 1
-        rounds.append(dict(n=n_round, winner=winner, hp=dict(hp), ko=ko_loser is not None, t0=t_round, t1=t_end_round))
+        rounds.append(dict(n=n_round, winner=winner, hp=dict(hp), ko=ko_loser is not None, t0=t_round, t1=t_end_round, exchanges=k))
         for w in (left, right):
-            tl[w].append((t_end_round, '@hp', {'hp': dict(hp), 'round': n_round, 'wins': dict(wins)}))
+            em.directive(w, t_end_round, '@hp', {'hp': dict(hp), 'round': n_round, 'wins': dict(wins)})
         t = t_end_round + 2.2
     # ---- match result
     champ = left if wins[left] > wins[right] else right
     loser = other(champ)
     t_fin = t - 2.2 + 1.6
     banner(t_fin, 'winner', over=champ)
-    tl[champ].append((t_fin, 'victory2' if wins[loser] == 0 and 'victory2' in A[champ].anim else 'victory', {}))
+    em.play(champ, t_fin, 'victory2' if wins[loser] == 0 and 'victory2' in A[champ].anim else 'victory', {}, tot(champ, 'victory'))
     if ko_loser is None:                                           # lost on time: still goes down
-        tl[loser].append((t_fin, 'knockdown', {}))
-        tl[loser].append((t_fin + tot(loser, 'knockdown'), 'ko', {}))
+        em.play(loser, t_fin, 'knockdown', {}, tot(loser, 'knockdown'), then='ko')
     t_end = t_fin + 3.0
-    tl[left].append((t_end - 0.2, '@record', {'winner': champ, 'loser': loser, 'score': dict(wins), 'chars': {s: A[s].character for s in (left, right)}}))
+    em.finish()
+    em.directive(left, t_end - 0.2, '@record', {'winner': champ, 'loser': loser, 'score': dict(wins), 'chars': {s: A[s].character for s in (left, right)}})
     for w in tl:
         tl[w].sort(key=lambda s: s[0])
-    summary = dict(winner=champ, loser=loser, wins=dict(wins), rounds=rounds, mode=mode, p_left=pl)
+    summary = dict(winner=champ, loser=loser, wins=dict(wins), rounds=rounds, mode=mode, p_left=pl, projs=bout.projs, beats=bout.beats, air=bout.n_air)
     return tl, t_end, summary
+
+
+def make_friendly(plan, atlases, fx=None, exchanges=4):
+    """Spar / clash exchanges (no HP, no finishers) through the same choreography: -> (timeline, t_end, summary).
+    The caller (brain.make_timeline) wraps them in bows and the closing fist bump."""
+    bout = Bout(plan, atlases, fx, friendly=True)
+    left, right = bout.left, bout.right
+    rng, em = bout.rng, bout.em
+    t = plan['t0']
+    for p in bout.pick.values():
+        p.new_round()
+    for k in range(exchanges):
+        if bout.last_att is not None and bout.last_hit and rng.random() < 0.4:
+            att = bout.last_att
+        else:
+            att = (left, right)[k % 2] if k < 2 else (left if rng.random() < 0.5 else right)
+        air = k == exchanges - 1 and rng.random() < 0.35
+        t, ko, ex = bout.exchange(att, t, k, dramatic=False, air=air)
+    em.finish()
+    t_end = max(em.free.values()) + 0.2
+    for w in em.tl:
+        em.tl[w].sort(key=lambda s: s[0])
+    return em.tl, t_end, dict(projs=bout.projs, beats=bout.beats, air=bout.n_air, pos=dict(bout.pos))
 
 
 def _fx_hit_s(effect):

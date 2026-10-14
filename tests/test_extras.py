@@ -122,6 +122,7 @@ class Micro(Isolated):
         self.go(0.25)
         self.assertEqual(b.eye, (0, 0))                                                 # not while a move plays
         found = 0
+        found_moving = False
         for ch in available():
             a = Atlas(ch)
             pts = eyes.eye_pixels(a, 'idle', 0, 1)
@@ -135,9 +136,12 @@ class Micro(Isolated):
             self.assertTrue(all(bb[1] <= y < bb[1] + (bb[3] - bb[1]) * 0.3 for x, y in pts), ch)
             moved = eyes.shift_eyes(fr, pts, 1, 0)
             diff = sum(1 for x in range(fr.width) for y in range(fr.height) if moved.getpixel((x, y)) != fr.getpixel((x, y)))
-            self.assertTrue(0 < diff <= 2 * len(pts), (ch, diff))
+            self.assertLessEqual(diff, 2 * len(pts), (ch, diff))                       # a uniform visor band (Cursor, V5 art) shifts invisibly: 0 is fine
+            if diff:
+                found_moving = True
             self.assertIs(eyes.shift_eyes(fr, pts, 0, 0), fr)
         self.assertGreaterEqual(found, 4, 'eyes found for too few characters')
+        self.assertTrue(found_moving, 'no character has pupils that visibly move')
 
     def test_fast_drag_makes_it_dizzy_and_shift_drag_throws(self):
         b, ov = self.f.brain, self.f.ov

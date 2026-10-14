@@ -10,7 +10,7 @@
   python minis.py demo [kind]    start one bout now (spar | clash | ranged | match); plates keep the real numbers
   python minis.py winners random|decided   how match winners are drawn (decided = biased by the health score)
   python minis.py monitors       list monitors (index, rect, primary) for `arena --monitor N`
-  python minis.py arena --monitor N [--freeze] [--seconds S]   arena mode on monitor N, as its own process
+  python minis.py arena --monitor N [--freeze] [--seconds S] [--seed K]   arena mode on monitor N, as its own process
   python minis.py arena stop     ask the arena to leave (then force-stop it if it will not)
   python minis.py arena capture <png>   PrintWindow of the arena's OWN window only (never the desktop)
   python minis.py director       run the director + scoreboard widget in the foreground
@@ -290,8 +290,9 @@ def pick_arena_monitor(cfg, mons):
     return others[0] if len(others) == 1 else None
 
 
-def start_arena(monitor, freeze=False, seconds=None):
-    """Launch the arena as its own detached process (a crash never takes the taskbar fighters down)."""
+def start_arena(monitor, freeze=False, seconds=None, seed=None):
+    """Launch the arena as its own detached process (a crash never takes the taskbar fighters down).
+    `seed` fixes the choreography (previews, captures); without it the wall clock seeds the match."""
     st, pid = proc_state(ARENA)
     if st == 'running':
         return f'arena: already running (pid {pid})', 1
@@ -300,6 +301,8 @@ def start_arena(monitor, freeze=False, seconds=None):
         argv.append('--freeze')
     if seconds:
         argv += ['--seconds', str(float(seconds))]
+    if seed is not None:
+        argv += ['--seed', str(int(seed))]
     flags = 0x00000008 | 0x00000200 | 0x08000000
     subprocess.Popen(argv, creationflags=flags, close_fds=True, cwd=str(ROOT))
     return f'arena: started on monitor {monitor}' + (' (freeze)' if freeze else ''), 0
@@ -352,7 +355,7 @@ def cmd_arena(args):
     if args.monitor not in mons:
         print(f'arena: monitor {args.monitor} does not exist; have {sorted(mons)}')
         return 2
-    msg, rc = start_arena(args.monitor, args.freeze, args.seconds)
+    msg, rc = start_arena(args.monitor, args.freeze, args.seconds, getattr(args, 'seed', None))
     print(msg)
     return rc
 
@@ -918,7 +921,7 @@ def cmd_run(args):
         if args.monitor is None:
             print('run arena: --monitor N is required')
             return 2
-        return run_arena(dict(monitor=args.monitor, freeze=args.freeze, seconds=args.seconds), shell, cfgmod.load())
+        return run_arena(dict(monitor=args.monitor, freeze=args.freeze, seconds=args.seconds), shell, cfgmod.load(), seed=getattr(args, 'seed', None))
     return run_slot(args.slot, shell, cfgmod.load())
 
 
@@ -1148,6 +1151,7 @@ def main(argv=None):
     r.add_argument('--monitor', type=int, default=None)
     r.add_argument('--freeze', action='store_true')
     r.add_argument('--seconds', type=float, default=None)
+    r.add_argument('--seed', type=int, default=None)
     r.set_defaults(fn=cmd_run)
     w = sub.add_parser('winners', help='how match winners are drawn')
     w.add_argument('mode', choices=('decided', 'random'))
@@ -1159,6 +1163,7 @@ def main(argv=None):
     ar.add_argument('--monitor', type=int, default=None, help='required for start: see `monitors`')
     ar.add_argument('--freeze', action='store_true', help='snapshot the monitor into RAM as the stage backdrop')
     ar.add_argument('--seconds', type=float, default=None, help='leave on its own after this long')
+    ar.add_argument('--seed', type=int, default=None, help='fix the choreography seed (captures, previews)')
     ar.set_defaults(fn=cmd_arena)
     p = sub.add_parser('plates', help='show or hide both HUD plates')
     p.add_argument('state', choices=('on', 'off'))

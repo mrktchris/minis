@@ -18,7 +18,7 @@ from __future__ import annotations
 import math, random
 from collections import deque
 
-from . import config as cfgmod, rounds
+from . import choreo, config as cfgmod, rounds
 from .effects import EffectPlayer
 
 LEFT, RIGHT = 'a', 'b'
@@ -41,11 +41,7 @@ def other(slot):
 
 
 def strike_pool(atlas):
-    pool = [m for m in STRIKES if m in atlas.anim]
-    s = atlas.signature()['strike']
-    if s and s not in pool:
-        pool.append(s)
-    return pool
+    return choreo.strike_pool(atlas)
 
 
 def kind_possible(kind, atlases_by_slot, plan=None):
@@ -72,11 +68,13 @@ def kind_possible(kind, atlases_by_slot, plan=None):
 def make_timeline(kind, plan, atlases, fx=None):
     """-> ({slot: [(t_abs, anim, opts)]}, t_end, projectiles[list of dict]).  Same inputs -> same output on both sides.
     `atlases` maps character -> Atlas; plan['chars'] maps slot -> character (absent: the slot ids are the characters).
-    Entries whose anim starts with '@' are directives (rounds.py): @hp, @fx, @banner, @record."""
+    Entries whose anim starts with '@' are directives (rounds.py): @hp, @fx, @banner, @record, @shake, @flash, @whiff.
+    V5: spar / clash exchanges and the whole match come from choreo.py through rounds.py (seeded no-repeat picks, openers,
+    defender answers, combos, resets, specials at range); this function only adds the bows and the closing fist bump."""
     if kind == 'match':
         tl, t_end, summary = rounds.make_match(plan, atlases, fx)
         make_timeline.last_summary = summary
-        return tl, t_end, []
+        return tl, t_end, list(summary.get('projs') or [])
     t0 = plan['t0']
     rng = random.Random(plan['seed'])
     chars = plan.get('chars') or {}
@@ -94,21 +92,22 @@ def make_timeline(kind, plan, atlases, fx=None):
             for w in (left, right):
                 tl[w].append((t0, 'bow', {}))
             t = t0 + max(tot(left, 'bow'), tot(right, 'bow')) + 0.45
-        pool = {w: strike_pool(A(w)) for w in (left, right)}
-        order = [left, right, left, right] if bows else [left, right]
-        for k, att in enumerate(order):
-            dfn = right if att == left else left
-            move = rng.choice(pool[att][:4] if k < 2 else pool[att])
-            react = 'block_hit' if move in ('jab', 'cross', 'low_kick') and rng.random() < 0.7 else ('hit_heavy' if A(att).anim[move].get('power', 1) >= 3 else 'hit')
-            tc = t + cont(att, move)
-            tl[att].append((t, move, {'contact': tc}))
-            tl[att].append((t + tot(att, move), 'idle', {}))
-            if react == 'block_hit':
-                tl[dfn].append((max(t0, tc - 0.2), 'block', {}))
-            tl[dfn].append((tc, react, {'react_to': move}))
-            tl[dfn].append((tc + tot(dfn, react), 'idle', {}))
-            t = tc + max(tot(att, move) - cont(att, move), tot(dfn, react)) + 0.35
-        tf = t
+        ftl, tf, summary = rounds.make_friendly(dict(plan, t0=t), atlases, fx, exchanges=4 if bows else 2)
+        for w in (left, right):
+            tl[w].extend(ftl.get(w, []))
+        projs.extend(summary.get('projs') or [])
+        make_timeline.last_summary = summary
+        pos = summary.get('pos') or plan['pos']
+        back = {w: plan['pos'][w] for w in (left, right)}     # walk back to the bout spots for the hand shake
+        tw = tf
+        for w in (left, right):
+            d = abs(float(pos[w]) - float(back[w]))
+            if d > 2 and 'walk' in A(w).anim:
+                dur = d / 60.0
+                tl[w].append((tf, 'walk', {'to': back[w], 'slide_ms': int(dur * 1000)}))
+                tl[w].append((tf + dur, 'idle', {}))
+                tw = max(tw, tf + dur + 0.15)
+        tf = tw
         end_move = rng.choice(['fistbump', 'highfive']) if bows else 'fistbump'
         for w in (left, right):
             tl[w].append((tf, end_move, {'contact': tf + cont(w, end_move)}))
@@ -228,6 +227,8 @@ class Brain:
         self.next_match = now + rng.uniform(cfg.get('match_min_s', 180), cfg.get('match_max_s', 360))
         self.demo = None            # {'kind', 'until'}: a bout asked for by the user, sent as soon as both are free
         self.ko_until = 0.0
+        self.stop = None             # (t_start, t_end): hitstop freeze of the animation clock (V5)
+        self.slide = None            # (t0, t1, x0, x1): the fighter slides while a move plays (dash-in, knockback) (V5)
         self.stun_until = 0.0        # dizzy after a fast drag / a throw landing
         self.throw_state = None      # a Shift-drag throw in flight
         self.last_now = now
@@ -246,7 +247,11 @@ class Brain:
         self.anim_loop = self.atlas.anim[name]['loop'] if loop is None else loop
 
     def frame(self, now):
-        return self.atlas.locate(self.anim, (now - self.anim_t0) * 1000.0, self.anim_loop)
+        el = now - self.anim_t0
+        st = self.stop
+        if st is not None:                                        # hitstop: the clock stands still for the overlap
+            el -= max(0.0, min(now, st[1]) - max(st[0], self.anim_t0))
+        return self.atlas.locate(self.anim, el * 1000.0, self.anim_loop)
 
     def _work_anims(self):
         ctx = (self.snap.ctx_pct or 0) if self.snap else 0
@@ -326,8 +331,10 @@ class Brain:
             except (ValueError, OSError):
                 banner = None
         fxp = self.fxp.placements(now)
+        flash = self.fxp.flash(now)
         v = dict(anim=self.anim, frame=idx, x=self.x, facing=self.facing, dim=dim, proj=None, fx=fxp, banner=banner,
-                 shake=self.fxp.shake(now), busy=bool(fxp or banner), eye=(self.eye if self.anim == 'idle' and self.mode == 'home' else (0, 0)))
+                 shake=self.fxp.shake(now), busy=bool(fxp or banner or flash or self.slide), flash=flash,
+                 eye=(self.eye if self.anim == 'idle' and self.mode == 'home' else (0, 0)))
         if self.script and self.script['projs']:
             for p in self.script['projs']:
                 if p['owner'] == self.slot and p['spawn'] <= now <= p['arrive']:
@@ -380,6 +387,7 @@ class Brain:
 
     def _end_match_visuals(self):
         self.hp = self.round = self.banner = None
+        self.stop = self.slide = None
         self.fxp.clear()
 
     # -------------------------------------------------------------- on-demand bout (minis.py demo / menu)
@@ -603,12 +611,28 @@ class Brain:
             self.play(name, t_abs, loop=None)
             if 'hp' in opts and isinstance(opts['hp'], dict):
                 self.hp = opts['hp'].get(self.slot)
+            if 'to' in opts:                                      # slide while the move plays (dash-in, backdash, knockback)
+                z0, z1 = self.zone
+                x1 = max(z0, min(z1, float(opts['to'])))
+                ms = float(opts.get('slide_ms') or self.atlas.total_ms(name) if name in self.atlas.anim else 300)
+                self.slide = (t_abs, t_abs + max(0.05, ms / 1000.0), self.x, x1)
+            hs = opts.get('hitstop')
+            if hs:
+                t_stop = float(opts.get('contact', t_abs))
+                self.stop = (t_stop, t_stop + float(hs) / 1000.0)
             if 'contact' in opts:
                 self.contact_log.append((opts['contact'], name))
                 self._bout_note('contact', opts['contact'], name)
             if 'react_to' in opts:
                 self.hit_log.append((t_abs, name))
                 self._bout_note('hit', t_abs, name)
+        if self.slide is not None:
+            t0, t1, x0, x1 = self.slide
+            if now >= t1:
+                self.x, self.slide = x1, None
+            elif now > t0:
+                k = (now - t0) / (t1 - t0)
+                self.x = x0 + (x1 - x0) * (1 - (1 - k) ** 2)      # ease-out: fast start, soft stop
         if now >= sc['t_end']:
             self.script, self.bout = None, None
             self._end_match_visuals()
@@ -628,6 +652,15 @@ class Brain:
                 self.fxp.spawn(opts['fx'], t_abs, self.x, self.atlas.ground_y, self.facing, owner=self.slot, anchor=opts.get('anchor'),
                                hand=self.atlas.hand(opts.get('move') or opts['fx']),
                                fade_ms=(max(1.0, (until - t_abs) * 1000.0) if until else None))
+        elif name == '@shake':
+            if now - t_abs <= 0.5:
+                self.fxp.add_shake(t_abs, opts.get('frames', 0), float(opts.get('amp', 0)))
+        elif name == '@flash':
+            if now - t_abs <= 0.5:
+                self.fxp.flash_at(t_abs, float(opts.get('alpha', 0.6)))
+        elif name == '@whiff':
+            self.hit_log.append((t_abs, 'whiff'))
+            self._bout_note('hit', t_abs, 'whiff')
         elif name == '@banner':
             plan = (self.script or {}).get('plan') or {}
             over = opts.get('over')
