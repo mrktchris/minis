@@ -234,7 +234,8 @@ class ArenaWithTwoSlots(unittest.TestCase):
     """Two real slot processes + one real arena process (headless surface, synthetic monitor + windows, synthetic backdrop)
     for ~30 s: the slots hide while the arena heartbeat is fresh, rounds progress, a winner is recorded, nothing is written
     outside the temp data dir, and the slots come back when the arena leaves."""
-    ARENA_S = 80.0                       # a full best-of-3 takes ~60 s in real time; the arena leaves on its own at ARENA_S at the latest
+    ARENA_S = 120.0                      # a best-of-3 takes ~60 s, up to ~95 s when every round goes the full 25 s (physics timing is
+                                         # real time, so it varies run to run); the arena leaves on its own at ARENA_S at the latest
 
     @classmethod
     def setUpClass(cls):
@@ -257,6 +258,7 @@ class ArenaWithTwoSlots(unittest.TestCase):
                                      stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=0x08000000)
         cls.samples = []
         t0 = time.monotonic()
+        exited = None
         try:
             while time.monotonic() - t0 < cls.ARENA_S + 20:
                 row = {'t': time.monotonic() - t0}
@@ -274,8 +276,10 @@ class ArenaWithTwoSlots(unittest.TestCase):
                 except OSError:
                     row['present'] = None
                 cls.samples.append(row)
-                if cls.arena.poll() is not None and row['t'] > cls.ARENA_S + 6:
-                    break                                     # a few seconds of samples after the arena left
+                if cls.arena.poll() is not None:
+                    exited = exited if exited is not None else row['t']
+                    if row['t'] > exited + 6:
+                        break                                 # a few seconds of samples after the arena left
                 time.sleep(0.2)
         finally:
             cls.arena_rc = cls.arena.poll()
