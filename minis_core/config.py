@@ -39,6 +39,15 @@ DEFAULTS = {
     "director_poll_s": 2.0,
     "director_idle_s": 60,                 # a slot keeps its source until that source is idle this long and another is active
     "director_grace_s": 6,                 # a source missing for less than this keeps its slot (one bad poll)
+    # V5.1: dormant partner, sparring bot, rival mode
+    "dormant_hours": 24,                   # a program that went quiet keeps its slot (asleep, dimmed) this long after its last activity
+    "sparring_bot": True,                  # one fighter alone and nothing else was used recently: a generic 'Sparring bot' takes the other slot
+    "rival": True,                         # default for the control.json toggle (`minis.py rival on|off`): a sleeping partner still fights
+    "rival_min": 8,                        # minutes between rival matches (best of 3) while the active fighter is not working
+    "rival_max": 15,
+    "rival_spar_min": 3,                   # minutes between short rival exchanges while the active fighter is working
+    "rival_spar_max": 6,
+    "ignore_sources": [],                  # source ids (see `minis.py detect`) that never get a fighter, e.g. ["grok"]
     "proc_working_cpu_pct": 15,            # process sources: tree CPU above this (% of one core) = working
     "proc_window_s": 6,                    # ... averaged over this many seconds
     "log_max_bytes": 65536,

@@ -56,6 +56,17 @@ def set_plates(flag: bool, path=None) -> bool:
     return _update(path, plates=bool(flag))
 
 
+def rival_on(path=None, default=True) -> bool:
+    """Rival mode (V5.1): a sleeping partner is woken for a match now and then.  `minis.py rival on|off` or the menu;
+    `default` is the config value when control.json has no say."""
+    v = read(path).get('rival')
+    return bool(default) if v is None else bool(v)
+
+
+def set_rival(flag: bool, path=None) -> bool:
+    return _update(path, rival=bool(flag))
+
+
 DEMO_KINDS = ('spar', 'clash', 'ranged', 'match')
 WINNER_MODES = ('decided', 'random')
 ARENA_FRESH_S = 4.0

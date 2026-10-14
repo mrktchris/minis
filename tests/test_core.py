@@ -381,6 +381,118 @@ class UsageBouts(unittest.TestCase):
         self.assertIn('idle_flourish', seen)
 
 
+RIVAL_FAST = dict(QUIET, rival_min=0.05, rival_max=0.05, rival_spar_min=0.05, rival_spar_max=0.05)   # 3 s, in minutes
+
+
+def rival_pair(seed=4, left_state='idle', right_slot_sleeps=True, **over):
+    """LEFT awake (idle by default), RIGHT asleep - or the other way round - with the rival timers at 3 s."""
+    sleeper, awake = (RIGHT, LEFT) if right_slot_sleeps else (LEFT, RIGHT)
+    tele = {awake: sim.FakeTelemetry(awake, [(0, left_state, 30.0)]), sleeper: sim.FakeTelemetry(sleeper, [(0, 'sleeping', None)])}
+    cfg, atl, brains = placed(seed, **dict(RIVAL_FAST, **over))
+    recs = []
+    for b in brains.values():
+        b.record = lambda w, l, **kw: recs.append((w, l))
+    return brains, tele, recs, sleeper, awake
+
+
+def trace(brains, tele, secs, until=None, t0=1000.0, fps=10):
+    """-> (anims per slot as [(t, anim)], distinct bout plans seen - sent or playing).  Stops early when `until(now)` holds."""
+    anims = {LEFT: [], RIGHT: []}
+    plans = []
+    bus_ = {}
+    for i in range(int(secs * fps)):
+        now = t0 + i / fps
+        sim.step(brains, tele, now, bus_)
+        for w, b in brains.items():
+            if not anims[w] or anims[w][-1][1] != b.anim:
+                anims[w].append((now, b.anim))
+            sc = b.script or b.pending
+            if sc and (not plans or plans[-1] is not sc['plan']):
+                plans.append(sc['plan'])
+        if until and until(now):
+            break
+    return anims, plans
+
+
+class Rival(unittest.TestCase):
+    """V5.1 rival mode: a sleeping partner is woken for a best-of-3 now and then, fights, and goes back to sleep."""
+
+    def test_sleeper_is_woken_for_a_match_fights_and_sleeps_again(self):
+        brains, tele, recs, sleeper, awake = rival_pair()
+        b = brains[sleeper]
+        anims, plans = trace(brains, tele, 300, until=lambda now: recs and b.mode == 'home' and b.anim == 'sleep')
+        self.assertTrue(plans and plans[0]['kind'] == 'match' and plans[0].get('rival') and plans[0]['wake'] == sleeper, plans[:1])
+        names = [a for _, a in anims[sleeper]]
+        self.assertIn('wake', names)
+        self.assertLess(names.index('wake'), names.index('walk'), names)              # stretch and yawn, then walk out
+        self.assertGreaterEqual(len(brains[sleeper].hit_log) + len(brains[awake].hit_log), 2)
+        self.assertEqual(len(recs), 1)                                                   # W/L recorded as usual, once
+        self.assertEqual(set(recs[0]), {'claude', 'codex'})
+        self.assertEqual((b.mode, b.anim, b.script, b.bout), ('home', 'sleep', None, None))   # back home, asleep
+        self.assertTrue(b.view(b.last_now)['dim'])
+        self.assertEqual(b.state(), 'sleeping')                                          # the plate kept telling the truth
+
+    def test_the_plan_leaves_time_for_the_wake(self):
+        brains, tele, recs, sleeper, awake = rival_pair()
+        plans = trace(brains, tele, 20)[1]
+        self.assertTrue(plans)
+        p = plans[0]
+        sent = p['deadline'] - CFG['invite_window_s']
+        wake = brains[awake].wake_s('codex')
+        self.assertGreater(wake, 0.5)
+        walk_max = (brains[awake].zone[1] - brains[awake].zone[0]) / CFG['walk_px_s']
+        self.assertGreaterEqual(p['t0'] - sent, 1.0 + wake)                             # the normal lead plus the wake
+        self.assertLessEqual(p['t0'] - sent, 1.0 + wake + walk_max)
+        self.assertGreater(brains[sleeper].hold_until, sent)                             # it stood still for the wake
+
+    def test_sleeper_is_lit_while_it_fights_and_dim_at_home(self):
+        brains, tele, recs, sleeper, awake = rival_pair()
+        dims = []
+        drive(brains, tele, 60, each=lambda now, bus_: dims.append((brains[sleeper].mode, brains[sleeper].view(now)['dim'])))
+        self.assertIn(('home', True), dims)
+        self.assertIn(('script', False), dims)
+        self.assertNotIn(('script', True), dims)
+
+    def test_a_working_fighter_gets_short_exchanges_not_matches(self):
+        brains, tele, recs, sleeper, awake = rival_pair(left_state='working')
+        plans = trace(brains, tele, 90)[1]
+        self.assertTrue(plans)
+        self.assertEqual({p['kind'] for p in plans}, {'clash'})
+        self.assertTrue(all(p.get('rival') for p in plans))
+        self.assertEqual(recs, [])
+
+    def test_the_awake_fighter_in_slot_b_starts_the_rival_bout(self):
+        brains, tele, recs, sleeper, awake = rival_pair(right_slot_sleeps=False)
+        self.assertEqual((sleeper, awake), (LEFT, RIGHT))
+        plans = trace(brains, tele, 90)[1]
+        self.assertTrue(plans and plans[0]['kind'] == 'match' and plans[0]['wake'] == LEFT)
+        self.assertEqual(plans[0]['id'].split(':')[0], brains[RIGHT].run)               # invited by the right side
+        self.assertGreaterEqual(len(recs), 1)
+
+    def test_rival_off_means_the_sleeper_is_left_alone(self):
+        brains, tele, recs, sleeper, awake = rival_pair()
+        for b in brains.values():
+            b.rival = False
+        anims, plans = trace(brains, tele, 90)
+        self.assertEqual(plans, [])
+        self.assertEqual([a for _, a in anims[sleeper]], ['sleep'])
+
+    def test_sleeper_does_not_accept_when_the_toggle_is_off_on_its_side(self):
+        brains, tele, recs, sleeper, awake = rival_pair()
+        brains[sleeper].rival = False                                                     # e.g. control.json read a beat later
+        plans = trace(brains, tele, 30)[1]
+        self.assertTrue(plans)                                                            # the invite went out ...
+        self.assertEqual(len(recs), 0)                                                    # ... and nobody came
+        self.assertEqual(brains[sleeper].anim, 'sleep')
+
+    def test_default_timers_are_minutes_so_a_sleeper_stays_asleep_for_a_while(self):
+        brains, tele, recs, sleeper, awake = rival_pair(rival_min=8, rival_max=15, rival_spar_min=3, rival_spar_max=6)
+        anims, plans = trace(brains, tele, 120)
+        self.assertEqual(plans, [])
+        self.assertGreaterEqual(brains[awake].next_rival - 1000.0, 8 * 60)
+        self.assertLessEqual(brains[awake].next_rival - 1000.0, 15 * 60)
+
+
 class Placement(unittest.TestCase):
     """Bug report, 2026-10-13: the two fighters stood on top of each other.  Root cause: a fighter knocked out (limit) mid-bout
     stayed where it fell, a limit fighter was forbidden from walking at all, and nothing ever sent a working fighter back

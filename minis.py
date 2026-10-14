@@ -9,6 +9,8 @@
   python minis.py plates on|off  show / hide both HUD plates (fixed at the left end of the zone)
   python minis.py demo [kind]    start one bout now (spar | clash | ranged | match); plates keep the real numbers
   python minis.py winners random|decided   how match winners are drawn (decided = biased by the health score)
+  python minis.py rival on|off   rival mode: a sleeping partner (or the sparring bot) is woken for a match now and then
+  python minis.py detect         which known AI programs the sources see right now, and how (names and numbers only)
   python minis.py monitors       list monitors (index, rect, primary) for `arena --monitor N`
   python minis.py arena --monitor N [--freeze] [--seconds S] [--seed K]   arena mode on monitor N, as its own process
   python minis.py arena stop     ask the arena to leave (then force-stop it if it will not)
@@ -215,6 +217,10 @@ def cmd_status(args=None):
         if role in SLOTS:
             a = DEFAULT_ASSIGN[role] if data is None else director.slot_assignment(data, role)
             line += f'  -> {a["program"]} as {a["character"]}' if a else '  -> (no assignment: hidden)'
+            if a and a.get('bot'):
+                line += '  (sparring bot: stand-in, shown asleep)'
+            elif a and a.get('dormant'):
+                line += '  (dormant partner: not detected right now, shown asleep)'
         print(line)
     if data is None:
         print('assign.json: missing (fighters fall back to a=claude, b=codex)')
@@ -272,6 +278,31 @@ def cmd_winners(args):
     ok = control.set_winners(args.mode)
     print(f'winners: {args.mode}' if ok else 'could not write control.json')
     return 0 if ok else 1
+
+
+def cmd_rival(args):
+    from minis_core import control
+    ok = control.set_rival(args.state == 'on')
+    print(f'rival mode {args.state}' if ok else 'could not write control.json')
+    return 0 if ok else 1
+
+
+def cmd_detect(args=None):
+    """What the sources layer sees right now, program by program.  Names, states and numbers only: never a window title,
+    never a path beyond the executable's file name."""
+    from minis_core import sources
+    cfg = cfgmod.load()
+    srcs = sources.Sources(cfg)
+    now = time.time()
+    srcs.poll(now)                                      # process sources need two polls a second apart for a CPU rate
+    time.sleep(1.1)
+    rows = sources.describe(cfg, time.time(), srcs)
+    w = max(len(r['program']) for r in rows)
+    for r in rows:
+        print(f"{r['source']:11s} {r['program']:{w}s}  {r['character']:9s} {r['state']:9s} {r['how']}")
+    seen = [r for r in rows if r['state'] != '-']
+    print(f'{len(seen)} of {len(rows)} known programs seen' + (': ' + ', '.join(r['program'] for r in seen) if seen else ''))
+    return 0
 
 
 def cmd_monitors(args=None):
@@ -721,11 +752,13 @@ class Fighter:
         plates = control.plates_on(self.control_path)
         winners = control.winners(self.control_path)
         arena = control.arena_active(self.control_path and None)
+        rival = control.rival_on(self.control_path, default=self.cfg.get('rival', True))
         choice = self.ov.menu([(1, f'Quit this mini ({name})'), (2, 'Hide for 1 hour'), (3, 'Hide HUD plates' if plates else 'Show HUD plates'),
                                (4, 'Resume animations' if paused else 'Pause all animations'), (5, 'Start a bout now'),
                                (6, 'Start a match now (best of 3)'),
                                (7, f'Winners: {winners} -> {"random" if winners == "decided" else "decided"}'),
-                               (8, 'Exit arena mode' if arena else 'Arena mode...')])
+                               (8, 'Exit arena mode' if arena else 'Arena mode...'),
+                               (9, f'Rival mode: {"on" if rival else "off"} -> {"off" if rival else "on"}')])
         if choice == 1:
             self.st['quit'] = True
         elif choice == 2:
@@ -747,6 +780,9 @@ class Fighter:
             self.last['ctl'] = -1e9
         elif choice == 8:
             self.toggle_arena()
+        elif choice == 9:
+            control.set_rival(not rival, self.control_path)
+            self.last['ctl'] = -1e9
 
     def toggle_arena(self):
         """Menu / scoreboard: start the arena on the configured (or the only other) monitor, or ask it to leave."""
@@ -810,6 +846,7 @@ class Fighter:
                 self.last['psig'] = None
                 self._show_plate()
             b.winners = control.winners(self.control_path)
+            b.rival = control.rival_on(self.control_path, default=self.cfg.get('rival', True))
             ar = control.arena_active(now=wall)
             if ar != self.arena:
                 self.arena = ar
@@ -1156,6 +1193,10 @@ def main(argv=None):
     w = sub.add_parser('winners', help='how match winners are drawn')
     w.add_argument('mode', choices=('decided', 'random'))
     w.set_defaults(fn=cmd_winners)
+    rv = sub.add_parser('rival', help='rival mode: a sleeping partner is woken for a match now and then')
+    rv.add_argument('state', choices=('on', 'off'))
+    rv.set_defaults(fn=cmd_rival)
+    sub.add_parser('detect', help='which known AI programs the sources see right now, and how').set_defaults(fn=cmd_detect)
     sub.add_parser('monitors', help='list monitors for arena --monitor N').set_defaults(fn=cmd_monitors)
     ar = sub.add_parser('arena', help='arena mode: fighters break out onto a whole monitor')
     ar.add_argument('action', nargs='?', default='start', choices=('start', 'stop', 'capture'))

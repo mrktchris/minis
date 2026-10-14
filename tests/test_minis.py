@@ -106,6 +106,43 @@ class Commands(Isolated):
         self.assertIn('assign.json: missing', out.getvalue())
         self.assertIn('animations: running', out.getvalue())
 
+    def test_status_names_a_dormant_partner_and_the_sparring_bot(self):
+        director.write_assign({'a': {'source': 'claude', 'character': 'claude', 'program': 'Claude Code'},
+                               'b': {'source': 'codex', 'character': 'codex', 'program': 'Codex', 'dormant': True}, 'ts': 1.0})
+        out = io.StringIO()
+        with mock.patch.object(minis, 'pid_alive', lambda pid: False), redirect_stdout(out):
+            minis.cmd_status()
+        self.assertIn('-> Codex as codex  (dormant partner', out.getvalue())
+        director.write_assign({'a': {'source': 'claude', 'character': 'claude', 'program': 'Claude Code'}, 'b': dict(director.SPARRING_ASSIGN), 'ts': 2.0})
+        out = io.StringIO()
+        with mock.patch.object(minis, 'pid_alive', lambda pid: False), redirect_stdout(out):
+            minis.cmd_status()
+        self.assertIn('-> Sparring bot as generic  (sparring bot', out.getvalue())
+
+    def test_rival_cli_writes_control_and_the_config_default_applies_until_then(self):
+        self.assertTrue(control.rival_on(default=True))
+        self.assertFalse(control.rival_on(default=False))
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(minis.main(['rival', 'off']), 0)
+        self.assertFalse(control.rival_on(default=True))
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(minis.main(['rival', 'on']), 0)
+        self.assertTrue(control.rival_on(default=False))
+        with self.assertRaises(SystemExit):
+            minis.main(['rival', 'maybe'])
+
+    def test_detect_prints_names_states_and_how_never_paths(self):
+        from minis_core import sources
+        rows = [dict(source='claude', program='Claude Code', character='claude', state='idle', how='transcript, newest session file 4 min old, ctx 77%'),
+                dict(source='cursor', program='Cursor', character='cursor', state='-', how='not running (would match exe cursor.exe)')]
+        out = io.StringIO()
+        with mock.patch.object(sources, 'describe', lambda cfg, now, srcs: rows), mock.patch.object(sources.Sources, 'poll', lambda self, now: []), \
+                mock.patch('time.sleep', lambda s: None), redirect_stdout(out):
+            self.assertEqual(minis.main(['detect']), 0)
+        text = out.getvalue()
+        self.assertIn('claude      Claude Code  claude    idle      transcript, newest session file 4 min old, ctx 77%', text)
+        self.assertIn('1 of 2 known programs seen: Claude Code', text)
+
     def test_log_is_rotating_and_never_carries_a_file_name(self):
         log = minis.get_logger('t-slot')
         try:
@@ -410,6 +447,37 @@ class FighterLoop(Isolated):
             self.f.st['menu'] = True
             self.go(0.2)
         self.assertEqual(started, [2])
+
+    def test_menu_toggles_rival_mode_and_the_brain_follows(self):
+        self.f.setup()
+        self.go(0.6)
+        self.assertTrue(self.f.brain.rival)                                        # config default: on
+        self.f.ov.menu_choice = 9
+        self.f.st['menu'] = True
+        self.go(0.2)
+        labels = [label for _, label in self.f.ov.items]
+        self.assertIn('Rival mode: on -> off', labels)
+        self.assertFalse(control.rival_on(default=True))
+        self.go(0.6)
+        self.assertFalse(self.f.brain.rival)
+        self.f.ov.menu_choice = 9
+        self.f.st['menu'] = True
+        self.go(0.2)
+        self.assertIn('Rival mode: off -> on', [label for _, label in self.f.ov.items])
+        self.go(0.6)
+        self.assertTrue(self.f.brain.rival)
+
+    def test_sparring_bot_slot_shows_asleep_with_no_numbers(self):
+        self.f.detector_for = None                                                 # the real detector_for: a NullDetector for the bot
+        from minis_core import sources
+        self.f.detector_for = sources.detector_for
+        self.assign(a=dict(director.SPARRING_ASSIGN))
+        self.f.setup()
+        self.go(2.5)
+        self.assertEqual(self.f.display_name(), 'Sparring bot')
+        self.assertEqual((self.f.snap.state, self.f.snap.ctx_pct, self.f.snap.plan_pct), ('sleeping', None, None))
+        self.assertTrue(self.f.ov.visible and self.f.pov.visible)
+        self.assertTrue(self.f.brain.view(self.t['mono'])['dim'])
 
     def test_arena_cli_requires_a_monitor_and_stop_asks_first(self):
         from minis_win import shell

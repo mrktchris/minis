@@ -146,6 +146,89 @@ class TwoRealProcesses(unittest.TestCase):
               f'both scripted in {len(scripted)} samples; closest outside bouts: {min(apart):.1f} px', file=sys.stderr)
 
 
+@unittest.skipUnless(os.environ.get('MINIS_INTEGRATION'), 'slow two-process test: set MINIS_INTEGRATION=1')
+class RivalWithASleepingPartner(unittest.TestCase):
+    """V5.1 rival mode with two REAL slot processes: slot a idle (Claude), slot b the sparring bot (its detector sees nothing, so
+    it is `sleeping` with no numbers).  With the rival timers at 6 s the awake side must wake the sleeper for a best-of-3, both
+    sides must play it, the record must be written once, and the sleeper's bus state must say `sleeping` the whole time."""
+    RUN_S = 130.0                        # cap; the sampling stops as soon as the match is recorded and the sleeper is back asleep
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix='minis-rival-'))
+        data = cls.data = cls.tmp / 'minis'
+        (data / 'fake').mkdir(parents=True)
+        (data / 'fake' / 'srcA.json').write_text(json.dumps({'state': 'idle', 'ctx': 41.0}))
+        (data / 'harness.json').write_text(json.dumps({'cfg': {'rival_min': 0.1, 'rival_max': 0.1, 'rival_spar_min': 0.1, 'rival_spar_max': 0.1,
+                                                              'bout_min_s': 999, 'bout_max_s': 999}}))
+        (data / 'assign.json').write_text(json.dumps({'a': {'source': 'srcA', 'character': 'claude', 'program': 'Claude Code'},
+                                                      'b': {'source': 'sparring', 'character': 'generic', 'program': 'Sparring bot', 'bot': True},
+                                                      'ts': time.time()}))
+        env = dict(os.environ, LOCALAPPDATA=str(cls.tmp), PYTHONDONTWRITEBYTECODE='1')
+        cls.procs = [subprocess.Popen([sys.executable, str(ROOT / 'tests' / 'two_process_harness.py'), s], env=env, cwd=str(ROOT),
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=0x08000000) for s in 'ab']
+        cls.samples = []
+        t0 = time.monotonic()
+        try:
+            while time.monotonic() - t0 < cls.RUN_S:
+                row = {'t': time.monotonic() - t0}
+                for s in 'ab':
+                    try:
+                        row[s] = json.loads((data / 'bus' / f'{s}.json').read_text(encoding='utf-8'))
+                    except (OSError, ValueError):
+                        row[s] = None
+                cls.samples.append(row)
+                b = row['b'] or {}
+                if row['t'] > 20 and (data / 'record.json').exists() and b.get('mode') == 'home' and b.get('anim') == 'sleep':
+                    time.sleep(0.5)                                     # one more beat asleep, then stop before the next rival bout
+                    break
+                time.sleep(0.1)
+        finally:
+            cls.alive_at_end = [p.poll() is None for p in cls.procs]
+            for p in cls.procs:
+                p.terminate()
+            cls.errs = [p.communicate(timeout=10)[1].decode('utf-8', 'replace') for p in cls.procs]
+        cls.notes = {s: TwoRealProcesses._notes(data / f'{s}.log') for s in 'ab'}
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, True)
+
+    def both(self):
+        return [r for r in self.samples if r['a'] and r['b'] and r['a'].get('state') != 'gone' and r['b'].get('state') != 'gone']
+
+    def test_0_processes_ran_without_crashing(self):
+        self.assertEqual(self.alive_at_end, [True, True], self.errs)
+        self.assertGreater(len(self.both()), 200)                                           # 20 s at least, both alive
+        for s in 'ab':
+            self.assertNotIn('ERROR', (self.data / f'{s}.log').read_text(encoding='utf-8'))
+
+    def test_a_the_sleeper_is_woken_for_a_rival_match_and_the_plate_keeps_saying_sleeping(self):
+        bouts = {s: {n[1]: n[3] for n in self.notes[s] if n[0] == 'bout'} for s in 'ab'}
+        common = set(bouts['a']) & set(bouts['b'])
+        self.assertIn('match-rival', {bouts['a'][i] for i in common}, f'no rival match on both sides: {bouts}')
+        rows = self.both()
+        self.assertEqual({r['b']['state'] for r in rows}, {'sleeping'})                    # the truth, before, during and after
+        self.assertEqual({r['b']['ctx'] for r in rows}, {None})
+        anims = [r['b']['anim'] for r in rows]
+        self.assertIn('wake', anims)
+        self.assertLess(anims.index('wake'), anims.index('walk'), 'it must stretch and yawn before walking out')
+        self.assertTrue(any(r['b']['mode'] == 'script' and r['a']['mode'] == 'script' for r in rows), 'both never in the bout together')
+        hits = [n for n in self.notes['a'] + self.notes['b'] if n[0] in ('hit', 'contact')]
+        self.assertGreaterEqual(len(hits), 4)
+
+    def test_b_the_result_is_recorded_once_and_the_sleeper_goes_back_to_sleep(self):
+        rec = json.loads((self.data / 'record.json').read_text(encoding='utf-8'))
+        self.assertEqual(rec.get('matches'), 1, rec)
+        self.assertEqual({rec['last']['winner'], rec['last']['loser']}, {'claude', 'generic'})
+        self.assertEqual(rec['last']['where'], 'taskbar')
+        last = self.both()[-1]
+        self.assertEqual((last['b']['mode'], last['b']['anim']), ('home', 'sleep'), last['b'])
+        print(f"\n  [rival] bouts: {sorted(set(n[3] for n in self.notes['a'] if n[0] == 'bout'))}; hits/contacts: "
+              f"{len([n for n in self.notes['a'] + self.notes['b'] if n[0] in ('hit', 'contact')])}; record {rec['last']['winner']} > {rec['last']['loser']}",
+              file=sys.stderr)
+
+
 @unittest.skipUnless(os.environ.get('MINIS_INTEGRATION'), 'slow three-process test: set MINIS_INTEGRATION=1')
 class ArenaWithTwoSlots(unittest.TestCase):
     """Two real slot processes + one real arena process (headless surface, synthetic monitor + windows, synthetic backdrop)

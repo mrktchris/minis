@@ -225,6 +225,10 @@ class Brain:
         self.next_shadow = now + rng.uniform(cfg.get('shadowbox_min_s', 3), cfg.get('shadowbox_max_s', 6))
         self.next_console = now + rng.uniform(cfg.get('console_min_s', 40), cfg.get('console_max_s', 80))
         self.next_match = now + rng.uniform(cfg.get('match_min_s', 180), cfg.get('match_max_s', 360))
+        self.rival = True            # control.json `rival` (set by the owner each tick): a sleeping partner still fights (V5.1)
+        self.next_rival = self.next_rival_spar = now
+        self._schedule_rival(now)
+        self.hold_until = 0.0        # a sleeper plays `wake` before it walks to a bout
         self.demo = None            # {'kind', 'until'}: a bout asked for by the user, sent as soon as both are free
         self.ko_until = 0.0
         self.stop = None             # (t_start, t_end): hitstop freeze of the animation clock (V5)
@@ -236,6 +240,11 @@ class Brain:
         self.contact_log = deque(maxlen=64)
         self.bout_log = deque(maxlen=64)          # (what, bout id, t, move); bout_log_n counts every note ever made
         self.bout_log_n = 0
+
+    def _schedule_rival(self, now):
+        c = self.cfg
+        self.next_rival = now + self.rng.uniform(float(c.get('rival_min', 8)), float(c.get('rival_max', 15))) * 60.0
+        self.next_rival_spar = now + self.rng.uniform(float(c.get('rival_spar_min', 3)), float(c.get('rival_spar_max', 6))) * 60.0
 
     # -------------------------------------------------------------- animation plumbing
     def play(self, name, now, loop=None):
@@ -312,7 +321,7 @@ class Brain:
                     round=(self.round or {}).get('n'), wins=(self.round or {}).get('wins'))
 
     def view(self, now):
-        dim = self.snap is not None and self.snap.state == 'sleeping'
+        dim = self.snap is not None and self.snap.state == 'sleeping' and self.mode == 'home'   # a rival on its way to a bout is lit
         if self.paused:                                           # one static frame: nothing to animate, nothing to redraw
             return dict(anim='idle', frame=0, x=self.x, facing=self.facing, dim=dim, proj=None, fx=[], banner=None, shake=(0, 0), busy=False)
         idx, _ = self.frame(now)
@@ -364,6 +373,7 @@ class Brain:
             self.anim, self.anim_t0, self.anim_loop = 'idle', now, True
             self.next_bout = now + self.rng.uniform(self.cfg['bout_min_s'], self.cfg['bout_max_s'])
             self.next_clash = now + self.rng.uniform(self.cfg.get('clash_min_s', 20), self.cfg.get('clash_max_s', 40))
+            self._schedule_rival(now)
         self.paused = paused
 
     def set_atlas(self, atlas, now):
@@ -475,7 +485,8 @@ class Brain:
                 return
             if (plan.get('chars') or {}).get(self.slot, self.character) != self.character:
                 return                                            # planned for a skin this slot no longer wears
-            if self.free_for(kind) or (plan.get('demo') and self._free_any()):
+            rival_ok = plan.get('rival') and self.rival and self.state() == 'sleeping' and self._free_any()
+            if self.free_for(kind) or ((plan.get('demo') or rival_ok) and self._free_any()):
                 self._accept(ev, now)
         elif t == 'accept':
             if self.pending and ev.get('for') == self.pending['seq'] and ev.get('bout', self.pending['plan']['id']) == self.pending['plan']['id']:
@@ -501,7 +512,11 @@ class Brain:
             target = {vis: pos[other(vis)] + (-gap if pos[vis] < pos[other(vis)] else gap), other(vis): pos[other(vis)]}
         walk = max(abs(target[w] - pos[w]) for w in SLOTS) / float(self.cfg['walk_px_s'])
         chars = {me: self.character, you: self.partner.get('character') or self.character}
-        plan = dict(kind=kind, left=left, right=right, pos=target, t0=now + walk + 1.0, seed=self.seq + 1 + int(now) % 997,
+        wake = 0.0
+        if self.partner.get('state') == 'sleeping' and kind != 'console':       # a sleeper stretches and yawns before it walks
+            wake = self.wake_s(chars[you])
+            kw = dict(kw, wake=you)
+        plan = dict(kind=kind, left=left, right=right, pos=target, t0=now + walk + 1.0 + wake, seed=self.seq + 1 + int(now) % 997,
                     chars=chars, id=f'{self.run}:{self.seq + 1}', deadline=now + self.cfg.get('invite_window_s', 3.0), **kw)
         if kind == 'match':                                     # both sides derive HP, attackers and the winner from these
             plan['mode'] = self.winners if self.winners in rounds.MODES else 'decided'
@@ -542,6 +557,14 @@ class Brain:
         self.bout_log.append((what, self.bout, round(t, 3), name))
         self.bout_log_n += 1
 
+    def wake_s(self, character):
+        """How long `wake` plays for a character (0 when the atlas has none)."""
+        try:
+            a = self.atlases[character]
+            return a.total_ms('wake') / 1000.0 if 'wake' in a.anim else 0.0
+        except Exception:
+            return 0.0
+
     def _commit(self, kind, plan, now):
         tl, t_end, projs = make_timeline(kind, plan, self.atlases, self.fx)
         self.script = dict(kind=kind, plan=plan, tl=tl.get(self.slot, []), t_end=t_end, projs=projs)
@@ -549,7 +572,10 @@ class Brain:
             self.last_match = getattr(make_timeline, 'last_summary', None)
         self.script_i = -1
         self.bout = plan.get('id') or self.bout or 'local'
-        self._bout_note('bout', plan['t0'], kind + ('-demo' if plan.get('demo') else ''))
+        self._bout_note('bout', plan['t0'], kind + ('-demo' if plan.get('demo') else '-rival' if plan.get('rival') else ''))
+        if plan.get('wake') == self.slot and self.state() == 'sleeping' and 'wake' in self.atlas.anim:
+            self.play('wake', now, loop=False)                     # stretch and yawn first; the plan's t0 leaves time for it
+            self.hold_until = now + self.wake_s(self.character)
         self._goto(plan['pos'][self.slot], now, then='script')
         if kind == 'console':
             self.next_console = now + self.rng.uniform(self.cfg.get('console_min_s', 40), self.cfg.get('console_max_s', 80))
@@ -566,6 +592,8 @@ class Brain:
             self.facing = 1 if float(self.partner['x']) > self.x else -1
 
     def _tick_walk(self, now, dt):
+        if now < self.hold_until:                                     # still waking up: stand and play it out
+            return
         d = self.walk_target - self.x
         if abs(d) <= 0.8 or self.walk_then in ('wait', 'script') and abs(d) <= 1.5:
             self.x = self.walk_target
@@ -639,6 +667,7 @@ class Brain:
             self._goto(self.home_x, now, then='home')
             self.next_bout = now + self.rng.uniform(self.cfg['bout_min_s'], self.cfg['bout_max_s'])
             self.next_clash = now + self.rng.uniform(self.cfg.get('clash_min_s', 20), self.cfg.get('clash_max_s', 40))
+            self._schedule_rival(now)
 
     def _directive(self, name, t_abs, opts, now):
         """Timeline directives (rounds.py): HP, effects, banner texts, the record.  Every side runs @hp / @fx; only the
@@ -782,6 +811,18 @@ class Brain:
                 kind = self.rng.choice(self.cfg.get('bout_kinds', ['spar', 'spar', 'ranged']))
                 self.next_bout = now + 30
                 if self._send_invite(kind, now) or (kind != 'spar' and self._send_invite('spar', now)):
+                    return
+        # rival mode (V5.1): the awake fighter (either slot) wakes a sleeping partner for a match now and then; while it is
+        # working, a short exchange instead.  The sleeper never starts anything, so the two cannot invite each other at once.
+        if self.rival and p and self._partner_home() and st in AWAKE and pst == 'sleeping':
+            if st == 'working':
+                if now >= self.next_rival_spar and self.free_for('clash'):
+                    self._schedule_rival(now)
+                    if self._send_invite('clash', now, rival=True):
+                        return
+            elif now >= self.next_rival and self.free_for('match'):
+                self._schedule_rival(now)
+                if self._send_invite('match', now, rival=True):
                     return
         # a knocked-out partner gets a visit now and then (the first one comes from its limit event)
         if p and pst == 'limit' and now >= self.next_console and self.free_for('console') and self._partner_home():
