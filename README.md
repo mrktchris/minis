@@ -29,8 +29,12 @@ Everything is visual. It reads numbers, it never touches your agents, your windo
   window is moved, focused or closed.
 - **Pause**, **hide plates**, **drag**, double-click for a victory pose, a right-click menu, pupils that follow the
   cursor, a dizzy spell after a fast drag, Shift-drag to throw.
-- **Seven original characters**, 48+ moves each, built by a 2-bone rig from pose data. Every frame is generated and
-  reproducible with one command.
+- **Seven original characters**, 48 moves each, built by a 2-bone rig from pose data; the V5.1 redesign gives each
+  one a silhouette feature, an accent colour and an HD rim light. Every frame is generated and reproducible with one
+  command.
+- **Choreographed fights** (V5): a seeded no-repeat planner picks openers, combos, defence, spacing, specials, a super
+  when the meter fills and one ultimate per match; beams extend from the hands, hits freeze both fighters for a
+  hitstop, and an ultimate landing flashes the frame white.
 
 ## Screenshots
 
@@ -38,11 +42,23 @@ Everything is visual. It reads numbers, it never touches your agents, your windo
 
 ![HUD plates for every program and state, with callouts explaining each state row](docs/img/plates.png)
 
-![Roster contact sheet: seven characters, idle, strike, special and super, both facings](docs/img/roster.png)
+![V5.1 roster: seven redesigned characters, idle, victory and ultimate frames, with a one-line description each](docs/img/v5-roster.png)
+
+![Arena capture: Claude's kamehameha 13 ms after release, the beam head mid-extension, callouts on the grow effect](docs/img/v5-kamehameha.png)
+
+![Arena capture: the one-frame white flash of a beam ultimate landing, K.O. banner, beam at full extent](docs/img/v5-flash.png)
+
+![Arena capture: an air-to-air exchange, both fighters off the floor, a jump-in kick landing](docs/img/v5-air.png)
+
+![Beam and energy FX reel: every beam, wave and burst at 4x with real timings](docs/img/v5-beams.gif)
 
 ![HD ultimates sheet: every character's ultimate with effects, facing right and left](docs/img/ultimates.png)
 
 ![Arena mode: HP bars, K.O. banner, explosion and knockdown on a black stage, EXIT button top right](docs/img/arena-fight.png)
+
+The taskbar, plate, ultimates and arena-K.O. images were captured before the V5.1 costume redesign; the roster sheet
+and the three arena captures are current. The arena captures are PrintWindow shots of the overlay's own window (so
+the stage is black), taken by `tools/arena_capture.py`; nothing on the desktop is read.
 
 ![Scoreboard widget: W-L record, mode, sparkline, winners switch and three buttons](docs/img/scoreboard.png)
 
@@ -105,7 +121,7 @@ python minis.py demo [spar|clash|ranged|match]   start one bout now
 python minis.py monitors         list monitors for the arena
 python minis.py arena --monitor N [--freeze] [--seconds S]   arena mode on monitor N; `arena stop` to leave
 python minis.py selftest-gui     real-desktop check: both windows visible over the taskbar, survive a taskbar raise
-python -m unittest discover -s tests          265 tests (8 skipped unless MINIS_INTEGRATION=1)
+python -m unittest discover -s tests          281 tests (8 skipped unless MINIS_INTEGRATION=1)
 ```
 
 Right-click a fighter or its plate for *Quit this mini / Hide for 1 hour / Hide (Show) HUD plates / Pause all
@@ -133,20 +149,78 @@ the taskbar is not at the bottom, and while it auto-hides.
   `%LOCALAPPDATA%\minis\feeds\claude-plan.json` (`{"five_hour": 35, "ts": "<iso>"}`) the plate shows it for 15 min.
   minis never writes that file.
 
-## Matches, effects, arena
+## Characters (V5.1 redesign)
 
-- A match is best-of-3, both at 100 HP; damage = move power x 12 (12 / 24 / 36), a super 24, the ultimate 40; a round
-  ends at 0 HP or after 25 s. `decided` weights each exchange by `(100 - ctx%) + 20 if not at the limit + 10 if
-  working`; `random` is even. Both processes build the same timeline from the shared seed, so HP and the winner
-  agree without talking. W-L per character lands in `record.json`.
-- Ultimates: Claude `kamehameha`, Codex `rasengan`, Gemini `getsuga`, Cursor `odm_strike`, Ollama `wind_scar`,
-  LM Studio `bankai`, the generic Agent `spirit_bomb`. Effects come from `assets_hd/fx/fx.json`; every effect has a
-  procedural stand-in so nothing breaks without the art.
-- Arena: `python minis.py arena --monitor N`. HD fighters at about 170 px jump, air-dash with afterimages and hover
-  between the top edges of your windows; a defender knocked into a window rectangle cracks it, three cracks shatter
-  it (shards fall, random letters spray); ultimates explode and shake the overlay. The overlay is click-through except
-  the EXIT button; ESC, `arena stop`, the menu and the widget all end it. The process measures its own CPU and drops
-  from 30 to 20 fps above 10% of one core.
+Every costume is original pixel art from the rig's costume flags (`art/roster.py`). Each character got the same three
+things: one strong silhouette feature, one saturated accent against a restrained base, and an HD rim tint that reads
+as light. Signature idles and victory poses are per character too.
+
+| character | look | sigil | ultimate |
+| --- | --- | --- | --- |
+| Claude | terracotta street-monk: hood down, a long two-tone cream scarf, wrapped forearms, hoodie drawstrings, reversed cap | `/` | `kamehameha` |
+| Codex | black-and-violet hacker-ninja: hood up with a violet visor glow, loose sleeves, split-toe tabi, circuit traces, violet holographic afterimages | `$` | `rasengan` |
+| Gemini | blue-and-gold twin-tail ronin: two ponytails that whip, a haori with gold lapels, a pale-gold star-sparkle rim | `*` | `getsuga` |
+| Cursor | cyan-on-black pointer assassin: an angular cursor-arrow brim, thin sharp limbs, cyan edge light on the black suit, speed-line afterimages | `>` | `odm_strike` |
+| Ollama | cream-and-brown llama-hood brawler: hood up with little llama ears, chunky build, an earthy palette with one orange accent | `o` | `wind_scar` |
+| LM Studio | cyber-samurai: white armour plates, neon teal edge light, magenta soles, holographic (dithered neon) trail on its flash-steps | `L` | `bankai` |
+| Agent (generic) | olive field agent: tactical vest with pouches, gold headband with a knot tail, dark boots; stands in for aider, opencode, Windsurf and any character without art | `+` | `spirit_bomb` |
+
+The LM Studio direction is the one costume with a named visual inspiration (DullMesh's Cyber White Samurai, looked
+at, nothing downloaded); see [docs/CREDITS.md](docs/CREDITS.md). `python art/qa_v5.py roster` renders the contact
+sheet above, `idles` each signature idle, `beams` the FX reel.
+
+## Fights
+
+Every exchange is planned from the shared seed by `minis_core/choreo.py`, a pure function of one `random.Random` and
+the two move atlases, so both fighter processes (and the headless simulator) derive the identical exchange without
+talking. The same planner drives spar, clash, the taskbar match and the arena.
+
+- **Picker**: seeded no-repeat move picker, never the same move twice in a row, no move more than twice a round
+  (relaxed only when nothing else is left), weighted by category and situation.
+- **Openers**: dash-in jab, jump-in kick, sweep. **Defender answers**: block, crouch block under highs, parry then
+  counter, backdash whiff, or getting hit.
+- **Combos**: jab-cross-uppercut and six more strings, each hit with hitstop; then pressure or a spacing reset
+  (walk back / backdash). **Specials** at range, with projectiles where the character has one.
+- **Super meter**: damage dealt plus half the damage taken; at 72 the super unlocks (24 damage).
+- **One ultimate per match**, at a dramatic moment (round point or low HP, never in a round's first two exchanges),
+  40 damage, with a white flash and a shake; a taunt follows a whiffed one. Big hits knock down, then the fighter
+  gets up; one air-to-air exchange per round.
+- **Variety numbers** (from `tests/test_choreo.py`, 20 seeded matches over four roster pairs): the most-used move is
+  16-19% of a character's attacks (Claude `reverse` 18%, Cursor `tab_bolt` 19%, nothing over 25%) and 23-26 distinct
+  moves play per character; 42 of the 45 shared moves have a trigger (was 39).
+- **Matches**: best-of-3, both at 100 HP; damage = move power x 12 (12 / 24 / 36), a super 24, the ultimate 40; a
+  round ends at 0 HP or after 25 s. `decided` weights each exchange by `(100 - ctx%) + 20 if not at the limit + 10
+  if working`; `random` is even. W-L per character lands in `record.json`.
+
+### Beams and energy FX
+
+Effects live in `assets_hd/fx/fx.json` (and the 64 px twin); every effect has a procedural stand-in so nothing breaks
+without the art. Two V5.1 keys, documented in the file's own `schema_notes` and in
+[docs/ANIMATION-NOTES.md](docs/ANIMATION-NOTES.md):
+
+- `grow: {from_w, to_w, ms}`: the engine draws the effect stretched from `from_w` to `to_w` px over its first `ms`
+  with the anchored end fixed on the hand, so a beam extends from the hands instead of appearing whole; it holds, then
+  retracts and fades. Claude's `kamehameha` grows 56 -> 256 px over 100 ms; `reach` is 256 px in the arena and 128 on
+  the taskbar.
+- `flash: true`: frame 0 is a one-frame white-hot release flash. In the arena the whole overlay goes 60% white for
+  that frame and clears on the next; on the taskbar only the fighter's own pixels whiten, never the HUD plate.
+- **Hitstop**: both fighters freeze on contact for a share of the move's `hitstop_ms` (defaults 150 ms for a
+  strike, 220 for a super, 300 for an ultimate; strikes and specials freeze for half of it, supers and ultimates for
+  all of it, because the sheets already hold the hit frame). The move's own `shake` shakes the window, the impact
+  burst lands at the beam's end, and a fighter hit by a beam takes `hit_heavy` and knockback straight along it. Beam
+  ultimates are fired from range so the beam reaches the defender's hurtbox; melee ultimates dash in first.
+- `travel: {speed}` sends an effect along the owner's facing (projectiles and the travelling ultimates); it is
+  what the arena waits on before the contact of a travelling beam.
+
+## Arena
+
+- `python minis.py arena --monitor N [--seed K]`. HD fighters at about 170 px jump, air-dash with afterimages
+  and hover between the top edges of your windows (a top edge inside the HUD band is not a platform, but still
+  cracks); a defender knocked into a window rectangle cracks it, three cracks shatter it (shards fall, random letters
+  spray); ultimates explode, flash and shake the overlay. The overlay is click-through except the EXIT button; ESC,
+  `arena stop`, the menu and the widget all end it. The process measures its own CPU and drops from 30 to 20 fps above
+  10% of one core. `python tools/arena_capture.py --monitor N --out <dir>` runs one match and saves PrintWindow captures
+  of the arena's own window at the beam, the flash, an air exchange and a knockdown (never a screenshot of the monitor).
 
 See **[MOVELIST.md](MOVELIST.md)** for every move, trigger and timing, and **[docs/ANIMATION-NOTES.md](docs/ANIMATION-NOTES.md)**
 for the animation rules the rig follows.
@@ -172,8 +246,9 @@ network, and the only one living in the taskbar or an arena.
 
 ## Roadmap (honest)
 
-- **Art**: the V5 motion pass (anticipation, smears, uneven timing) covers all seven characters, but the look of six
-  of them is still first-pass; a redesign of their costumes and faces is pending. Art is generated, not hand-drawn.
+- **Art**: the V5 motion pass (anticipation, smears, uneven timing) and the V5.1 costume redesign cover all seven
+  characters, but the art is generated by a rig, not hand-drawn. Several of the screenshots above predate the
+  redesign and are due a recapture.
 - **DPI**: only 100% DPI on the primary display has been seen. Integer scaling exists and is unit-tested, not
   observed on a 150% or 200% display.
 - **Windows only**, bottom taskbar only. No macOS or Linux plans at the moment.
@@ -191,13 +266,14 @@ Build logs with what was verified and how: [RESULT.md](RESULT.md), [BRIEF.md](BR
 
 ```
 minis.py                 CLI, the director loop, the per-slot fighter loop
-minis_core/              sources, director, telemetry, bus, control, atlas, brain, rounds, fx, effects, scoreboard,
-                         arena, history, eyes, render, sim (headless simulator), config
+minis_core/              sources, director, telemetry, bus, control, atlas, brain, choreo (exchange grammar), rounds,
+                         fx, effects, scoreboard, arena, history, eyes, render, sim (headless simulator), config
 minis_win/               layered always-on-top window, arena window, process table (all ctypes)
 art/                     rig, move library, roster, builder -> assets/ (64 px) and assets_hd/ (128 px)
-tools/                   preview sheets and GIFs, MOVELIST generator
+tools/                   preview sheets and GIFs, MOVELIST generator, arena_capture (live arena moments, own window only)
 tests/                   unittest; fixtures are synthetic and content-free; nothing reads this machine's real state
-qa/                      preview sheets and reels   docs/img/   the annotated images above
+qa/                      preview sheets and reels (qa/v5/: the V5.1 roster sheet, beam reel and idle reels)
+docs/img/                the annotated images above
 ```
 
 Rebuild the art with `python art/build_fighters.py` (`--only gemini,cursor` for some). To hand-polish a frame, drop a

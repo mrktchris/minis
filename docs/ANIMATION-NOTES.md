@@ -104,3 +104,10 @@ edge-light trim, and holographic (dithered neon) afterimages on its flash-steps.
   assert rules 1 and 6 on the real sheets; `test_rows_match_the_v5_visual_regression_fixture` pins every row
   (`python tests/test_art.py --regen-hashes` after a change that was judged by eye).
 - `anim.json` adds `hitstop_ms`, `shake`, `smear_frames` and `credits`; the top-level `schema_notes` describe them.
+- `fx.json` (V5.1) adds two keys to every effect, described in its own `schema_notes`: `grow: {from_w, to_w, ms}` (the
+  engine draws the effect stretched from `from_w` to `to_w` px over its first `ms` after spawn with the anchored end
+  fixed, so a beam extends from the hands instead of appearing whole; `null` = draw the frames as authored) and
+  `flash: true` (frame 0 is a one-frame white-hot release flash; the engine whitens the owner sprite on the taskbar
+  and the whole overlay in the arena for that frame; never true on a looping effect). `art/fx.py` holds
+  `FX_SCHEMA_NOTES`; `minis_core/fx.py` / `effects.py` read them, and an engine that does not know the keys ignores
+  them. `python art/qa_v5.py beams` renders every beam, wave and burst at 4x with real timings to `qa/v5/beams.gif`.

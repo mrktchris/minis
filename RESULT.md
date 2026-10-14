@@ -213,3 +213,66 @@ anchor + offset, `hand` from the move's `hand` key, flipped for left-facing.
   of the arena window would contain the screen snapshot.
 - Nobody clicked the live scoreboard buttons, EXIT, or pressed ESC on the live overlay; those paths are covered by the real-window tests.
 - Eyes: 5 of 7 characters get moving pupils; Codex and Cursor keep still (dark outfit beside the eye).
+
+---
+
+## V5 (2026-10-13): fight choreography and beam playback - engine half
+
+Written by Claude (engine half: `minis.py`, `minis_core/**`, `minis_win/**`, tests except `test_art.py`, `tools/**`); the six character
+redesigns and the beam FX overhaul (`art/`, `assets*/`, `tests/test_art.py`) were built in parallel by the ART agent, and the engine reads
+every frame count, `fx` list, `grow` and `flash` key from the JSON at run time.  The author's verdict on V4, watching live: "same moves over
+and over and that beam looks terrible".  Verified causes: `rounds.py` / `brain.py` drew every attack with `rng.choice` from the six strikes
+(the first spar exchanges from `pool[:4]`), nothing stopped repeats, and defence / locomotion / specials / supers / the ultimate almost never
+appeared; the kamehameha played as one static frame set with no extension or travel.
+
+### Built
+
+- `minis_core/choreo.py` (new): a seeded no-repeat `Picker` (never the same move twice in a row, no move more than twice a round,
+  weighted by category and situation) and `plan_exchange`, the exchange grammar: openers (dash-in jab, jump-in kick, sweep), defender
+  answers (block / block_hit, crouch_block under highs, parry -> counter, backdash whiff, getting hit by power), jab-cross-uppercut
+  combos with hitstop, pressure vs a spacing reset (walk_back / backdash), specials at range, a super when the hit meter fills, the
+  ultimate once per match at a dramatic moment (round point / low HP, never in a round's first two exchanges) with flash + shake,
+  knockdown -> getup on big hits, a taunt after a whiffed ultimate, one air-to-air exchange per round.  Pure function of one `Random`.
+- `rounds.py`: `Bout` plays those beats into a lazy-idle `_Emitter` with positions (`to` slides: dash-ins, backdashes, knockback),
+  `hitstop`, hit meters, projectiles, `@shake` / `@flash` / `@whiff` directives, impact bursts, rollback at the 25 s cap.  `make_match`
+  and the new `make_friendly` (spar / clash) share it; `brain.make_timeline` only adds the bows and the fist bump.  Both processes still
+  derive the identical timeline from the plan.
+- `brain.py`: hitstop freeze of the animation clock, slides, the three new directives, `flash` in the view.
+- `fx.py` / `effects.py`: `grow {from_w, to_w, ms}` (extends from the hand, holds, retracts + fades over the last frame; `extent()`,
+  cropped placement in both facings, `beam_end()`, `reach()`), `flash: true` (one-frame white, ~60 %), standalone move shakes and flashes.
+  Absent keys fall back to the V4 behaviour.  `render.compose` whitens only the fighter's drawn pixels on the taskbar (plate-safe).
+- `arena.py`: exchanges are the same grammar played with physics (approach / beat / strike states, resets with velocity, counters swap
+  roles), hitstop freezes both bodies, hover for air-to-air, beam ultimates fired from `reach * 0.8` so the beam reaches the hurtbox
+  (travelling ones from 260 px, contact at arrival), impact burst at the beam's end + `<move>_impact` / explosion + flash + the move's
+  own shake, knockback straight along a beam, knockdown -> getup when HP is left, a ceiling under the HUD, window tops inside the HUD
+  band are crack targets but not platforms, `ko_stars` fade before the next round, a full-frame flash in the compositor, and the
+  heartbeat carries the last 16 content-free events (kind, time, effect name).
+- `minis.py arena --seed K`, `tools/arena_capture.py` (PrintWindow of the arena's own window at the beam / flash / air / knockdown
+  moments, driven by the heartbeat), `tools/make_previews.py --match-gif <path>`, `gen_movelist.py` scans `choreo.py` (3 moves left
+  untriggered: turn, crouch, facepalm; was 10).
+
+### Verified (with the evidence)
+
+| claim | evidence |
+| --- | --- |
+| unit suite | `python -m unittest discover -s tests`: **281 tests OK, 8 skipped** (opt-in process tests); `tests/test_choreo.py` adds 16 |
+| variety, taskbar | 20 seeded matches over 4 roster pairs: top attack share per character 16-19 % (Claude `reverse` 18 %, Cursor `tab_bolt` 19 %, all < 25 %); 23-26 distinct moves per character (>= 12); strikes 256 / supers 66 / specials 56 / ultimates 36 / counters 21 picks; 46 air exchanges; every category in the grammar seen (test `Variety`) |
+| variety, arena | 4 headless matches: 13 distinct attack moves, top share `cross` 11/71 = 15 %; every match has an air-to-air exchange, a beam, a flash, a parry or block, a reset, a whiff; knockdowns kip up within 3 s; the ultimate at most once per fighter per match; 10 seeds: 14 of 24 rounds end by KO, mean round 20.8 s, none over 26.5 s |
+| both sides agree | `make_match` twice on one plan is equal (incl. `to` / `hitstop` opts); two Brains on the bus play a V5 match with slides and stops inside the zone, one record; `MINIS_INTEGRATION=1`: two real processes + demo spar: 13 contact / reaction pairs matched on both sides; the three-process arena ran 2 rounds, recorded the winner, slots hid and returned, no file left (8/8 OK, 129 s) |
+| beams | growing beam keeps its anchor edge on the hand in both facings while the far end extends 16 -> 256 px, holds, retracts and fades; `reach` 256 at RES 2 / 128 on the taskbar; flash 0.6 on the hit frame and 0 after; real `kamehameha` (art: grow 56 -> 256 over 100 ms, 7 frames, flash) traced at 112 / 312 / 512 px in the arena player |
+| arena beam contact | test: Claude's beam fired from range (>= REACH_PX, <= reach + 8), 40 damage, knockdown, knockback > 900 px/s along the beam, both bodies' clocks stand still for the hitstop, flash > 0, impact burst present, the compositor writes the flash as a full frame and clears it the next |
+| live taskbar | `stop`, `start`, `selftest-gui --keep`: PASS (2,932 px visible, 2,895 after the raise tick); fighters left RUNNING |
+| live arena, monitor 2, PrintWindow of its own window only | `python tools/arena_capture.py --monitor 2 --out <dir> --prefix v5` (the annotated copies are `docs/img/v5-kamehameha.png`, `v5-flash.png`, `v5-air.png`): `v5-kamehameha.png` (Claude's beam 13 ms after it fires: the head 56 px out of the hand, mid-extension, fired from range on the floor), `v5-rasengan_burst.png` (Codex's ultimate effect), `v5-flash.png` (the white frame: the whole overlay at 60 %), `v5-air.png` (both fighters airborne mid-strike), `v5-knockdown.png` (the defender going down under the impact burst), `v5-last.png`; `v5-match.gif` = the taskbar match through the real planner (484 frames) |
+| what the captures fixed | the first live run showed the fighters standing on a window top inside the HUD band, a beam knockback punting the defender off the top edge, the hover pinned under the HUD, a sprite-only flash and round-1 `ko_stars` looping into round 2: fixed (MIN_PLATFORM_Y, ceiling, flat beam knockback, floor-relative hover, full-window flash, fades) and re-captured |
+
+### Not done / not verified
+
+- `minis.py demo` twice: both requests were written and read by slot `a`, but slot `b` had no assignment (only Claude Code was running on
+  this PC), so no live demo bout could start; the demo path is covered by the two-process integration test (`spar-demo` on both sides).
+- The white flash is one frame (60 ms): the capture tool takes the first frame at or after the event, which caught it on the third
+  seeded run (`v5-flash.png`: the whole overlay at 60 % white, K.O., the beam's end burst on the defender); earlier runs got the frame before.
+- Other arenas were launched on monitor 2 during this session by another agent (wall-clock seeds); one was stopped by my
+  `minis.py stop` before the self-test, and two capture runs attached to a running one instead of starting a seeded match.
+- Supers come from the hit meter (72); the share is tuned by test, not by eye.  Hitstop on strikes is 50 % of `hitstop_ms` because the
+  sheets already hold the hit frame.
+- `test_art.py` and `tests/fixtures/v5_frame_hashes.json` changed under this run (ART agent); they passed at the end.

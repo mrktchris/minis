@@ -4,8 +4,8 @@ Generated from `assets/*/anim.json` by `tools/gen_movelist.py`; every number bel
 
 ## At a glance
 
-- **7 characters**: Claude, Codex, Gemini, Cursor, Ollama, LM Studio, Agent. Each has the same **45 shared moves** plus **three signature moves** (49 moves, 250 frames for Claude).
-- 39 of 45 shared moves are triggered by the planner today, and every signature move is; 6 shared moves are built and waiting for a trigger (listed at the end).
+- **7 characters**: Claude, Codex, Gemini, Cursor, Ollama, LM Studio, Agent. Each has the same **45 shared moves** plus **three signature moves** (49 moves, 263 frames for Claude).
+- 42 of 45 shared moves are triggered by the planner today, and every signature move is; 3 shared moves are built and waiting for a trigger (listed at the end).
 - Which character appears is decided by the **director** from what is running (at most two at a time, slot `a` left and slot `b` right).
 
 ## The roster
@@ -17,41 +17,41 @@ Generated from `assets/*/anim.json` by `tools/gen_movelist.py`; every number bel
 | Gemini | `*gemini` | #7FA8F2 | `spin_kick` | `star_shot` | `twin_flash` | `getsuga` | Gemini |
 | Cursor | `>cursor` | #5FD3F3 | `ground_pound` | `tab_bolt` | `autocomplete` | `odm_strike` | Cursor |
 | Ollama | `ollama` | #E9E2D2 | `ground_pound` | `pull_shot` | `serve` | `wind_scar` | Ollama |
-| LM Studio | `lmstudio` | #4FC0BA | `spin_kick` | `load_wave` | `hot_swap` | `bankai` | LM Studio |
+| LM Studio | `lmstudio` | #7CF8EA | `spin_kick` | `load_wave` | `hot_swap` | `bankai` | LM Studio |
 | Agent | `agent` | #E0C46C | `spin_kick` | `energy_bolt` | `overclock` | `spirit_bomb` | Windsurf, aider, opencode (and any character whose art is missing) |
 
 ### Signature moves
 
 | character | move | role | frames | length | what it is |
 | --- | --- | --- | ---: | ---: | --- |
-| Claude | `spin_kick` | strike | 8 | 770 ms | Claude's signature spinning kick. · reach 20 px, contact at frame 4 |
-| Claude | `slash_wave` | special | 7 | 770 ms | Throws a "/" slash wave across the taskbar. Costs nothing; looks cool. |
-| Claude | `reverse` | super | 7 | 710 ms | "/reverse": rewinds to where it stood a second ago, dodging everything. Afterimage trail. |
-| Claude | `kamehameha` | ultimate | 8 | 2520 ms | Cups both hands at the hip, charges for a full second, then fires a horizontal beam the width of the taskbar. · reach 21 px, contact at frame 5 · 40 damage · effects: `kamehameha_charge`, `kamehameha` |
-| Codex | `ground_pound` | strike | 8 | 890 ms | Codex's heavy leaping slam with a ground shockwave. · reach 19 px, contact at frame 3 |
-| Codex | `deploy` | special | 7 | 780 ms | Types a command and hits ENTER: fires a ">_" bolt across the taskbar. |
-| Codex | `sudo` | super | 7 | 820 ms | "$reverse": raises a giant $ and powers up with elevated permissions. |
-| Codex | `rasengan` | ultimate | 8 | 1320 ms | Spins a sphere of energy in one hand, dashes in with afterimages and drives it home in a spiral burst. · reach 22 px, contact at frame 5 · 40 damage · effects: `rasengan_orb`, `rasengan_burst` |
-| Gemini | `spin_kick` | strike | 8 | 770 ms | Gemini's spinning kick, ponytail whipping round. · reach 20 px, contact at frame 4 |
-| Gemini | `star_shot` | special | 7 | 770 ms | Two-handed push that fires a "*" sparkle along the taskbar. |
-| Gemini | `twin_flash` | super | 7 | 710 ms | Flash-steps back a second in time, leaving a sparkle and an afterimage trail. |
-| Gemini | `getsuga` | ultimate | 7 | 1390 ms | Raises an arm, gathers energy and swings down a giant crescent slash wave. · reach 22 px, contact at frame 4 · 40 damage · effects: `getsuga_charge`, `getsuga` |
-| Cursor | `ground_pound` | strike | 8 | 890 ms | Cursor's leaping slam with a ground shockwave. · reach 19 px, contact at frame 3 |
-| Cursor | `tab_bolt` | special | 7 | 780 ms | Accepts a suggestion and hits TAB: fires a ">|" caret bolt across the taskbar. |
-| Cursor | `autocomplete` | super | 7 | 820 ms | Raises a giant ">" and powers up: the whole line completes itself. |
-| Cursor | `odm_strike` | ultimate | 8 | 1030 ms | Fires two grapple lines, zips across them and finishes with a spinning cross slash. · reach 14 px, contact at frame 5 · 40 damage · effects: `odm_lines`, `odm_slash` |
-| Ollama | `ground_pound` | strike | 8 | 890 ms | Ollama's llama stomp with a ground shockwave. · reach 19 px, contact at frame 3 |
-| Ollama | `pull_shot` | special | 7 | 780 ms | "ollama pull": hurls a wool-white orb across the taskbar. |
-| Ollama | `serve` | super | 7 | 820 ms | "ollama serve": raises a giant "o" and powers up, local and unstoppable. |
-| Ollama | `wind_scar` | ultimate | 8 | 1630 ms | Raises both arms, then slams down and rips three claws of energy along the ground. · reach 19 px, contact at frame 4 · 40 damage · effects: `wind_scar_charge`, `wind_scar` |
-| LM Studio | `spin_kick` | strike | 8 | 770 ms | LM Studio's spinning kick, scarf trailing. · reach 20 px, contact at frame 4 |
-| LM Studio | `load_wave` | special | 7 | 770 ms | Loads a model and throws it as a teal-and-magenta wave across the taskbar. |
-| LM Studio | `hot_swap` | super | 7 | 710 ms | Hot-swaps back to where it stood a second ago, afterimage trail and a giant "L". |
-| LM Studio | `bankai` | ultimate | 8 | 1330 ms | Releases a pillar of aura, then lands three flash-step strikes faster than the eye. · reach 22 px, contact at frame 4 · 40 damage · effects: `bankai_aura`, `bankai_slash` |
-| Agent | `spin_kick` | strike | 8 | 770 ms | A spinning kick: every agent learns this one. · reach 20 px, contact at frame 4 |
-| Agent | `energy_bolt` | special | 7 | 780 ms | Types a command and fires an energy orb across the taskbar. |
-| Agent | `overclock` | super | 7 | 820 ms | Raises a giant "+" and powers up: everything runs faster. |
-| Agent | `spirit_bomb` | ultimate | 7 | 1800 ms | Raises both hands, gathers a huge slow ball of energy overhead and hurls it. · reach 21 px, contact at frame 4 · 40 damage · effects: `spirit_bomb_orb`, `spirit_bomb` |
+| Claude | `spin_kick` | strike | 8 | 660 ms | Claude's signature spinning kick. · reach 21 px, contact at frame 4 |
+| Claude | `slash_wave` | special | 7 | 670 ms | Throws a "/" slash wave across the taskbar. Costs nothing; looks cool. |
+| Claude | `reverse` | super | 7 | 670 ms | "/reverse": rewinds to where it stood a second ago, dodging everything. Afterimage trail. |
+| Claude | `kamehameha` | ultimate | 8 | 2060 ms | Cups both hands at the hip, charges for a full second, then fires a horizontal beam the width of the taskbar. · reach 22 px, contact at frame 6 · 40 damage · effects: `kamehameha_charge`, `kamehameha` |
+| Codex | `ground_pound` | strike | 8 | 800 ms | Codex's heavy leaping slam with a ground shockwave. · reach 19 px, contact at frame 4 |
+| Codex | `deploy` | special | 8 | 720 ms | Types a command and hits ENTER: fires a ">_" bolt across the taskbar. |
+| Codex | `sudo` | super | 7 | 810 ms | "$reverse": raises a giant $ and powers up with elevated permissions. |
+| Codex | `rasengan` | ultimate | 8 | 1280 ms | Spins a sphere of energy in one hand, dashes in with afterimages and drives it home in a spiral burst. · reach 23 px, contact at frame 6 · 40 damage · effects: `rasengan_orb`, `rasengan_burst` |
+| Gemini | `spin_kick` | strike | 8 | 660 ms | Gemini's spinning kick, ponytail whipping round. · reach 21 px, contact at frame 4 |
+| Gemini | `star_shot` | special | 7 | 670 ms | Two-handed push that fires a "*" sparkle along the taskbar. |
+| Gemini | `twin_flash` | super | 7 | 670 ms | Flash-steps back a second in time, leaving a sparkle and an afterimage trail. |
+| Gemini | `getsuga` | ultimate | 8 | 1440 ms | Raises an arm, gathers energy and swings down a giant crescent slash wave. · reach 22 px, contact at frame 5 · 40 damage · effects: `getsuga_charge`, `getsuga` |
+| Cursor | `ground_pound` | strike | 8 | 800 ms | Cursor's leaping slam with a ground shockwave. · reach 19 px, contact at frame 4 |
+| Cursor | `tab_bolt` | special | 8 | 720 ms | Accepts a suggestion and hits TAB: fires a ">|" caret bolt across the taskbar. |
+| Cursor | `autocomplete` | super | 7 | 810 ms | Raises a giant ">" and powers up: the whole line completes itself. |
+| Cursor | `odm_strike` | ultimate | 8 | 1010 ms | Fires two grapple lines, zips across them and finishes with a spinning cross slash. · reach 13 px, contact at frame 6 · 40 damage · effects: `odm_lines`, `odm_slash` |
+| Ollama | `ground_pound` | strike | 8 | 800 ms | Ollama's llama stomp with a ground shockwave. · reach 19 px, contact at frame 4 |
+| Ollama | `pull_shot` | special | 8 | 720 ms | "ollama pull": hurls a wool-white orb across the taskbar. |
+| Ollama | `serve` | super | 7 | 810 ms | "ollama serve": raises a giant "o" and powers up, local and unstoppable. |
+| Ollama | `wind_scar` | ultimate | 8 | 1540 ms | Raises both arms, then slams down and rips three claws of energy along the ground. · reach 20 px, contact at frame 5 · 40 damage · effects: `wind_scar_charge`, `wind_scar` |
+| LM Studio | `spin_kick` | strike | 8 | 660 ms | LM Studio's spinning kick, scarf trailing. · reach 21 px, contact at frame 4 |
+| LM Studio | `load_wave` | special | 7 | 670 ms | Loads a model and throws it as a teal-and-magenta wave across the taskbar. |
+| LM Studio | `hot_swap` | super | 7 | 670 ms | Hot-swaps back to where it stood a second ago, afterimage trail and a giant "L". |
+| LM Studio | `bankai` | ultimate | 8 | 1270 ms | Releases a pillar of aura, then lands three flash-step strikes faster than the eye. · reach 22 px, contact at frame 4 · 40 damage · effects: `bankai_aura`, `bankai_slash` |
+| Agent | `spin_kick` | strike | 8 | 660 ms | A spinning kick: every agent learns this one. · reach 21 px, contact at frame 4 |
+| Agent | `energy_bolt` | special | 8 | 720 ms | Types a command and fires an energy orb across the taskbar. |
+| Agent | `overclock` | super | 7 | 810 ms | Raises a giant "+" and powers up: everything runs faster. |
+| Agent | `spirit_bomb` | ultimate | 8 | 1760 ms | Raises both hands, gathers a huge slow ball of energy overhead and hurls it. · reach 21 px, contact at frame 5 · 40 damage · effects: `spirit_bomb_orb`, `spirit_bomb` |
 
 ## What makes them move
 
@@ -92,51 +92,51 @@ A **match** is best-of-3 rounds: both fighters start a round at 100 HP; a landed
 
 | move | frames | length | used | what it is |
 | --- | ---: | ---: | :---: | --- |
-| `idle` | 6 | 720 ms↻ | yes | Default guard stance (idle, done). |
-| `idle_flourish` | 6 | 640 ms | yes | Every 6-10 s while idle: shoulder roll and a hop (1 in 4 is the super instead). |
+| `idle` | 8 | 1240 ms↻ | yes | Default guard stance (idle, done). |
+| `idle_flourish` | 6 | 620 ms | yes | Every 6-10 s while idle: shoulder roll and a hop (1 in 4 is the super instead). |
 | `walk` | 6 | 600 ms↻ | yes | Walking to a bout, wandering, or visiting. Stride-locked: 40 px/s, feet do not slide. |
 | `walk_back` | 6 | 660 ms↻ | yes | Backing away while still facing the other fighter. |
-| `dash` | 5 | 360 ms | yes | Hop-step forward to close distance. |
+| `dash` | 5 | 350 ms | yes | Hop-step forward to close distance. |
 | `turn` | 2 | 120 ms | not yet | Pivot to face the other way. |
 | `crouch` | 3 | 300 ms↻ | not yet | Low stance. |
-| `jump` | 6 | 460 ms | yes | Neutral jump with squash on landing. |
+| `jump` | 7 | 600 ms | yes | Neutral jump with squash on landing. |
 
 ### Strikes
 
 | move | frames | length | used | what it is |
 | --- | ---: | ---: | :---: | --- |
-| `jab` | 5 | 500 ms | yes | Spar / clash: fast lead-hand strike, light hit. · reach 21 px, contact at frame 3 |
-| `cross` | 6 | 600 ms | yes | Spar / clash: rear-hand power punch. · reach 19 px, contact at frame 3 |
-| `uppercut` | 6 | 580 ms | yes | Spar / clash: rising launcher. · reach 13 px, contact at frame 3 |
-| `low_kick` | 6 | 570 ms | yes | Spar / clash: ground sweep. · reach 20 px, contact at frame 3 |
-| `roundhouse` | 7 | 700 ms | yes | Spar / clash: high kick, heavy hit, longest hit-stop. · reach 20 px, contact at frame 3 |
+| `jab` | 7 | 530 ms | yes | Spar / clash: fast lead-hand strike, light hit. · reach 21 px, contact at frame 3 |
+| `cross` | 7 | 590 ms | yes | Spar / clash: rear-hand power punch. · reach 19 px, contact at frame 3 |
+| `uppercut` | 7 | 600 ms | yes | Spar / clash: rising launcher. · reach 13 px, contact at frame 3 |
+| `low_kick` | 7 | 570 ms | yes | Spar / clash: ground sweep. · reach 20 px, contact at frame 3 |
+| `roundhouse` | 8 | 700 ms | yes | Spar / clash: high kick, heavy hit, longest hit-stop. · reach 20 px, contact at frame 3 |
 
 ### Defense
 
 | move | frames | length | used | what it is |
 | --- | ---: | ---: | :---: | --- |
-| `backdash` | 5 | 380 ms | not yet | Evasive hop back with afterimages. |
+| `backdash` | 5 | 340 ms | yes | Evasive hop back with afterimages. |
 | `block` | 4 | 380 ms↻ | yes | Spar / duel: the defender raises guard just before a strike lands. |
-| `block_hit` | 3 | 240 ms | yes | Spar / duel: the guard absorbs the hit with a flash. |
-| `crouch_block` | 2 | 200 ms↻ | not yet | Low guard. |
-| `parry` | 3 | 240 ms | not yet | Swat a strike aside. Counter window. · reach 20 px, contact at frame 1 |
+| `block_hit` | 3 | 220 ms | yes | Spar / duel: the guard absorbs the hit with a flash. |
+| `crouch_block` | 2 | 200 ms↻ | yes | Low guard. |
+| `parry` | 4 | 300 ms | yes | Swat a strike aside. Counter window. · reach 20 px, contact at frame 1 |
 
 ### Reactions
 
 | move | frames | length | used | what it is |
 | --- | ---: | ---: | :---: | --- |
-| `hit` | 4 | 330 ms | yes | Spar: head snap when a strike lands. |
-| `hit_heavy` | 6 | 550 ms | yes | Spar: slides back and wobbles after a heavy strike. |
-| `knockdown` | 7 | 700 ms | yes | Falls flat. (Spar is friendly, so it is reserved for a finisher.) |
-| `getup` | 6 | 660 ms | yes | After a KO: kip up. |
+| `hit` | 5 | 360 ms | yes | Spar: head snap when a strike lands. |
+| `hit_heavy` | 6 | 490 ms | yes | Spar: slides back and wobbles after a heavy strike. |
+| `knockdown` | 7 | 610 ms | yes | Falls flat. (Spar is friendly, so it is reserved for a finisher.) |
+| `getup` | 6 | 590 ms | yes | After a KO: kip up. |
 | `dizzy` | 4 | 520 ms↻ | yes | Stagger with stars: shown while a fighter stays at its limit. |
-| `ko` | 7 | 930 ms↻ | yes | Context or plan limit reached (90%+): knocked out, stars orbit. |
+| `ko` | 7 | 890 ms↻ | yes | Context or plan limit reached (90%+): knocked out, stars orbit. |
 
 ### Emotes
 
 | move | frames | length | used | what it is |
 | --- | ---: | ---: | :---: | --- |
-| `victory` | 5 | 740 ms | yes | A task finished (15 s+ of work, not a timeout): fist pump with a hop. |
+| `victory` | 7 | 1270 ms | yes | A task finished (15 s+ of work, not a timeout): fist pump with a hop. |
 | `victory2` | 4 | 560 ms | yes | Flex. The bigger-win version. |
 | `taunt` | 6 | 720 ms | yes | End of a ranged duel: come-on beckon. |
 | `wave` | 4 | 480 ms | yes | After consoling a KO. |
@@ -162,8 +162,8 @@ A **match** is best-of-3 rounds: both fighters start a round at 100 HP; a landed
 | move | frames | length | used | what it is |
 | --- | ---: | ---: | :---: | --- |
 | `bow` | 4 | 750 ms | yes | Respect bow before and after a spar (a clash skips the bows). |
-| `fistbump` | 4 | 460 ms | yes | Ends every spar, clash and handoff, on the same frame for both. · reach 21 px, contact at frame 2 |
-| `highfive` | 5 | 530 ms | yes | Alternative spar ending: jump high-five. · reach 15 px, contact at frame 2 |
+| `fistbump` | 4 | 420 ms | yes | Ends every spar, clash and handoff, on the same frame for both. · reach 21 px, contact at frame 2 |
+| `highfive` | 5 | 500 ms | yes | Alternative spar ending: jump high-five. · reach 15 px, contact at frame 2 |
 | `handoff_give` | 6 | 840 ms | yes | Handoff: the fighter that just finished holds out the diff. |
 | `handoff_take` | 6 | 780 ms | yes | Handoff: the other fighter takes the diff to review it. |
 | `console` | 4 | 640 ms | yes | The other fighter hit its limit: pats it on the shoulder. |
@@ -176,7 +176,7 @@ A dark pill behind each fighter (it flips to the front side only when the back s
 
 ## Built but not triggered yet
 
-`backdash`, `turn`, `crouch`, `crouch_block`, `parry`, `facepalm`. These have art, timing and tests; they need a trigger in `minis_core/brain.py`.
+`turn`, `crouch`, `facepalm`. These have art, timing and tests; they need a trigger in `minis_core/brain.py`.
 
 ## Ideas to expand
 
