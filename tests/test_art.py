@@ -531,7 +531,7 @@ GENERIC_FX = ('hit_light', 'hit_heavy', 'block_spark', 'dust', 'ko_stars', 'crac
 BANNER_FX = ('round_1', 'round_2', 'round_3', 'fight', 'winner', 'ko')
 ULTIMATES = {'claude': 'kamehameha', 'codex': 'rasengan', 'gemini': 'getsuga', 'cursor': 'odm_strike',
              'ollama': 'wind_scar', 'lmstudio': 'bankai', 'generic': 'spirit_bomb'}
-FX_KEYS = {'frames', 'anchor', 'offset', 'loop', 'layer', 'hit_frame', 'travel', 'shake'}
+FX_KEYS = {'frames', 'anchor', 'offset', 'loop', 'layer', 'hit_frame', 'travel', 'shake', 'grow', 'flash'}
 
 
 def sheet_colours(im):

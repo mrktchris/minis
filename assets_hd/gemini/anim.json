@@ -48,38 +48,34 @@
   "#3E2418",
   "#3F4560",
   "#3F7BE0",
-  "#4A2458",
   "#4A4A55",
+  "#5A4710",
   "#73472E",
   "#7FA8F2",
-  "#8E50A5",
-  "#938F9F",
-  "#9599A8",
   "#9A6444",
   "#A9A9B4",
+  "#B08E2E",
   "#B8BCD0",
   "#B98260",
-  "#B9CFF8",
-  "#C77DD8",
-  "#D8BAA8",
+  "#E0B898",
   "#E8718C",
-  "#EBC0F5",
-  "#F4DCFA",
+  "#E8C55A",
   "#F4F4F2",
   "#FFE27A",
+  "#FFF4C2",
   "#FFFFFF"
  ],
- "colors": 33,
+ "colors": 29,
  "anims": {
   "idle": {
    "row": 0,
    "loop": true,
    "cat": "locomotion",
-   "desc": "Guard stance: breathing chest, head bob, drifting guard.",
+   "desc": "Ronin stance: upright, hand on hip; flicks the ponytails.",
    "frames": [
     {
      "i": 0,
-     "ms": 150,
+     "ms": 170,
      "dx": 0
     },
     {
@@ -89,32 +85,32 @@
     },
     {
      "i": 2,
-     "ms": 120,
-     "dx": 0
-    },
-    {
-     "i": 3,
-     "ms": 170,
-     "dx": 0
-    },
-    {
-     "i": 4,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 5,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 6,
      "ms": 150,
      "dx": 0
     },
     {
+     "i": 3,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 180,
+     "dx": 0
+    },
+    {
      "i": 7,
-     "ms": 170,
+     "ms": 150,
      "dx": 0
     }
    ]
@@ -1101,36 +1097,36 @@
    "row": 26,
    "loop": false,
    "cat": "emote",
-   "desc": "Fist pump. Played when a task finishes.",
+   "desc": "A spin that whips the ponytails, one arm up, sparkles.",
    "frames": [
     {
      "i": 0,
-     "ms": 120,
+     "ms": 110,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 50,
-     "dx": 0
+     "ms": 60,
+     "dx": 2
     },
     {
      "i": 2,
-     "ms": 140,
-     "dx": 0
+     "ms": 50,
+     "dx": 2
     },
     {
      "i": 3,
      "ms": 60,
-     "dx": 0
+     "dx": -2
     },
     {
      "i": 4,
-     "ms": 70,
-     "dx": 0
+     "ms": 160,
+     "dx": -2
     },
     {
      "i": 5,
-     "ms": 80,
+     "ms": 150,
      "dx": 0
     },
     {

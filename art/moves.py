@@ -117,6 +117,215 @@ TEMPLATES = {'spin': sig_spin, 'pound': sig_pound, 'throw': sig_throw, 'cast': s
              'rewind': sig_rewind, 'raise': sig_raise}
 
 
+# ---------------------------------------------------------------------- signature idles (V5.1)
+# Every idle is a weight shift (the breathing-chest / head-bob base) plus one personal tic in the back half of the
+# loop, so a fighter standing still still tells you who it is.  The loop closes on the rest pose.
+def _idle(keys, desc):
+    return M([(p(**kw), ms) for kw, ms in keys], loop=True, cat='locomotion', desc=desc)
+
+
+def idle_guard():
+    keys = [  # dy, chest, head_y, lean, hand lift, ms
+        (1, 1.00, 0, 10, 0, 150), (1, 1.03, 0, 11, 0, 130), (2, 1.06, 1, 12, 1, 120), (2, 1.06, 1, 12, 1, 170),
+        (2, 1.03, 1, 11, 1, 130), (1, 1.00, 0, 10, 0, 130), (1, 0.98, 0, 9, 0, 150), (1, 0.98, 0, 9, 0, 170)]
+    return _idle([(dict(dy=dy, chest=ch_, head=(1, hy), lean=ln, hf=(8, -1 + lift), hb=(4, 1 + lift)), ms)
+                  for dy, ch_, hy, ln, lift, ms in keys], 'Guard stance: breathing chest, head bob, drifting guard.')
+
+
+def idle_monk():
+    """Claude: loose, weight on the back foot, hands low; the tic is a two-finger tug on the cap brim."""
+    return _idle([
+        (dict(dy=1, lean=6, hf=(7, 0), hb=(3, 2), ff=(7, 0), fb=(-7, 0)), 160),
+        (dict(dy=1, chest=1.03, lean=7, hf=(7, 0), hb=(3, 2), ff=(7, 0), fb=(-7, 0)), 130),
+        (dict(dy=2, chest=1.06, head=(1, 1), lean=8, hf=(7, 1), hb=(3, 3), ff=(7, 0), fb=(-7, 0)), 140),
+        (dict(dy=2, chest=1.05, head=(1, 1), lean=8, hf=(6, 1), hb=(3, 3), ff=(7, 0), fb=(-7, 0)), 170),
+        (dict(dy=2, lean=6, hf=(1, -6), hb=(3, 3), ff=(7, 0), fb=(-7, 0), face='g'), 110),
+        (dict(dy=1, lean=5, tilt=-5, head=(0, 0), hf=(0, -8), hb=(3, 3), ff=(7, 0), fb=(-7, 0), face='g', open_f=True), 260),
+        (dict(dy=1, lean=6, hf=(4, -3), hb=(3, 2), ff=(7, 0), fb=(-7, 0)), 120),
+        (dict(dy=1, chest=0.98, lean=6, hf=(7, 0), hb=(3, 2), ff=(7, 0), fb=(-7, 0)), 150)],
+        'Street-monk stance: weight back, hands low; tugs the cap brim.')
+
+
+def idle_hacker():
+    """Codex: hunched under the hood, hands low and close; the tic is cracking its knuckles, fist into palm."""
+    return _idle([
+        (dict(dy=2, lean=14, hf=(6, 2), hb=(4, 3), ff=(7, 0), fb=(-6, 0)), 160),
+        (dict(dy=2, chest=1.03, lean=15, hf=(6, 2), hb=(4, 3), ff=(7, 0), fb=(-6, 0)), 130),
+        (dict(dy=3, chest=1.06, head=(1, 1), lean=16, hf=(6, 3), hb=(4, 4), ff=(7, 0), fb=(-6, 0)), 150),
+        (dict(dy=3, chest=1.06, head=(1, 1), lean=16, hf=(6, 3), hb=(4, 4), ff=(7, 0), fb=(-6, 0)), 170),
+        (dict(dy=2, lean=14, hf=(6, 0), hb=(6, 0), fist_f=4, fist_b=3, open_f=False, ff=(7, 0), fb=(-6, 0), face='g'), 120),
+        (dict(dy=2, lean=13, hf=(7, -1), hb=(6, 0), fist_f=4, ff=(7, 0), fb=(-6, 0), face='g', head=(0, 0), fx=(('spark_s', 'hf', 1, -1),)), 90),
+        (dict(dy=2, lean=14, hf=(6, 0), hb=(6, 0), fist_f=4, ff=(7, 0), fb=(-6, 0), face='g'), 200),
+        (dict(dy=2, chest=0.98, lean=14, hf=(6, 2), hb=(4, 3), ff=(7, 0), fb=(-6, 0)), 140)],
+        'Hooded hacker stance: hunched, hands close; cracks its knuckles.')
+
+
+def idle_ronin():
+    """Gemini: upright, rear hand on the hip; the tic is a head flick that whips the ponytails."""
+    return _idle([
+        (dict(dy=1, lean=4, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0)), 170),
+        (dict(dy=1, chest=1.03, lean=5, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0)), 130),
+        (dict(dy=2, chest=1.06, head=(1, 1), lean=6, hf=(8, 1), hb=(-2, 5), eb_b='back', ff=(6, 0), fb=(-7, 0)), 150),
+        (dict(dy=2, chest=1.05, head=(1, 1), lean=6, hf=(8, 1), hb=(-2, 5), eb_b='back', ff=(6, 0), fb=(-7, 0)), 160),
+        (dict(dy=1, lean=2, head=(-1, 0), tilt=-9, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0), face='g'), 90),
+        (dict(dy=1, lean=3, head=(2, 0), tilt=6, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0), face='g'), 110),
+        (dict(dy=1, lean=4, head=(1, 0), tilt=2, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0), face='g'), 180),
+        (dict(dy=1, chest=0.98, lean=4, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0)), 150)],
+        'Ronin stance: upright, hand on hip; flicks the ponytails.')
+
+
+def idle_pointer():
+    """Cursor: low, narrow, coiled; the tic is a sharp head snap toward the target and a twitch of the lead hand."""
+    return _idle([
+        (dict(dy=3, lean=14, sq=0.97, hf=(9, 0), hb=(2, 2), ff=(8, 0), fb=(-6, 0)), 180),
+        (dict(dy=3, chest=1.03, lean=15, sq=0.97, hf=(9, 0), hb=(2, 2), ff=(8, 0), fb=(-6, 0)), 130),
+        (dict(dy=4, chest=1.05, head=(1, 1), lean=16, sq=0.96, hf=(9, 1), hb=(2, 3), ff=(8, 0), fb=(-6, 0)), 150),
+        (dict(dy=4, chest=1.05, head=(1, 1), lean=16, sq=0.96, hf=(9, 1), hb=(2, 3), ff=(8, 0), fb=(-6, 0)), 160),
+        (dict(dy=3, lean=14, sq=0.97, head=(3, 0), tilt=7, hf=(11, -2), hb=(2, 2), ff=(8, 0), fb=(-6, 0), face='g', open_f=True), 60),
+        (dict(dy=3, lean=14, sq=0.97, head=(3, 0), tilt=7, hf=(11, -2), hb=(2, 2), ff=(8, 0), fb=(-6, 0), face='g', open_f=True), 220),
+        (dict(dy=3, lean=14, sq=0.97, head=(2, 0), tilt=3, hf=(10, -1), hb=(2, 2), ff=(8, 0), fb=(-6, 0), face='g'), 110),
+        (dict(dy=3, chest=0.98, lean=14, sq=0.97, hf=(9, 0), hb=(2, 2), ff=(8, 0), fb=(-6, 0)), 140)],
+        'Pointer stance: low and coiled; snaps its head and points.')
+
+
+def idle_brawler():
+    """Ollama: bouncing on its toes with both fists up; the tic is bumping its fists together."""
+    return _idle([
+        (dict(dy=1, lean=8, sq=1.0, hf=(6, -4), hb=(3, -3), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 140),
+        (dict(dy=2, lean=9, sq=0.97, chest=1.04, hf=(6, -3), hb=(3, -2), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 120),
+        (dict(dy=0, lean=8, sq=1.03, head=(1, -1), hf=(6, -5), hb=(3, -4), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 110),
+        (dict(dy=2, lean=9, sq=0.97, chest=1.04, hf=(6, -3), hb=(3, -2), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 130),
+        (dict(dy=1, lean=8, hf=(5, -2), hb=(5, -2), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0), face='g'), 90),
+        (dict(dy=1, lean=8, chest=1.06, hf=(5, -2), hb=(5, -2), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0), face='g', fx=(('spark_s', 'hf', 0, -2),)), 170),
+        (dict(dy=0, lean=8, sq=1.03, head=(1, -1), hf=(6, -5), hb=(3, -4), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 120),
+        (dict(dy=1, lean=8, chest=0.98, hf=(6, -4), hb=(3, -3), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 150)],
+        'Brawler stance: bouncing, fists up; bumps its fists together.')
+
+
+def idle_agent():
+    """Generic: at ease, hands at the sides; the tic is checking the wrist and a short nod."""
+    return _idle([
+        (dict(dy=1, lean=2, hf=(2, 6), hb=(0, 6), ff=(5, 0), fb=(-6, 0)), 170),
+        (dict(dy=1, chest=1.03, lean=3, hf=(2, 6), hb=(0, 6), ff=(5, 0), fb=(-6, 0)), 130),
+        (dict(dy=2, chest=1.06, head=(1, 1), lean=4, hf=(2, 7), hb=(0, 7), ff=(5, 0), fb=(-6, 0)), 150),
+        (dict(dy=2, chest=1.05, head=(1, 1), lean=4, hf=(2, 7), hb=(0, 7), ff=(5, 0), fb=(-6, 0)), 160),
+        (dict(dy=1, lean=6, head=(2, 2), hf=(5, -1), hb=(0, 6), ff=(5, 0), fb=(-6, 0), face='n'), 120),
+        (dict(dy=1, lean=6, head=(2, 3), hf=(5, -1), hb=(0, 6), ff=(5, 0), fb=(-6, 0), face='n'), 240),
+        (dict(dy=1, lean=3, head=(1, 0), hf=(3, 3), hb=(0, 6), ff=(5, 0), fb=(-6, 0), face='f'), 110),
+        (dict(dy=1, chest=0.98, lean=2, hf=(2, 6), hb=(0, 6), ff=(5, 0), fb=(-6, 0)), 150)],
+        'Field-agent stance: at ease; checks the wrist, nods.')
+
+
+IDLES = {'guard': idle_guard, 'monk': idle_monk, 'hacker': idle_hacker, 'ronin': idle_ronin, 'pointer': idle_pointer,
+         'brawler': idle_brawler, 'agent': idle_agent}
+
+
+# ---------------------------------------------------------------------- signature victories (V5.1)
+def _vic(keys, desc):
+    return M([(p(**kw), ms) for kw, ms in keys], cat='emote', desc=desc)
+
+
+def vic_fistpump():
+    return _vic([
+        (dict(dy=4, lean=10, sq=0.88, hf=(5, 3), hb=(3, 3), face='w'), 120),
+        (dict(dy=-6, lean=0, sq=1.12, hf=(5, -12), hb=(3, 2), ff=(5, 3), fb=(-4, 2), face='w', fx=(('star', 'head', -8, -7),)), 50),
+        (dict(dy=-10, lean=-4, sq=1.0, hf=(6, -13), hb=(2, 3), ff=(5, 5), fb=(-4, 4), face='w', fx=(('star', 'head', -9, -6), ('star', 'head', 8, -8))), 140),
+        (dict(dy=-4, lean=-2, sq=1.05, hf=(6, -13), hb=(2, 3), ff=(5, 3), fb=(-4, 2), face='w'), 60),
+        (dict(dy=4, lean=4, sq=0.88, hf=(5, -12), hb=(3, 2), face='w', fx=(('dust', 'ff', 5, 1), ('dust', 'fb', -6, 1))), 70),
+        (dict(dy=0, lean=0, sq=1.03, hf=(5, -13), hb=(4, 3), face='w'), 80),
+        (dict(dy=1, lean=0, hf=(5, -12), hb=(4, 3), face='w'), 300)], 'Fist pump. Played when a task finishes.')
+
+
+def vic_monk():
+    """Claude: palms together, a deep bow, then up with a two-finger peace sign and a star."""
+    return _vic([
+        (dict(dy=2, lean=8, hf=(5, -3), hb=(5, -3), fist_f=2, fist_b=2, ff=(5, 0), fb=(-5, 0), face='n'), 160),
+        (dict(dy=3, lean=32, head=(3, 3), sq=0.97, hf=(4, 0), hb=(4, 0), fist_f=2, fist_b=2, ff=(5, 0), fb=(-5, 0), face='z'), 120),
+        (dict(dy=3, lean=36, head=(3, 3), sq=0.97, hf=(4, 1), hb=(4, 1), fist_f=2, fist_b=2, ff=(5, 0), fb=(-5, 0), face='z'), 320),
+        (dict(dy=0, lean=-4, sq=1.06, hf=(6, -12), hb=(2, 3), eb_f='up', open_f=True, ff=(5, 0), fb=(-5, 0), face='w'), 70),
+        (dict(dy=1, lean=-6, sq=1.0, tilt=-6, hf=(7, -13), hb=(2, 3), eb_f='up', open_f=True, ff=(5, 0), fb=(-5, 0), face='w',
+              fx=(('star', 'head', 9, -9),)), 150),
+        (dict(dy=1, lean=-6, tilt=-6, hf=(7, -13), hb=(2, 3), eb_f='up', open_f=True, ff=(5, 0), fb=(-5, 0), face='w',
+              fx=(('star', 'head', -8, -10), ('star', 'head', 10, -6))), 150),
+        (dict(dy=1, lean=-4, tilt=-4, hf=(7, -13), hb=(2, 3), eb_f='up', open_f=True, ff=(5, 0), fb=(-5, 0), face='w'), 300)],
+        'Prayer bow, then a two-finger peace sign.')
+
+
+def vic_hacker():
+    """Codex: throws the hood back a notch, crosses its arms, two slow nods under the visor."""
+    return _vic([
+        (dict(dy=2, lean=10, hf=(2, -8), hb=(4, 2), ff=(6, 0), fb=(-6, 0), face='g'), 150),
+        (dict(dy=1, lean=4, chest=1.06, sq=1.03, hf=(-2, -4), hb=(6, -4), eb_f='down', eb_b='down', fist_f=3, fist_b=3, ff=(6, 0), fb=(-6, 0), face='g'), 90),
+        (dict(dy=2, lean=2, chest=1.08, hf=(-2, -4), hb=(6, -4), fist_f=3, fist_b=3, ff=(6, 0), fb=(-6, 0), face='g'), 260),
+        (dict(dy=2, lean=4, chest=1.08, head=(1, 2), hf=(-2, -4), hb=(6, -4), fist_f=3, fist_b=3, ff=(6, 0), fb=(-6, 0), face='g'), 140),
+        (dict(dy=2, lean=2, chest=1.08, head=(0, 0), hf=(-2, -4), hb=(6, -4), fist_f=3, fist_b=3, ff=(6, 0), fb=(-6, 0), face='g'), 180),
+        (dict(dy=2, lean=4, chest=1.08, head=(1, 2), hf=(-2, -4), hb=(6, -4), fist_f=3, fist_b=3, ff=(6, 0), fb=(-6, 0), face='w',
+              fx=(('spark_s', 'head', 8, -6),)), 140),
+        (dict(dy=2, lean=2, chest=1.06, head=(0, 0), hf=(-2, -4), hb=(6, -4), fist_f=3, fist_b=3, ff=(6, 0), fb=(-6, 0), face='w'), 300)],
+        'Hood back, arms crossed, two slow nods.')
+
+
+def vic_ronin():
+    """Gemini: a full spin that whips both ponytails out, landing in a one-arm-up pose with sparkles."""
+    return _vic([
+        (dict(dy=3, lean=10, sq=0.94, hf=(4, 2), hb=(2, 2), ff=(6, 0), fb=(-6, 0), face='w'), 110),
+        (dict(dy=1, lean=0, turn=0.6, face='back', dx=1, hf=(2, -2), hb=(-3, -2), ff=(3, 0), fb=(-3, 0)), 60),
+        (dict(dy=0, lean=-6, turn=0.3, face='back', dx=1, sq=1.04, hf=(-4, -6), hb=(-6, -4), ff=(2, 1), fb=(-2, 0)), 50),
+        (dict(dy=0, lean=-4, turn=0.7, dx=-1, sq=1.04, hf=(6, -10), hb=(-5, 0), ff=(4, 2), fb=(-4, 0), face='w'), 60),
+        (dict(dy=1, lean=-6, turn=1.0, dx=-1, hf=(7, -13), hb=(-3, 4), eb_f='up', eb_b='back', ff=(6, 0), fb=(-6, 0), face='w',
+              fx=(('star', 'head', 9, -10), ('star', 'head', -9, -4))), 160),
+        (dict(dy=2, lean=-4, sq=0.97, hf=(7, -13), hb=(-3, 4), eb_f='up', eb_b='back', ff=(6, 0), fb=(-6, 0), face='w',
+              fx=(('star', 'head', -10, -9), ('star', 'head', 10, -4), ('star', 'head', 1, -13))), 150),
+        (dict(dy=1, lean=-4, hf=(7, -13), hb=(-3, 4), eb_f='up', eb_b='back', ff=(6, 0), fb=(-6, 0), face='w'), 300)],
+        'A spin that whips the ponytails, one arm up, sparkles.')
+
+
+def vic_pointer():
+    """Cursor: a sharp point at the beaten opponent, a click (the hand snaps), then a cool head tilt."""
+    return _vic([
+        (dict(dy=3, lean=10, sq=0.96, hf=(4, -2), hb=(2, 2), ff=(7, 0), fb=(-6, 0), face='g'), 120),
+        (dict(dy=2, lean=22, dx=2, hf=(13, -4), hb=(1, 2), open_f=True, ff=(10, 0), fb=(-7, 0), face='g', smear_f=(4, -2)), 50),
+        (dict(dy=2, lean=24, hf=(14, -4), hb=(1, 2), open_f=True, ff=(10, 0), fb=(-7, 0), face='g'), 260),
+        (dict(dy=2, lean=24, hf=(13, -3), hb=(1, 2), fist_f=3, ff=(10, 0), fb=(-7, 0), face='g', fx=(('spark_s', 'hf', 3, -1),)), 70),
+        (dict(dy=2, lean=24, hf=(14, -4), hb=(1, 2), open_f=True, ff=(10, 0), fb=(-7, 0), face='g', fx=(('block', 'hf', 4, -2),)), 160),
+        (dict(dy=2, lean=16, head=(2, 0), tilt=8, hf=(10, -2), hb=(1, 2), ff=(9, 0), fb=(-7, 0), face='w'), 140),
+        (dict(dy=2, lean=14, head=(2, 0), tilt=8, hf=(9, -1), hb=(1, 2), ff=(9, 0), fb=(-7, 0), face='w'), 300)],
+        'Points at the loser, clicks, head tilt.')
+
+
+def vic_brawler():
+    """Ollama: a ground-shaking stomp, a double-arm flex, then a jump with both fists in the air."""
+    return _vic([
+        (dict(dy=-3, lean=6, sq=1.06, hf=(5, -3), hb=(3, -3), fist_f=4, fist_b=4, ff=(6, 6), fb=(-6, 0), face='g'), 110),
+        (dict(dy=5, lean=10, sq=0.86, hf=(6, 2), hb=(3, 2), fist_f=4, fist_b=4, ff=(8, 0), fb=(-7, 0), face='g',
+              fx=(('dust', 'ff', 5, 1), ('shock', 'abs', 38, 56))), 130),
+        (dict(dy=2, lean=0, chest=1.10, hf=(6, -8), hb=(2, -8), eb_f='up', eb_b='up', fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0), face='g'), 260),
+        (dict(dy=4, lean=4, sq=0.90, chest=1.04, hf=(5, 3), hb=(2, 3), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0), face='w'), 90),
+        (dict(dy=-9, lean=0, sq=1.12, hf=(6, -13), hb=(2, -13), eb_f='up', eb_b='up', fist_f=4, fist_b=4, ff=(5, 4), fb=(-4, 3), face='w',
+              fx=(('star', 'head', -9, -8), ('star', 'head', 9, -8))), 170),
+        (dict(dy=4, lean=6, sq=0.88, hf=(5, -8), hb=(2, -8), eb_f='up', eb_b='up', fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0), face='w',
+              fx=(('dust', 'ff', 5, 1), ('dust', 'fb', -6, 1))), 80),
+        (dict(dy=1, lean=2, chest=1.06, hf=(6, -10), hb=(2, -10), eb_f='up', eb_b='up', fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0), face='w'), 300)],
+        'Stomp, flex, and a two-fist jump.')
+
+
+def vic_agent():
+    """Generic: snaps to attention, a crisp salute, holds it, then stands at ease with the hands behind the back."""
+    return _vic([
+        (dict(dy=2, lean=6, hf=(4, 2), hb=(1, 3), ff=(5, 0), fb=(-6, 0), face='n'), 120),
+        (dict(dy=1, lean=0, chest=1.06, sq=1.03, hf=(3, -7), hb=(0, 6), ff=(2, 0), fb=(-3, 0), fist_f=3, face='n', smear_f=(4, 2)), 50),
+        (dict(dy=1, lean=0, chest=1.08, hf=(3, -8), hb=(0, 6), ff=(2, 0), fb=(-3, 0), fist_f=3, face='n'), 300),
+        (dict(dy=1, lean=0, chest=1.08, hf=(3, -8), hb=(0, 6), ff=(2, 0), fb=(-3, 0), fist_f=3, face='w', fx=(('star', 'head', 9, -8),)), 160),
+        (dict(dy=1, lean=2, chest=1.04, hf=(4, -2), hb=(0, 6), ff=(2, 0), fb=(-3, 0), face='w'), 90),
+        (dict(dy=1, lean=2, hf=(-3, 5), hb=(-3, 5), eb_f='back', eb_b='back', ff=(5, 0), fb=(-6, 0), face='w'), 140),
+        (dict(dy=1, lean=2, chest=1.03, hf=(-3, 5), hb=(-3, 5), eb_f='back', eb_b='back', ff=(5, 0), fb=(-6, 0), face='w'), 300)],
+        'Attention, salute, at ease.')
+
+
+VICTORIES = {'fistpump': vic_fistpump, 'monk': vic_monk, 'hacker': vic_hacker, 'ronin': vic_ronin, 'pointer': vic_pointer,
+             'brawler': vic_brawler, 'agent': vic_agent}
+
+
 def build_moves(character):
     """character: a roster.Character or its name.  Shared move set + the character's three signature moves."""
     import roster
@@ -125,13 +334,8 @@ def build_moves(character):
     mv = {}
 
     # ------------------------------------------------------------------ locomotion
-    # idle: nothing moves more than a pixel.  The chest expands, the head bobs a frame later, the guard drifts.
-    idle_keys = [  # dy, chest, head_y, lean, hand lift, ms
-        (1, 1.00, 0, 10, 0, 150), (1, 1.03, 0, 11, 0, 130), (2, 1.06, 1, 12, 1, 120), (2, 1.06, 1, 12, 1, 170),
-        (2, 1.03, 1, 11, 1, 130), (1, 1.00, 0, 10, 0, 130), (1, 0.98, 0, 9, 0, 150), (1, 0.98, 0, 9, 0, 170)]
-    mv['idle'] = M([(p(dy=dy, chest=ch_, head=(1, hy), lean=ln, hf=(8, -1 + lift), hb=(4, 1 + lift)), ms)
-                    for dy, ch_, hy, ln, lift, ms in idle_keys],
-                   loop=True, cat='locomotion', desc='Guard stance: breathing chest, head bob, drifting guard.')
+    # idle: the character's signature stance (weight shift + personal tic); 'guard' is the shared default
+    mv['idle'] = IDLES[ch.style.get('idle', 'guard')]()
     mv['idle_flourish'] = M([
         (p(dy=3, lean=16, sq=0.94, hf=(5, 3), hb=(2, 3), ff=(8, 0), fb=(-7, 0)), 100),
         (p(dy=-1, lean=4, sq=1.06, hf=(9, -5), hb=(6, -6), ff=(6, 2), fb=(-5, 1), face='g'), 80),
@@ -296,14 +500,7 @@ def build_moves(character):
         loop=True, loop_range=(4, 6), cat='reaction', desc='Knocked out; stars orbit. Shown when a plan limit is hit.')
 
     # ------------------------------------------------------------------ emotes / states
-    mv['victory'] = M([
-        (p(dy=4, lean=10, sq=0.88, hf=(5, 3), hb=(3, 3), face='w'), 120),
-        (p(dy=-6, lean=0, sq=1.12, hf=(5, -12), hb=(3, 2), ff=(5, 3), fb=(-4, 2), face='w', fx=(('star', 'head', -8, -7),)), 50),
-        (p(dy=-10, lean=-4, sq=1.0, hf=(6, -13), hb=(2, 3), ff=(5, 5), fb=(-4, 4), face='w', fx=(('star', 'head', -9, -6), ('star', 'head', 8, -8))), 140),
-        (p(dy=-4, lean=-2, sq=1.05, hf=(6, -13), hb=(2, 3), ff=(5, 3), fb=(-4, 2), face='w'), 60),
-        (p(dy=4, lean=4, sq=0.88, hf=(5, -12), hb=(3, 2), face='w', fx=(('dust', 'ff', 5, 1), ('dust', 'fb', -6, 1))), 70),
-        (p(dy=0, lean=0, sq=1.03, hf=(5, -13), hb=(4, 3), face='w'), 80),
-        (p(dy=1, lean=0, hf=(5, -12), hb=(4, 3), face='w'), 300)], cat='emote', desc='Fist pump. Played when a task finishes.')
+    mv['victory'] = VICTORIES[ch.style.get('victory', 'fistpump')]()        # the character's own win pose
     mv['victory2'] = M([(p(dy=2, lean=0, chest=1.04, hf=(5, -7), hb=(2, -7), eb_f='up', eb_b='up', face='g', fist_f=4, fist_b=4), 140),
                         (p(dy=1, lean=0, chest=1.10, hf=(5, -8), hb=(2, -8), eb_f='up', eb_b='up', face='g', fist_f=4, fist_b=4), 140),
                         (p(dy=2, lean=0, chest=1.04, hf=(5, -7), hb=(2, -7), eb_f='up', eb_b='up', face='g', fist_f=4, fist_b=4), 140),

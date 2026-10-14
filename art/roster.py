@@ -5,7 +5,8 @@ Every character is a rig.Body variant (proportions, hood / scarf / ponytail, pal
 move set from moves.py; its three signature moves are built from parameterised templates in moves.py (`spin`, `pound`,
 `throw`, `cast`, `rewind`, `raise`), so the planner can treat all characters the same way and never branch on a name.
 
-claude and codex keep their original bodies (rig.CLAUDE / rig.CODEX) and their original signature moves.
+claude and codex keep their original signature moves; every body (costume flags + palette) is defined here.
+`style` names the signature idle / victory template (moves.py IDLES / VICTORIES).
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -26,56 +27,110 @@ class Character:
     signature: dict             # {'strike': move, 'special': move, 'super': move}
     sig_moves: dict             # move -> (template, desc, opts)
     projectile: dict = field(default_factory=dict)   # style + colours for proj.png, `kind` for anim.json
+    style: dict = field(default_factory=dict)        # {'idle': template, 'victory': template} (moves.py)
 
 
 def _fx(a, b, w, c):
     return dict(a=hexrgb(a), b=hexrgb(b), w=hexrgb(w), c=hexrgb(c))
 
 
-# ---------------------------------------------------------------- new bodies
+# ---------------------------------------------------------------- bodies (V5.1 redesign)
+# Every costume is original pixel art from the rig's costume flags.  The LM Studio cyber-samurai (white plates, teal
+# edge light, magenta soles, holographic trail) is the bar; each of the others gets the same three things: one strong
+# silhouette feature, one saturated accent against a restrained base, and an HD rim tint (`hi2`) that reads as light.
+def _g5(base, hi, sh, ol, hi2):
+    g = _g(base, hi, sh, ol)
+    g['hi2'] = hexrgb(hi2)
+    return g
+
+
+# Claude: terracotta street-monk.  Hood down, a long two-tone cream scarf (trim over paper), wrapped forearms,
+# hoodie drawstrings, the reversed cap with '/'.  Warm rim light.
+CLAUDE = Body('claude', thigh=8, shin=8, torso=12, torso_w=10, upper=6, fore=6, limb=3, head_w=13, head_h=13,
+              foot_len=6, sigil='/', scarf=True, hood=True, ghost_group='cloth', tail_seg=(5, 2.6), scarf_group='paper',
+              wraps=True, drawstring=True, palette={
+    'skin': _g5('E9B88F', 'F6D6B6', 'C48A66', '7A4A34', 'FFEBD6'),
+    'hair': _g('2B2420', '4A3E36', '1A1512', '100C0A'),
+    'cloth': _g5('D97757', 'F0A184', 'A8553C', '5E2C1E', 'FFD2B8'),
+    'trim': _g5('F0EEE6', 'FFFFFF', 'C7C2B3', '7D7766', 'FFFFFF'),
+    'pants': _g5('2E2B38', '45414F', '1E1C26', '121118', 'F0A184'),
+    'shoe': _g5('F0EEE6', 'FFFFFF', 'C7C2B3', '7D7766', 'FFFFFF'),
+    'sole': _g('1F1E1D', '45414F', '1F1E1D', '121118'),
+    'ink': _g('1F1E1D', '1F1E1D', '1F1E1D', '1F1E1D'),
+    'paper': PAPER,
+    'fx': _fx('FF9C2C', 'FFE27A', 'FFFFFF', 'F0A184'),
+    'flash': FLASH,
+})
+
+# Codex: black-and-violet hooded hacker-ninja.  Hood UP with a violet visor glow, loose sleeves, split-toe tabi,
+# circuit traces, '$' on the hood.  Violet holographic afterimages.
+CODEX = Body('codex', thigh=7, shin=7, torso=12, torso_w=13, upper=5.5, fore=5.5, limb=4, head_w=13, head_h=13,
+             foot_len=7, sigil='$', scarf=False, hood=True, hood_up=True, visor_glow=True, sleeves='loose', tabi=True,
+             circuit=True, ghost_group='trim', ghost_style='holo', palette={
+    'skin': _g5('BB7A50', 'D79E74', '8F5736', '4C2A1B', 'F0C8A8'),
+    'hair': _g('17130F', '2E2620', '0D0A08', '070504'),
+    'cloth': _g5('1E1E28', '33334A', '111118', '07070B', 'A99DFF'),
+    'trim': _g5('7C6CFF', 'A99DFF', '5648D6', '2A2270', 'E4E0FF'),
+    'pants': _g5('2C2C3A', '44445A', '1C1C26', '0E0E14', '7C6CFF'),
+    'shoe': _g5('15151C', '33334A', '0B0B10', '07070B', 'A99DFF'),
+    'sole': _g('5648D6', '7C6CFF', '5648D6', '2A2270'),
+    'ink': _g('0B0B10', '0B0B10', '0B0B10', '0B0B10'),
+    'paper': PAPER,
+    'fx': _fx('9B6BFF', 'FFE27A', 'FFFFFF', 'A99DFF'),
+    'flash': FLASH,
+})
+
+# Gemini: blue-and-gold twin-tail ronin.  Two ponytails that whip, a haori jacket with gold lapels, '*' sigil,
+# a pale-gold star-sparkle rim and sparkle afterimages.
 GEMINI = Body('gemini', thigh=8, shin=8, torso=11, torso_w=10, upper=6, fore=6, limb=3, head_w=13, head_h=13,
-              foot_len=6, sigil='*', scarf=False, hood=False, ponytail=True, tail_anchor=(-6.5, 0.5), tail_seg=(3, 2.2),
-              ghost_group='cloth', palette={
-    'skin': _g('9A6444', 'B98260', '73472E', '3E2418'),
-    'hair': _g('1E1A2A', '3A3450', '120F1A', '08070C'),
-    'cloth': _g('3F7BE0', '7FA8F2', '2A55A8', '142A5C'),
-    'trim': _g('C77DD8', 'EBC0F5', '8E50A5', '4A2458'),
-    'pants': _g('2A2F45', '3F4560', '1B1F30', '0E1018'),
-    'shoe': PAPER,
+              foot_len=6, sigil='*', scarf=False, hood=False, ponytail=True, twin_tail=True, lapel=True,
+              tail_anchor=(-6.5, 0.5), tail_seg=(4, 2.4), ghost_group='cloth', ghost_style='spark', palette={
+    'skin': _g5('9A6444', 'B98260', '73472E', '3E2418', 'E0B898'),
+    'hair': _g5('1E1A2A', '3A3450', '120F1A', '08070C', '7FA8F2'),
+    'cloth': _g5('3F7BE0', '7FA8F2', '2A55A8', '142A5C', 'FFF4C2'),
+    'trim': _g5('E8C55A', 'FFF4C2', 'B08E2E', '5A4710', 'FFFFFF'),
+    'pants': _g5('2A2F45', '3F4560', '1B1F30', '0E1018', '7FA8F2'),
+    'shoe': _g5('F4F4F2', 'FFFFFF', 'A9A9B4', '4A4A55', 'FFFFFF'),
     'sole': _g('2A55A8', '3F7BE0', '2A55A8', '142A5C'),
     'ink': _g('141420', '141420', '141420', '141420'),
     'paper': PAPER,
-    'fx': _fx('E8718C', 'FFE27A', 'FFFFFF', 'EBC0F5'),
+    'fx': _fx('E8718C', 'FFE27A', 'FFFFFF', 'FFF4C2'),
     'flash': FLASH,
 })
 
-CURSOR = Body('cursor', thigh=8, shin=7, torso=12, torso_w=11, upper=6, fore=5.5, limb=3, head_w=13, head_h=13,
-              foot_len=6, sigil='>', scarf=False, hood=True, ghost_group='trim', palette={
-    'skin': _g('F0CDB0', 'FBE5D2', 'CFA587', '7E5640'),
+# Cursor: sleek cyan-on-black "pointer" assassin.  An angular cursor-arrow brim, sharp thin limbs, '>' sigil,
+# cyan edge light on the black suit (the rim tone IS the accent) and speed-line afterimages.
+CURSOR = Body('cursor', thigh=8, shin=7, torso=12, torso_w=10, upper=6, fore=6, limb=3, head_w=13, head_h=13,
+              foot_len=6, sigil='>', scarf=False, hood=False, brim='pointer', arm_taper=0.8,
+              ghost_group='trim', ghost_style='streak', palette={
+    'skin': _g5('F0CDB0', 'FBE5D2', 'CFA587', '7E5640', 'FFF4EA'),
     'hair': _g('3A2A20', '5A4434', '241A13', '120D0A'),
-    'cloth': _g('2B2B2F', '45454B', '1A1A1D', '0A0A0C'),
-    'trim': _g('E6E6EA', 'FFFFFF', 'B4B4BC', '5E5E66'),
-    'pants': _g('3C4250', '545B6B', '282C36', '14161C'),
-    'shoe': _g('E6E6EA', 'FFFFFF', 'B4B4BC', '5E5E66'),
-    'sole': _g('1A1A1D', '45454B', '1A1A1D', '0A0A0C'),
-    'ink': _g('0C0C10', '0C0C10', '0C0C10', '0C0C10'),
+    'cloth': _g5('1C1C22', '2E2E36', '0E0E12', '060608', '5FD3F3'),
+    'trim': _g5('5FD3F3', 'B8F1FF', '2A95B5', '0E3F50', 'FFFFFF'),
+    'pants': _g5('26262E', '3A3A44', '16161A', '0A0A0C', '5FD3F3'),
+    'shoe': _g5('1C1C22', '2E2E36', '0E0E12', '060608', '5FD3F3'),
+    'sole': _g('5FD3F3', 'B8F1FF', '2A95B5', '0E3F50'),
+    'ink': _g('0A0A0E', '0A0A0E', '0A0A0E', '0A0A0E'),
     'paper': PAPER,
-    'fx': _fx('5FD3F3', 'FFE27A', 'FFFFFF', 'B4B4BC'),
+    'fx': _fx('5FD3F3', 'FFE27A', 'FFFFFF', 'B8F1FF'),
     'flash': FLASH,
 })
 
+# Ollama: cream-and-brown llama-hood brawler.  Hood up with little llama ears, chunky build, 'o' sigil, an earthy
+# palette with one bright orange accent (soles, ear lining, energy).
 OLLAMA = Body('ollama', thigh=7, shin=7, torso=11, torso_w=14, upper=5.5, fore=5.5, limb=4, head_w=14, head_h=13,
-              foot_len=7, sigil='o', scarf=True, hood=False, ghost_group='cloth', palette={
-    'skin': _g('E2B48C', 'F2D0B0', 'BE8A64', '6E4630'),
+              foot_len=7, sigil='o', scarf=False, hood=True, hood_up=True, ears='llama', ear_inner='sole',
+              ghost_group='cloth', palette={
+    'skin': _g5('E2B48C', 'F2D0B0', 'BE8A64', '6E4630', 'FFEEDC'),
     'hair': _g('2E2622', '4A3E36', '1E1814', '0F0C0A'),
-    'cloth': _g('E9E2D2', 'FAF6EE', 'BFB5A0', '6B6252'),
-    'trim': _g('2C2C30', '4A4A52', '1C1C20', '0C0C0E'),
-    'pants': _g('5A4A3C', '75634F', '413529', '221B14'),
-    'shoe': _g('2C2C30', '4A4A52', '1C1C20', '0C0C0E'),
-    'sole': _g('413529', '5A4A3C', '413529', '221B14'),
+    'cloth': _g5('EEE6D4', 'FBF7EE', 'C4B89E', '6E6250', 'FFFFFF'),
+    'trim': _g5('8A5A38', 'B57C50', '5E3A22', '301C0E', 'FFD27A'),
+    'pants': _g5('5A4A3C', '75634F', '413529', '221B14', 'FFB347'),
+    'shoe': _g5('3A2A20', '5E3A22', '221B14', '0F0C0A', 'FFB347'),
+    'sole': _g('FFB347', 'FFD27A', 'FFB347', '8A5A38'),
     'ink': _g('141414', '141414', '141414', '141414'),
     'paper': PAPER,
-    'fx': _fx('FFB347', 'FFE27A', 'FFFFFF', 'FAF6EE'),
+    'fx': _fx('FFB347', 'FFE27A', 'FFFFFF', 'FBF7EE'),
     'flash': FLASH,
 })
 
@@ -96,20 +151,27 @@ LMSTUDIO = Body('lmstudio', thigh=9, shin=8, torso=12, torso_w=9, upper=6.5, for
     'flash': FLASH,
 })
 
+# Agent: olive '+' field agent.  Tactical vest with pouches, gold headband with a knot tail, dark boots, '+' sigil.
 GENERIC = Body('generic', thigh=8, shin=7, torso=12, torso_w=12, upper=6, fore=6, limb=4, head_w=13, head_h=13,
-               foot_len=6, sigil='+', scarf=False, hood=False, ghost_group='trim', palette={
-    'skin': _g('E0B090', 'F0CEB2', 'BC8C6C', '6E4A36'),
+               foot_len=6, sigil='+', scarf=False, hood=False, vest=True, headband=True, ghost_group='trim', palette={
+    'skin': _g5('E0B090', 'F0CEB2', 'BC8C6C', '6E4A36', 'FFEBD8'),
     'hair': _g('2B2420', '4A3E36', '1A1512', '100C0A'),
-    'cloth': _g('5B6B4A', '8A9B72', '3E4A31', '1E2418'),
-    'trim': _g('E0C46C', 'FFE9A8', 'B0963E', '5A4A1C'),
-    'pants': _g('3A3A40', '50505A', '28282C', '141416'),
-    'shoe': PAPER,
-    'sole': _g('28282C', '50505A', '28282C', '141416'),
+    'cloth': _g5('5B6B4A', '8A9B72', '3E4A31', '1E2418', 'C9D9A8'),
+    'trim': _g5('E0C46C', 'FFE9A8', 'B0963E', '5A4A1C', 'FFFFFF'),
+    'pants': _g5('3A3A40', '50505A', '28282C', '141416', '8A9B72'),
+    'shoe': _g5('28282C', '50505A', '141416', '0A0A0C', '8A9B72'),
+    'sole': _g('141416', '28282C', '141416', '0A0A0C'),
     'ink': _g('18181A', '18181A', '18181A', '18181A'),
     'paper': PAPER,
     'fx': _fx('FF9C2C', 'FFE27A', 'FFFFFF', 'FFE9A8'),
     'flash': FLASH,
 })
+
+# signature idle / victory per character (templates in moves.py)
+STYLE = {'claude': dict(idle='monk', victory='monk'), 'codex': dict(idle='hacker', victory='hacker'),
+         'gemini': dict(idle='ronin', victory='ronin'), 'cursor': dict(idle='pointer', victory='pointer'),
+         'ollama': dict(idle='brawler', victory='brawler'), 'lmstudio': dict(idle='guard', victory='fistpump'),
+         'generic': dict(idle='agent', victory='agent')}
 
 
 def _c(name, display, tag, accent, body, strike, special, sup, projectile, ult=None, support=None):
@@ -123,18 +185,18 @@ def _c(name, display, tag, accent, body, strike, special, sup, projectile, ult=N
             opts['support'] = support[0]
             moves[support[0]] = (support[1], support[2], {})
         moves[ult[0]] = (ult[1], ult[2], opts)
-    return Character(name, display, tag, accent, body, sig, moves, projectile)
+    return Character(name, display, tag, accent, body, sig, moves, projectile, STYLE.get(name, {}))
 
 
 ROSTER = {c.name: c for c in [
-    _c('claude', 'Claude', '/reverse', '#F0A184', rig.CLAUDE,
+    _c('claude', 'Claude', '/reverse', '#F0A184', CLAUDE,
        ('spin_kick', 'spin', "Claude's signature spinning kick.", {}),
        ('slash_wave', 'throw', 'Throws a "/" slash wave across the taskbar. Costs nothing; looks cool.', {}),
        ('reverse', 'rewind', '"/reverse": rewinds to where it stood a second ago, dodging everything. Afterimage trail.',
         {'glyph': 'rewind'}),
        dict(style='arc', kind='slash_wave', cols=('cloth.base', 'cloth.hi', 'trim.base'), spark='fx.b'),
        ult=('kamehameha', 'kamehameha', 'Cups both hands at the hip, charges for a full second, then fires a horizontal beam the width of the taskbar.', {})),
-    _c('codex', 'Codex', '$reverse', '#A99DFF', rig.CODEX,
+    _c('codex', 'Codex', '$reverse', '#A99DFF', CODEX,
        ('ground_pound', 'pound', "Codex's heavy leaping slam with a ground shockwave.", {}),
        ('deploy', 'cast', 'Types a command and hits ENTER: fires a ">_" bolt across the taskbar.', {}),
        ('sudo', 'raise', '"$reverse": raises a giant $ and powers up with elevated permissions.', {'glyph': 'bigsigil'}),

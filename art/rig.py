@@ -46,9 +46,9 @@ def hip_x_px():
 
 
 PART_ORDER = ['scarf_b', 'scarf_a', 'hood', 'leg_b_th', 'leg_b_sh', 'shoe_b', 'sole_b',
-              'torso', 'belt', 'arm_b_up', 'arm_b_fo', 'cuff_b', 'hand_b',
+              'torso', 'vest', 'lapel', 'trace', 'belt', 'arm_b_up', 'arm_b_fo', 'cuff_b', 'hand_b',
               'leg_f_th', 'leg_f_sh', 'shoe_f', 'sole_f',
-              'head', 'ear', 'hair', 'cap', 'visor', 'strap', 'sigil',
+              'head', 'ear', 'hair', 'cap', 'visor', 'strap', 'band', 'lens', 'sigil',
               'eye', 'brow', 'mouth',
               'arm_f_up', 'arm_f_fo', 'cuff_f', 'hand_f',
               'doc', 'doc_line', 'fx_a', 'fx_b', 'fx_w', 'fx_c']
@@ -60,11 +60,12 @@ GROUP = {'head': 'skin', 'hand_b': 'skin', 'hand_f': 'skin', 'hair': 'hair',
          'torso': 'cloth', 'arm_b_up': 'cloth', 'arm_b_fo': 'cloth', 'arm_f_up': 'cloth', 'arm_f_fo': 'cloth',
          'hood': 'cloth', 'cap': 'cloth', 'visor': 'cloth', 'scarf_b': 'cloth',
          'cuff_b': 'trim', 'cuff_f': 'trim', 'strap': 'trim', 'belt': 'trim', 'scarf_a': 'trim',
+         'lapel': 'trim', 'band': 'trim', 'trace': 'trim', 'vest': 'pants',
          'leg_b_th': 'pants', 'leg_b_sh': 'pants', 'leg_f_th': 'pants', 'leg_f_sh': 'pants',
          'shoe_b': 'shoe', 'shoe_f': 'shoe', 'sole_b': 'sole', 'sole_f': 'sole'}
 DARK = {'leg_b_th', 'leg_b_sh', 'shoe_b', 'sole_b', 'arm_b_up', 'arm_b_fo', 'cuff_b', 'hand_b'}   # far-side limbs
 FLAT = {'ear': ('skin', 'sh'), 'eye': ('ink', None), 'brow': ('ink', None), 'mouth': ('ink', None),
-        'sigil': ('trim', 'hi'), 'doc': ('paper', None), 'doc_line': ('paper', 'sh'),
+        'sigil': ('trim', 'hi'), 'lens': ('trim', 'hi'), 'doc': ('paper', None), 'doc_line': ('paper', 'sh'),
         'fx_a': ('fx', 'a'), 'fx_b': ('fx', 'b'), 'fx_w': ('fx', 'w'), 'fx_c': ('fx', 'c')}
 NOLINE = {'fx_a', 'fx_b', 'fx_w', 'fx_c'}
 TEXT_FX = ('bigsigil', 'bigglyph', 'qmark', 'zzz')   # effects that are letters: never mirrored on left-facing frames
@@ -116,7 +117,25 @@ class Body:
     tail_anchor: tuple = (-5.0, 4.5)   # head-local attach point of scarf / ponytail
     tail_seg: tuple = (4, 2.4)         # (segments, segment length px)
     ghost_group: str = 'trim'          # afterimage tint
-    ghost_style: str = 'dither'        # 'dither' = checker copies in the ghost group; 'holo' = neon scanline copies (cyber look)
+    ghost_style: str = 'dither'        # 'dither' = checker copies in the ghost group; 'holo' = neon scanline copies (cyber look);
+                                       # 'streak' = horizontal speed-line dashes
+    # ---- V5.1 costume features (every one defaults off, so an older body renders exactly as before)
+    hood_up: bool = False              # the hood is worn over the head (replaces the cap crown + brim; the sigil sits on the hood)
+    visor_glow: bool = False           # a glowing band across the eyes (trim highlight), eyes drawn over it
+    ears: str = ''                     # 'llama': two little rounded ears on top of the hood / cap
+    brim: str = 'cap'                  # 'cap' = reversed-cap brim, 'pointer' = an angular cursor-arrow brim, 'none'
+    headband: bool = False             # a trim band across the forehead with a knot tail at the back
+    wraps: bool = False                # forearms wrapped in trim cloth with cloth seams
+    sleeves: str = ''                  # 'loose': baggy upper arm and forearm that taper to the cuff
+    vest: bool = False                 # a tactical vest over the torso (drawn in the pants group: no extra colours)
+    lapel: bool = False                # haori-style V lapels in trim down the torso front
+    circuit: bool = False              # thin trim circuit traces on the torso
+    drawstring: bool = False           # two hoodie drawstrings under the neck
+    tabi: bool = False                 # split-toe shoes
+    twin_tail: bool = False            # a second, shorter tail drawn behind the first (twin ponytails)
+    arm_taper: float = 1.0             # < 1 thins the forearm / wrist (sharp, thin limbs)
+    scarf_group: str = 'cloth'         # colour group of the scarf's under-band (scarf_b); 'paper' = a second cream tone
+    ear_inner: str = 'skin'            # colour group of the llama ears' inner pixel
 
     @property
     def hip_y0(self):
@@ -140,7 +159,20 @@ class Body:
 def group_of(body, nm):
     if body.ponytail and nm in ('scarf_a', 'scarf_b'):
         return 'hair'
+    if nm == 'scarf_b':
+        return body.scarf_group
+    if nm == 'ear' and body.ears:
+        return body.ear_inner
     return GROUP[nm]
+
+
+def _ell_pts(cx, cy, rx, ry, ang, n=20):
+    """A rotated ellipse as a polygon (design -> cell px is the caller's job)."""
+    out = []
+    for i in range(n):
+        a = 2 * math.pi * i / n
+        out.append((cx + rot((rx * math.cos(a), ry * math.sin(a)), ang)[0], cy + rot((rx * math.cos(a), ry * math.sin(a)), ang)[1]))
+    return out
 
 
 def _g(base, hi, sh, ol):
@@ -463,18 +495,30 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None):
     limb = body.limb * S
     thin = max(2, body.limb - 1) * S                 # wrists and ankles
     wide = (body.limb + 1) * S                       # shoulders, thighs, hips
+    thin_arm = max(S, rnd(thin * body.arm_taper))    # wrists only: sharp, thin limbs taper harder
+    loose = body.sleeves == 'loose'
 
     # ---- scarf / ponytail (behind everything)
     if body.has_tail and scarf_pts:
         pts = [(x * S, y * S) for x, y in scarf_pts]
         n = len(pts) - 1
+        if body.twin_tail:                           # the second tail: shorter, higher, further back, whips with the first
+            tw = [(pts[0][0] - 0.5 * S, pts[0][1] - 1.5 * S)]
+            for i in range(1, n):
+                px_, py_ = pts[i]
+                qx, qy = pts[i - 1]
+                tw.append((tw[-1][0] + (px_ - qx) * 0.85, tw[-1][1] + (py_ - qy) * 0.85 - 0.9 * S))
+            for i in range(len(tw) - 1):
+                thick_line(d, (tw[i][0], tw[i][1] + S), (tw[i + 1][0], tw[i + 1][1] + S), 3 * S if i < len(tw) - 2 else 2 * S, pid['scarf_b'])
+            for i in range(len(tw) - 1):
+                thick_line(d, tw[i], tw[i + 1], 2 * S if i < len(tw) - 2 else S, pid['scarf_a'])
         for i in range(n):                           # the tail tapers: full width at the neck, a ribbon at the tip
             w_b = 3 * S if i < n - 1 else 2 * S
             thick_line(d, (pts[i][0], pts[i][1] + S), (pts[i + 1][0], pts[i + 1][1] + S), w_b, pid['scarf_b'])
         for i in range(n):
             thick_line(d, pts[i], pts[i + 1], 2 * S if i < n - 1 else S, pid['scarf_a'])
-    # ---- hood (Codex)
-    if body.hood:
+    # ---- hood down (the collar lump behind the neck); a hood worn up is drawn with the head
+    if body.hood and not body.hood_up:
         hx, hy = Sh[0] - 3.0 * S * math.cos(th) + u[0] * S, Sh[1] - 1.5 * S
         d.ellipse([rnd(hx - 4 * S), rnd(hy - 3 * S), rnd(hx + 3 * S) + S - 1, rnd(hy + 3 * S) + S - 1], fill=pid['hood'])
 
@@ -490,6 +534,10 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None):
         hw, hh = fl / 2.0, 1.5 * S
         local = [(-hw, -hh + S), (-hw + S, -hh), (hw - 1.5 * S, -hh), (hw, -hh + S), (hw, hh), (-hw, hh)]
         poly(d, [(cx_ + rot(p_, ang)[0], cy_ + rot(p_, ang)[1]) for p_ in local], pid[f'shoe_{side}'])
+        if body.tabi:                                # split toe: a one-pixel notch in the sole tone, above the sole band
+            for yy in (-hh + S, -hh + 2 * S):
+                nx_, ny_ = rot((hw - 2.5 * S, yy), ang)
+                _px(d, rnd(cx_ + nx_), rnd(cy_ + ny_), pid[f'sole_{side}'])
         sole = rot_rect((cx_, ank[1] + 1.5 * S), fl, 1.2 * S, ang)
         poly(d, sole, pid[f'sole_{side}'])
 
@@ -513,6 +561,26 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None):
     hh, hs = body.torso_w * 0.42 * pose.turn * S, body.torso_w * 0.5 * ws * S
     poly(d, [(hip[0] - v[0] * hh, hip[1] - v[1] * hh), (hip[0] + v[0] * hh, hip[1] + v[1] * hh),
              (Sh[0] + v[0] * hs, Sh[1] + v[1] * hs), (Sh[0] - v[0] * hs, Sh[1] - v[1] * hs)], pid['torso'])
+
+    def T(a, b):
+        """Torso-local (a along v = across, b along u = up from the hip) -> cell px."""
+        return (hip[0] + v[0] * a * S + u[0] * b * S, hip[1] + v[1] * a * S + u[1] * b * S)
+    tl = bf['torso']                                 # torso length in design px
+    if body.vest:                                    # tactical vest: a plate over the chest + two pouch rects in trim
+        vw = body.torso_w * 0.34 * ws
+        poly(d, [T(-vw, 1.2), T(vw, 1.2), T(vw * 1.05, tl - 1.8), T(-vw * 1.05, tl - 1.8)], pid['vest'])
+        for a_ in (-vw * 0.55, vw * 0.45):
+            poly(d, [T(a_ - 1, tl * 0.45), T(a_ + 1, tl * 0.45), T(a_ + 1, tl * 0.45 + 2), T(a_ - 1, tl * 0.45 + 2)], pid['lapel'])
+    if body.lapel:                                   # haori lapels: a trim V from each shoulder to the belt
+        for sgn_ in (-1, 1):
+            thick_line(d, T(sgn_ * hs / S * 0.8, tl - 1), T(0, 2.2), S, pid['lapel'])
+    if body.circuit:                                 # thin circuit traces down the chest
+        for (a0, b0, a1, b1) in ((1.5, tl - 2, 1.5, tl * 0.55), (1.5, tl * 0.55, 3.5, tl * 0.55), (-2.0, tl - 4, -2.0, tl * 0.3)):
+            thick_line(d, T(a0, b0), T(a1, b1), S, pid['trace'])
+        _px(d, rnd(T(3.5, tl * 0.55)[0]), rnd(T(3.5, tl * 0.55)[1]), pid['trace'])
+    if body.drawstring:                              # two hoodie strings hanging from the collar
+        for a_ in (0.6, 2.4):
+            thick_line(d, T(a_, tl - 1.5), T(a_ + 0.3, tl - 5), S, pid['trace'])
     thick_line(d, (hip[0] - v[0] * hh + u[0] * S, hip[1] - v[1] * hh + u[1] * S), (hip[0] + v[0] * hh + u[0] * S, hip[1] + v[1] * hh + u[1] * S), S, pid['belt'])
 
     # ---- arms
@@ -536,7 +604,7 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None):
         tgt = (base[0] + target[0] * S, base[1] + target[1] * S)
         el, hand = ik2(base, tgt, body.upper * S, body.fore * S, bend)
         stamp(d, base[0], base[1], wide, pid[f'arm_{side}_up'])                    # round shoulder
-        taper_line(d, base, el, limb, limb, pid[f'arm_{side}_up'])
+        taper_line(d, base, el, wide if loose else limb, wide if loose else limb, pid[f'arm_{side}_up'])
         dirx, diry = hand[0] - el[0], hand[1] - el[1]
         n = max(1e-6, math.hypot(dirx, diry))
         dirx, diry = dirx / n, diry / n
@@ -544,7 +612,15 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None):
             _, prev_hand = ik2(base, (base[0] + smear[0] * S, base[1] + smear[1] * S), body.upper * S, body.fore * S, bend)
             sweep = math.hypot(hand[0] - prev_hand[0], hand[1] - prev_hand[1])
             smear_arc(d, base, prev_hand, hand, limb + (S if sweep <= 12 * S else 0), pid[f'arm_{side}_fo'], inner=pid[f'cuff_{side}'])
-        taper_line(d, el, hand, limb, thin, pid[f'arm_{side}_fo'])
+        if body.wraps:                               # forearm wrapped in trim cloth, cloth seams every 2.5 px
+            taper_line(d, el, hand, limb, thin_arm, pid[f'cuff_{side}'])
+            fl_ = math.hypot(hand[0] - el[0], hand[1] - el[1])
+            k_ = 2.0 * S
+            while k_ < fl_ - 2.5 * S:
+                _px(d, rnd(el[0] + dirx * k_ - diry * 0.5 * S), rnd(el[1] + diry * k_ + dirx * 0.5 * S), pid[f'arm_{side}_fo'])
+                k_ += 2.5 * S
+        else:
+            taper_line(d, el, hand, wide if loose else limb, thin_arm, pid[f'arm_{side}_fo'])
         thick_line(d, (hand[0] - dirx * 2.2 * S, hand[1] - diry * 2.2 * S), (hand[0] - dirx * 0.8 * S, hand[1] - diry * 0.8 * S), limb, pid[f'cuff_{side}'])
         hand_at(side, hand, dirx, diry, fist, open_)
         return hand
@@ -564,13 +640,45 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None):
     # hair under the cap: forehead + nape
     for (x1, y1, x2, y2) in [(4.0, -2, 6.5, -0.5), (-6.5, 0, -4.5, 2)]:
         poly(d, [L((x1, y1)), L((x2, y1)), L((x2, y2)), L((x1, y2))], pid['hair'])
-    # reversed cap: crown, visor to the back, strap at the front
-    crown = [(-6.8, -1.8), (-6.5, -4.2), (-4, -6.7), (1, -7.2), (4.5, -6), (6.8, -3.5), (6.8, -1.8)]
-    poly(d, [L(p) for p in crown], pid['cap'])
-    poly(d, [L((-6, -2.5)), L((-11.5, -1)), L((-11.5, 1)), L((-6, 0))], pid['visor'])
-    poly(d, [L((5.5, -2.3)), L((7, -2.3)), L((7, -1.7)), L((5.5, -1.7))], pid['strap'])
+    lift = 1.0 if body.headband else 0.0             # the crown sits a pixel higher over a headband
+    if body.hood_up:
+        # hood worn up: drawn as the `cap` part (so the sigil / mirror logic is unchanged), a big rounded shell around the
+        # back and top of the head that leaves the face open; its skirt runs down into the collar
+        hood_pts = [(-6.0, 3.2), (-8.0, 0.0), (-7.6, -4.0), (-5.6, -7.2), (-2.0, -8.6), (3.0, -8.4), (6.5, -6.6), (7.6, -3.8),
+                    (7.4, -2.8), (4.0, -2.4), (-1.0, -2.2), (-2.8, 1.5), (-3.0, 4.0), (-4.0, 4.6)]
+        poly(d, [L(p) for p in hood_pts], pid['cap'])
+        edge = [(7.2, -2.9), (4.0, -2.6), (-0.8, -2.4), (-2.4, 1.5), (-2.6, 4.5)]       # trim piping along the face opening
+        for a_, b_ in zip(edge, edge[1:]):
+            thick_line(d, L(a_), L(b_), S, pid['band'])
+        if body.ears == 'llama':                     # two little rounded ears on top of the hood, inner pixel in `ear`
+            for ex in (-4.0, 2.5):
+                poly(d, [L((ex - 1.4, -7.0)), L((ex - 0.9, -9.4)), L((ex + 0.6, -9.4)), L((ex + 1.4, -7.0))], pid['cap'])
+                gx, gy = L((ex - 0.2, -8.1))
+                _px(d, rnd(gx), rnd(gy), pid['ear'])
+        if body.visor_glow:                          # a glowing band across the eyes under the hood's rim
+            poly(d, [L((0.8, 0.2)), L((7.0, 0.2)), L((7.0, 2.8)), L((0.8, 2.8))], pid['lens'])
+        sig_at = (-0.5, -5.4)
+    else:
+        # reversed cap: crown, visor to the back, strap at the front
+        crown = [(-6.8, -1.8 - lift), (-6.5, -4.2 - lift), (-4, -6.7 - lift), (1, -7.2 - lift), (4.5, -6 - lift), (6.8, -3.5 - lift), (6.8, -1.8 - lift)]
+        poly(d, [L(p) for p in crown], pid['cap'])
+        if body.ears == 'llama':
+            for ex in (-3.5, 2.0):
+                poly(d, [L((ex - 1.4, -6.0)), L((ex - 0.9, -9.0)), L((ex + 0.6, -9.0)), L((ex + 1.4, -6.0))], pid['cap'])
+                gx, gy = L((ex - 0.2, -7.6))
+                _px(d, rnd(gx), rnd(gy), pid['ear'])
+        if body.brim == 'pointer':                   # an angular cursor-arrow brim pointing back
+            poly(d, [L((-6, -3.8 - lift)), L((-13.5, -1.2 - lift)), L((-9.5, -0.2 - lift)), L((-6, 0.4 - lift)), L((-7.5, -1.6 - lift))], pid['visor'])
+        elif body.brim != 'none':
+            poly(d, [L((-6, -2.5 - lift)), L((-11.5, -1 - lift)), L((-11.5, 1 - lift)), L((-6, 0 - lift))], pid['visor'])
+        poly(d, [L((5.5, -2.3 - lift)), L((7, -2.3 - lift)), L((7, -1.7 - lift)), L((5.5, -1.7 - lift))], pid['strap'])
+        if body.headband:                            # trim band across the forehead with a knot tail off the back
+            poly(d, [L((-6.8, -1.9)), L((6.8, -1.9)), L((6.8, -0.6)), L((-6.8, -0.6))], pid['band'])
+            thick_line(d, L((-6.5, -1.2)), L((-10.0, 1.2)), S, pid['band'])
+            thick_line(d, L((-6.5, -1.4)), L((-9.5, -2.6)), S, pid['band'])
+        sig_at = (-0.5, -4.2 - lift)
     gl = GLYPH[body.sigil]
-    cx_, cy_ = L((-0.5, -4.2))
+    cx_, cy_ = L(sig_at)
     gx0, gy0 = rnd(cx_) - S, rnd(cy_) - 2 * S
     for yy, row in enumerate(gl):
         for xx, ch in enumerate(row):
@@ -715,6 +823,8 @@ def finish(buf: Image.Image, body: Body, pose: Pose, hip_y=None):
                 continue
             if nm in FLAT:
                 g, tone = FLAT[nm]
+                if nm == 'ear' and body.ears:
+                    g, tone = body.ear_inner, 'sh'
                 if g == 'fx':
                     op[x, y] = pal['fx'][tone] + (255,)
                 else:

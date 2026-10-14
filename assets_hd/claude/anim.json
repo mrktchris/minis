@@ -44,10 +44,10 @@
   "#2E2B38",
   "#45414F",
   "#4A3E36",
+  "#4A4A55",
   "#5E2C1E",
   "#7A4A34",
   "#7D7766",
-  "#99969E",
   "#9B9590",
   "#A8553C",
   "#A9A9B4",
@@ -60,10 +60,10 @@
   "#F0EEE6",
   "#F4F4F2",
   "#F6D6B6",
-  "#F7CBBB",
-  "#FAE8D7",
   "#FF9C2C",
+  "#FFD2B8",
   "#FFE27A",
+  "#FFEBD6",
   "#FFFFFF"
  ],
  "colors": 30,
@@ -72,11 +72,11 @@
    "row": 0,
    "loop": true,
    "cat": "locomotion",
-   "desc": "Guard stance: breathing chest, head bob, drifting guard.",
+   "desc": "Street-monk stance: weight back, hands low; tugs the cap brim.",
    "frames": [
     {
      "i": 0,
-     "ms": 150,
+     "ms": 160,
      "dx": 0
     },
     {
@@ -86,7 +86,7 @@
     },
     {
      "i": 2,
-     "ms": 120,
+     "ms": 140,
      "dx": 0
     },
     {
@@ -96,22 +96,22 @@
     },
     {
      "i": 4,
-     "ms": 130,
+     "ms": 110,
      "dx": 0
     },
     {
      "i": 5,
-     "ms": 130,
+     "ms": 260,
      "dx": 0
     },
     {
      "i": 6,
-     "ms": 150,
+     "ms": 120,
      "dx": 0
     },
     {
      "i": 7,
-     "ms": 170,
+     "ms": 150,
      "dx": 0
     }
    ]
@@ -1098,36 +1098,36 @@
    "row": 26,
    "loop": false,
    "cat": "emote",
-   "desc": "Fist pump. Played when a task finishes.",
+   "desc": "Prayer bow, then a two-finger peace sign.",
    "frames": [
     {
      "i": 0,
-     "ms": 120,
+     "ms": 160,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 50,
+     "ms": 120,
      "dx": 0
     },
     {
      "i": 2,
-     "ms": 140,
+     "ms": 320,
      "dx": 0
     },
     {
      "i": 3,
-     "ms": 60,
-     "dx": 0
-    },
-    {
-     "i": 4,
      "ms": 70,
      "dx": 0
     },
     {
+     "i": 4,
+     "ms": 150,
+     "dx": 0
+    },
+    {
      "i": 5,
-     "ms": 80,
+     "ms": 150,
      "dx": 0
     },
     {

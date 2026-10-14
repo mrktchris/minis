@@ -167,8 +167,10 @@ def ghost(im, offsets, body, mirrored, pose=None, prev=None):
     op = out.load()
     pal = body.palette
     g = pal[body.ghost_group]
-    holo = body.ghost_style == 'holo'
+    style = body.ghost_style
+    holo = style == 'holo'
     tones = [pal['trim']['hi'], pal['cloth']['hi'], pal['trim']['base'], pal['trim']['sh']] if holo else [g['hi'], g['base'], g['sh'], g['sh']]
+    sparks = []                                                        # 'spark': star points left in the trail
     behind = -1.0 if (pose is None or pose.dx >= 0) else 1.0          # ghosts trail opposite to the travel direction
     if mirrored:
         behind = -behind
@@ -195,10 +197,20 @@ def ghost(im, offsets, body, mirrored, pose=None, prev=None):
                     continue
                 if holo:                                               # scanlines, broken into dashes that thin out
                     on = ((y // S) % 2 == 0) and ((x // S + gi * 2) % (dens + 1) < 2)
+                elif style == 'streak':                                # horizontal speed-line dashes, every third row
+                    on = ((y // S + gi) % 3 == 0) and ((x // S + gi * 3) % (dens + 3) < 4)
                 else:
                     on = ((x // S) * 3 + (y // S) * 5 + gi * 2) % dens == 0
                 if on:
                     op[x, y] = col
+                    if style == 'spark' and ((x // S) * 7 + (y // S) * 11 + gi) % 29 == 0:
+                        sparks.append((x, y, gi))
+    if style == 'spark':                                               # four-point sparkles scattered through the trail
+        for x, y, gi in sparks:
+            c = (pal['trim']['hi'] if gi == 0 else tones[min(gi, len(tones) - 1)]) + (255,)
+            for dx, dy in ((0, 0), (-S, 0), (S, 0), (0, -S), (0, S)):
+                if 0 <= x + dx < cw and 0 <= y + dy < cw and not op[x + dx, y + dy][3]:
+                    op[x + dx, y + dy] = c
     return out
 
 

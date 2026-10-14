@@ -35,80 +35,82 @@
   "style": "orb"
  },
  "palette": [
-  "#0C0C0E",
   "#0F0C0A",
   "#141414",
-  "#1C1C20",
   "#1E1814",
   "#221B14",
-  "#2C2C30",
   "#2E2622",
+  "#301C0E",
+  "#3A2A20",
   "#413529",
   "#4A3E36",
-  "#4A4A52",
   "#5A4A3C",
-  "#6B6252",
+  "#5E3A22",
   "#6E4630",
+  "#6E6250",
   "#75634F",
+  "#8A5A38",
   "#A9A9B4",
+  "#B57C50",
   "#B8BCD0",
   "#BE8A64",
-  "#BFB5A0",
+  "#C4B89E",
   "#E2B48C",
-  "#E9E2D2",
+  "#EEE6D4",
   "#F2D0B0",
   "#F4F4F2",
-  "#FAF6EE",
+  "#FBF7EE",
   "#FFB347",
+  "#FFD27A",
   "#FFE27A",
   "#FFFFFF"
  ],
- "colors": 27,
+ "colors": 29,
  "anims": {
   "idle": {
    "row": 0,
    "loop": true,
    "cat": "locomotion",
-   "desc": "Guard stance: breathing chest, head bob, drifting guard.",
+   "desc": "Brawler stance: bouncing, fists up; bumps its fists together.",
    "frames": [
     {
      "i": 0,
-     "ms": 150,
+     "ms": 140,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 2,
      "ms": 120,
      "dx": 0
     },
     {
+     "i": 2,
+     "ms": 110,
+     "dx": 0
+    },
+    {
      "i": 3,
-     "ms": 170,
+     "ms": 130,
      "dx": 0
     },
     {
      "i": 4,
-     "ms": 130,
+     "ms": 90,
      "dx": 0
     },
     {
      "i": 5,
-     "ms": 130,
+     "ms": 170,
      "dx": 0
     },
     {
      "i": 6,
-     "ms": 150,
+     "ms": 120,
      "dx": 0
     },
     {
      "i": 7,
-     "ms": 170,
+     "ms": 150,
      "dx": 0
     }
    ]
@@ -1104,31 +1106,31 @@
    "row": 26,
    "loop": false,
    "cat": "emote",
-   "desc": "Fist pump. Played when a task finishes.",
+   "desc": "Stomp, flex, and a two-fist jump.",
    "frames": [
     {
      "i": 0,
-     "ms": 120,
+     "ms": 110,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 50,
+     "ms": 130,
      "dx": 0
     },
     {
      "i": 2,
-     "ms": 140,
+     "ms": 260,
      "dx": 0
     },
     {
      "i": 3,
-     "ms": 60,
+     "ms": 90,
      "dx": 0
     },
     {
      "i": 4,
-     "ms": 70,
+     "ms": 170,
      "dx": 0
     },
     {

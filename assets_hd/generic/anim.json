@@ -35,6 +35,7 @@
   "style": "orb"
  },
  "palette": [
+  "#0A0A0C",
   "#100C0A",
   "#141416",
   "#18181A",
@@ -45,41 +46,38 @@
   "#3A3A40",
   "#3E4A31",
   "#4A3E36",
-  "#4A4A55",
   "#50505A",
   "#5A4A1C",
   "#5B6B4A",
   "#6E4A36",
   "#8A9B72",
   "#9B9590",
-  "#9F9FA4",
   "#A9A9B4",
   "#B0963E",
   "#B8BCD0",
   "#BC8C6C",
-  "#BFC8B1",
+  "#C9D9A8",
   "#E0B090",
   "#E0C46C",
   "#F0CEB2",
   "#F4F4F2",
-  "#F7E4D5",
   "#FF9C2C",
   "#FFE27A",
   "#FFE9A8",
-  "#FFF3CF",
+  "#FFEBD8",
   "#FFFFFF"
  ],
- "colors": 33,
+ "colors": 31,
  "anims": {
   "idle": {
    "row": 0,
    "loop": true,
    "cat": "locomotion",
-   "desc": "Guard stance: breathing chest, head bob, drifting guard.",
+   "desc": "Field-agent stance: at ease; checks the wrist, nods.",
    "frames": [
     {
      "i": 0,
-     "ms": 150,
+     "ms": 170,
      "dx": 0
     },
     {
@@ -89,32 +87,32 @@
     },
     {
      "i": 2,
-     "ms": 120,
-     "dx": 0
-    },
-    {
-     "i": 3,
-     "ms": 170,
-     "dx": 0
-    },
-    {
-     "i": 4,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 5,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 6,
      "ms": 150,
      "dx": 0
     },
     {
+     "i": 3,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 240,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 110,
+     "dx": 0
+    },
+    {
      "i": 7,
-     "ms": 170,
+     "ms": 150,
      "dx": 0
     }
    ]
@@ -1106,7 +1104,7 @@
    "row": 26,
    "loop": false,
    "cat": "emote",
-   "desc": "Fist pump. Played when a task finishes.",
+   "desc": "Attention, salute, at ease.",
    "frames": [
     {
      "i": 0,
@@ -1120,22 +1118,22 @@
     },
     {
      "i": 2,
-     "ms": 140,
+     "ms": 300,
      "dx": 0
     },
     {
      "i": 3,
-     "ms": 60,
+     "ms": 160,
      "dx": 0
     },
     {
      "i": 4,
-     "ms": 70,
+     "ms": 90,
      "dx": 0
     },
     {
      "i": 5,
-     "ms": 80,
+     "ms": 140,
      "dx": 0
     },
     {
@@ -1143,6 +1141,9 @@
      "ms": 300,
      "dx": 0
     }
+   ],
+   "smear_frames": [
+    1
    ]
   },
   "victory2": {

@@ -1,6 +1,10 @@
 {
  "res": 1,
  "sheet": "fx.png",
+ "schema_notes": {
+  "grow": "optional {from_w, to_w, ms} (px at this res): the engine draws the effect stretched horizontally from from_w to to_w over its first ms after spawn, the anchored end fixed, so a beam extends from the hands instead of appearing whole; null = draw the frames as authored.",
+  "flash": "bool: frame 0 is a one-frame release flash (white-hot); the engine may whiten the owner sprite / flash the scene for that frame's ms.  Never true on a looping effect."
+ },
  "effects": {
   "hit_light": {
    "frames": [
@@ -42,7 +46,9 @@
    "layer": "front",
    "hit_frame": 1,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "hit_heavy": {
    "frames": [
@@ -94,7 +100,9 @@
    "shake": {
     "frames": 3,
     "amp": 2
-   }
+   },
+   "grow": null,
+   "flash": false
   },
   "block_spark": {
    "frames": [
@@ -136,7 +144,9 @@
    "layer": "front",
    "hit_frame": 1,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "dust": {
    "frames": [
@@ -178,7 +188,9 @@
    "layer": "back",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "ko_stars": {
    "frames": [
@@ -220,7 +232,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "crack_small": {
    "frames": [
@@ -248,7 +262,9 @@
    "layer": "back",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "crack_big": {
    "frames": [
@@ -286,7 +302,9 @@
    "shake": {
     "frames": 3,
     "amp": 2
-   }
+   },
+   "grow": null,
+   "flash": false
   },
   "shatter": {
    "frames": [
@@ -384,7 +402,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "explosion": {
    "frames": [
@@ -450,7 +470,9 @@
    "shake": {
     "frames": 6,
     "amp": 4
-   }
+   },
+   "grow": null,
+   "flash": false
   },
   "letters": {
    "frames": [
@@ -828,7 +850,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "ko_text": {
    "frames": [
@@ -866,7 +890,9 @@
    "shake": {
     "frames": 4,
     "amp": 3
-   }
+   },
+   "grow": null,
+   "flash": false
   },
   "round_text": {
    "frames": [
@@ -915,7 +941,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "round_1": {
    "frames": [
@@ -936,7 +964,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "round_2": {
    "frames": [
@@ -957,7 +987,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "round_3": {
    "frames": [
@@ -978,7 +1010,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "fight": {
    "frames": [
@@ -999,7 +1033,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "winner": {
    "frames": [
@@ -1020,7 +1056,9 @@
    "layer": "front",
    "hit_frame": null,
    "travel": null,
-   "shake": null
+   "shake": null,
+   "grow": null,
+   "flash": false
   },
   "ko": {
    "frames": [
@@ -1044,7 +1082,9 @@
    "shake": {
     "frames": 4,
     "amp": 3
-   }
+   },
+   "grow": null,
+   "flash": false
   }
  }
 }

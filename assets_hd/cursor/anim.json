@@ -35,48 +35,46 @@
   "style": "term"
  },
  "palette": [
+  "#060608",
   "#0A0A0C",
-  "#0C0C10",
+  "#0A0A0E",
+  "#0E0E12",
+  "#0E3F50",
   "#120D0A",
-  "#14161C",
-  "#1A1A1D",
+  "#16161A",
+  "#1C1C22",
   "#241A13",
-  "#282C36",
-  "#2B2B2F",
+  "#26262E",
+  "#2A95B5",
+  "#2E2E36",
   "#3A2A20",
-  "#3C4250",
-  "#45454B",
-  "#545B6B",
+  "#3A3A44",
   "#5A4434",
-  "#5E5E66",
   "#5FD3F3",
   "#7E5640",
-  "#99999C",
-  "#A1A5AE",
   "#A4988F",
   "#A9A9B4",
-  "#B4B4BC",
   "#B8BCD0",
+  "#B8F1FF",
   "#CFA587",
-  "#E6E6EA",
   "#F0CDB0",
   "#F4F4F2",
   "#FBE5D2",
-  "#FDF1E6",
   "#FFE27A",
+  "#FFF4EA",
   "#FFFFFF"
  ],
- "colors": 30,
+ "colors": 28,
  "anims": {
   "idle": {
    "row": 0,
    "loop": true,
    "cat": "locomotion",
-   "desc": "Guard stance: breathing chest, head bob, drifting guard.",
+   "desc": "Pointer stance: low and coiled; snaps its head and points.",
    "frames": [
     {
      "i": 0,
-     "ms": 150,
+     "ms": 180,
      "dx": 0
     },
     {
@@ -86,32 +84,32 @@
     },
     {
      "i": 2,
-     "ms": 120,
-     "dx": 0
-    },
-    {
-     "i": 3,
-     "ms": 170,
-     "dx": 0
-    },
-    {
-     "i": 4,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 5,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 6,
      "ms": 150,
      "dx": 0
     },
     {
+     "i": 3,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 220,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 110,
+     "dx": 0
+    },
+    {
      "i": 7,
-     "ms": 170,
+     "ms": 140,
      "dx": 0
     }
    ]
@@ -484,7 +482,7 @@
    "smear_frames": [
     2
    ],
-   "reach": 36
+   "reach": 37
   },
   "uppercut": {
    "row": 11,
@@ -753,11 +751,11 @@
     3
    ],
    "proj_from": [
-    34.4,
-    -19.9
+    35.4,
+    -20.0
    ],
    "hand": [
-    34,
+    35,
     -46
    ]
   },
@@ -870,7 +868,7 @@
    "smear_frames": [
     1
    ],
-   "reach": 38
+   "reach": 40
   },
   "hit": {
    "row": 20,
@@ -1107,7 +1105,7 @@
    "row": 26,
    "loop": false,
    "cat": "emote",
-   "desc": "Fist pump. Played when a task finishes.",
+   "desc": "Points at the loser, clicks, head tilt.",
    "frames": [
     {
      "i": 0,
@@ -1117,26 +1115,26 @@
     {
      "i": 1,
      "ms": 50,
-     "dx": 0
+     "dx": 4
     },
     {
      "i": 2,
-     "ms": 140,
+     "ms": 260,
      "dx": 0
     },
     {
      "i": 3,
-     "ms": 60,
-     "dx": 0
-    },
-    {
-     "i": 4,
      "ms": 70,
      "dx": 0
     },
     {
+     "i": 4,
+     "ms": 160,
+     "dx": 0
+    },
+    {
      "i": 5,
-     "ms": 80,
+     "ms": 140,
      "dx": 0
     },
     {
@@ -1144,6 +1142,9 @@
      "ms": 300,
      "dx": 0
     }
+   ],
+   "smear_frames": [
+    1
    ]
   },
   "victory2": {
@@ -1272,7 +1273,7 @@
    "smear_frames": [
     1
    ],
-   "reach": 40
+   "reach": 41
   },
   "highfive": {
    "row": 31,
@@ -1896,10 +1897,10 @@
    "smear_frames": [
     5
    ],
-   "reach": 25,
+   "reach": 26,
    "proj_from": [
-    25.9,
-    -30.9
+    26.8,
+    -31.4
    ],
    "fx": [
     {
@@ -1912,7 +1913,7 @@
     }
    ],
    "hand": [
-    26,
+    27,
     -59
    ]
   }

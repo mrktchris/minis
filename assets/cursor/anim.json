@@ -35,27 +35,27 @@
   "style": "term"
  },
  "palette": [
+  "#060608",
   "#0A0A0C",
-  "#0C0C10",
+  "#0A0A0E",
+  "#0E0E12",
+  "#0E3F50",
   "#120D0A",
-  "#14161C",
-  "#1A1A1D",
+  "#16161A",
+  "#1C1C22",
   "#241A13",
-  "#282C36",
-  "#2B2B2F",
+  "#26262E",
+  "#2A95B5",
+  "#2E2E36",
   "#3A2A20",
-  "#3C4250",
-  "#45454B",
-  "#545B6B",
+  "#3A3A44",
   "#5A4434",
-  "#5E5E66",
   "#5FD3F3",
   "#7E5640",
   "#A9A9B4",
-  "#B4B4BC",
   "#B8BCD0",
+  "#B8F1FF",
   "#CFA587",
-  "#E6E6EA",
   "#F0CDB0",
   "#F4F4F2",
   "#FBE5D2",
@@ -68,11 +68,11 @@
    "row": 0,
    "loop": true,
    "cat": "locomotion",
-   "desc": "Guard stance: breathing chest, head bob, drifting guard.",
+   "desc": "Pointer stance: low and coiled; snaps its head and points.",
    "frames": [
     {
      "i": 0,
-     "ms": 150,
+     "ms": 180,
      "dx": 0
     },
     {
@@ -82,32 +82,32 @@
     },
     {
      "i": 2,
-     "ms": 120,
-     "dx": 0
-    },
-    {
-     "i": 3,
-     "ms": 170,
-     "dx": 0
-    },
-    {
-     "i": 4,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 5,
-     "ms": 130,
-     "dx": 0
-    },
-    {
-     "i": 6,
      "ms": 150,
      "dx": 0
     },
     {
+     "i": 3,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 220,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 110,
+     "dx": 0
+    },
+    {
      "i": 7,
-     "ms": 170,
+     "ms": 140,
      "dx": 0
     }
    ]
@@ -480,7 +480,7 @@
    "smear_frames": [
     2
    ],
-   "reach": 17
+   "reach": 19
   },
   "uppercut": {
    "row": 11,
@@ -749,11 +749,11 @@
     3
    ],
    "proj_from": [
-    17.2,
-    -9.9
+    17.7,
+    -10.0
    ],
    "hand": [
-    17,
+    18,
     -23
    ]
   },
@@ -1103,7 +1103,7 @@
    "row": 26,
    "loop": false,
    "cat": "emote",
-   "desc": "Fist pump. Played when a task finishes.",
+   "desc": "Points at the loser, clicks, head tilt.",
    "frames": [
     {
      "i": 0,
@@ -1113,26 +1113,26 @@
     {
      "i": 1,
      "ms": 50,
-     "dx": 0
+     "dx": 2
     },
     {
      "i": 2,
-     "ms": 140,
+     "ms": 260,
      "dx": 0
     },
     {
      "i": 3,
-     "ms": 60,
-     "dx": 0
-    },
-    {
-     "i": 4,
      "ms": 70,
      "dx": 0
     },
     {
+     "i": 4,
+     "ms": 160,
+     "dx": 0
+    },
+    {
      "i": 5,
-     "ms": 80,
+     "ms": 140,
      "dx": 0
     },
     {
@@ -1140,6 +1140,9 @@
      "ms": 300,
      "dx": 0
     }
+   ],
+   "smear_frames": [
+    1
    ]
   },
   "victory2": {
@@ -1268,7 +1271,7 @@
    "smear_frames": [
     1
    ],
-   "reach": 20
+   "reach": 21
   },
   "highfive": {
    "row": 31,
@@ -1304,7 +1307,7 @@
    ],
    "hit_frame": 2,
    "hitstop_ms": 150,
-   "reach": 14
+   "reach": 15
   },
   "wave": {
    "row": 32,
@@ -1894,8 +1897,8 @@
    ],
    "reach": 13,
    "proj_from": [
-    13.0,
-    -15.5
+    13.4,
+    -15.7
    ],
    "fx": [
     {
@@ -1909,7 +1912,7 @@
    ],
    "hand": [
     13,
-    -29
+    -30
    ]
   }
  },

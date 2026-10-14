@@ -36,47 +36,45 @@
  },
  "palette": [
   "#070504",
-  "#08080C",
+  "#07070B",
   "#0B0B10",
   "#0D0A08",
-  "#111117",
+  "#0E0E14",
+  "#111118",
   "#15151C",
   "#17130F",
-  "#24242E",
-  "#26262F",
+  "#1C1C26",
+  "#1E1E28",
   "#2A2270",
+  "#2C2C3A",
   "#2E2620",
-  "#3A3A47",
-  "#3A3A4A",
+  "#33334A",
+  "#44445A",
   "#4C2A1B",
-  "#52525F",
   "#5648D6",
-  "#5C5D70",
   "#7C6CFF",
   "#8F5736",
   "#9B6BFF",
   "#A99DFF",
   "#A9A9B4",
-  "#B7B8C9",
   "#B8BCD0",
   "#BB7A50",
   "#D79E74",
   "#F4F4F2",
-  "#F4F4F8",
   "#FFE27A",
   "#FFFFFF"
  ],
- "colors": 30,
+ "colors": 28,
  "anims": {
   "idle": {
    "row": 0,
    "loop": true,
    "cat": "locomotion",
-   "desc": "Guard stance: breathing chest, head bob, drifting guard.",
+   "desc": "Hooded hacker stance: hunched, hands close; cracks its knuckles.",
    "frames": [
     {
      "i": 0,
-     "ms": 150,
+     "ms": 160,
      "dx": 0
     },
     {
@@ -86,7 +84,7 @@
     },
     {
      "i": 2,
-     "ms": 120,
+     "ms": 150,
      "dx": 0
     },
     {
@@ -96,22 +94,22 @@
     },
     {
      "i": 4,
-     "ms": 130,
+     "ms": 120,
      "dx": 0
     },
     {
      "i": 5,
-     "ms": 130,
+     "ms": 90,
      "dx": 0
     },
     {
      "i": 6,
-     "ms": 150,
+     "ms": 200,
      "dx": 0
     },
     {
      "i": 7,
-     "ms": 170,
+     "ms": 140,
      "dx": 0
     }
    ]
@@ -1107,36 +1105,36 @@
    "row": 26,
    "loop": false,
    "cat": "emote",
-   "desc": "Fist pump. Played when a task finishes.",
+   "desc": "Hood back, arms crossed, two slow nods.",
    "frames": [
     {
      "i": 0,
-     "ms": 120,
+     "ms": 150,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 50,
+     "ms": 90,
      "dx": 0
     },
     {
      "i": 2,
-     "ms": 140,
+     "ms": 260,
      "dx": 0
     },
     {
      "i": 3,
-     "ms": 60,
+     "ms": 140,
      "dx": 0
     },
     {
      "i": 4,
-     "ms": 70,
+     "ms": 180,
      "dx": 0
     },
     {
      "i": 5,
-     "ms": 80,
+     "ms": 140,
      "dx": 0
     },
     {

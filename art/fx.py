@@ -4,7 +4,9 @@ fx.json (docs/V4-WORKORDER.md "Shared interfaces", exact per-effect keys):
   {"res": k, "sheet": "fx.png",
    "effects": {"<name>": {"frames": [{"x","y","w","h","ms"}], "anchor": "hand|ground|center", "offset": [dx, dy],
                           "loop": bool, "layer": "front|back", "hit_frame": n|null,
-                          "travel": {"speed": px_per_s}|null, "shake": {"frames": n, "amp": px}|null}}}
+                          "travel": {"speed": px_per_s}|null, "shake": {"frames": n, "amp": px}|null,
+                          "grow": {"from_w", "to_w", "ms"}|null, "flash": bool}},
+   "schema_notes": {...}}                                       (V5.1: `grow` and `flash`, see FX_SCHEMA_NOTES)
 
 Placement contract (ART -> ENGINE): a frame is drawn CENTRED on the anchor point plus `offset` (px at this res;
 negate dx and flip the frame for a left-facing owner).  Anchor points, in the owner's cell:
@@ -464,6 +466,46 @@ def _energy(pal):
     return W_, pal['fx']['b'], pal['fx']['a'], dark(pal['fx']['a'], 0.45)
 
 
+def _glow(c, draw_fn, k):
+    """A halo layer: draw it on a scratch canvas, checker-dither it (parity flips with k so the halo shimmers frame to
+    frame) and composite it UNDER whatever is drawn next.  Pixel art has no alpha, so a glow is a dithered ring."""
+    g = Canvas(c.w, c.h)
+    draw_fn(g)
+    g.dither(keep=k % 2)
+    c.im.alpha_composite(g.im)
+
+
+def _burst(c, cx, cy, r, ramp, k, spikes=8, ring=True):
+    """An impact burst: layered disc, alternating licks that rotate with k, a thin ring every other frame."""
+    core, hot, acc, deep = ramp
+    for j in range(spikes):
+        a = j * 360.0 / spikes + k * 13
+        c.spike(cx, cy, a, r * (1.7 if j % 2 else 1.35), 1.1, hot if j % 2 else acc, inner=r * 0.55)
+    c.disc(cx, cy, r, deep)
+    c.disc(cx, cy, r * 0.78, acc)
+    c.disc(cx, cy, r * 0.55, hot)
+    c.disc(cx, cy, r * 0.3, core)
+    if ring and k % 2:
+        c.ring(cx, cy, r * 1.3, 0.9, acc)
+
+
+def _converge(c, cx, cy, r_in, r_out, ramp, k, n, count=8, seed=0):
+    """Charge particles converging on (cx, cy): frame k of n puts every mote a step further in along its own spoke, each
+    with a short streak pointing the way it travels (inward), so the gathering reads as motion, not sprinkles."""
+    core, hot, acc, deep = ramp
+    rng = random.Random(seed)
+    for j in range(count):
+        a = rng.uniform(0, 2 * math.pi)
+        lag = rng.uniform(0.0, 0.6)
+        t = (k / max(1.0, n - 1) + lag) % 1.0                          # motes at different stages of the fall
+        rr = r_out - (r_out - r_in) * t
+        x, y = cx + rr * math.cos(a), cy + rr * math.sin(a)
+        col = core if t > 0.7 else (hot if j % 2 else acc)
+        c.px(x, y, col)
+        tail = 1.5 + 1.5 * t
+        c.line((x, y), (x + tail * math.cos(a), y + tail * math.sin(a)), acc if t > 0.7 else deep, 1)
+
+
 def _orb(c, cx, cy, r, ramp, phase=0.0, spin=True):
     core, hot, acc, deep = ramp
     c.disc(cx, cy, r, deep)
@@ -479,44 +521,128 @@ def _orb(c, cx, cy, r, ramp, phase=0.0, spin=True):
                 c.px(cx + rr * math.cos(aa), cy + rr * math.sin(aa), core if s < 2 else (hot if s < 4 else deep))
 
 
+def _trail(c, x_head, cy, ramp, k, n=5, spread=4, step=5):
+    """Motion trail behind a travelling projectile (to the left of x_head): staggered dashes that shift with k."""
+    core, hot, acc, deep = ramp
+    for j in range(n):
+        y = cy + ((j * 7 + k * 3) % (2 * spread + 1)) - spread
+        x = x_head - 3 - j * step - (k * 2) % step
+        ln = 2 + (j % 3)
+        if x - ln < 0:
+            continue
+        c.line((x - ln, y), (x, y), hot if j % 2 == 0 else (acc if j % 3 else deep), 1)
+        if j % 2:
+            c.px(x - ln - 2, y, deep)
+
+
+def beam(c, x0, x1, cy, hw, ramp, k, seed=0, head=True, muzzle=True, fade=False):
+    """A horizontal energy beam from x0 to x1 with half-width hw: dithered glow halo, deep edge, accent, hot band and a
+    white-hot core.  Every band's edge ripples with a phase that moves with k (so consecutive frames differ), the inner
+    bands carry noise streaks, the beam necks just off the hands then flares into a wider head at x1, the muzzle flares
+    at x0 and the head throws licks.  `fade`: the dying beam, thin and dithered."""
+    core, hot, acc, deep = ramp
+    rng = random.Random(seed * 131 + k)
+    L = max(1.0, x1 - x0)
+
+    def w_at(x, hw_, ph):
+        t = (x - x0) / L
+        flare = 1.0 + (0.6 * max(0.0, (t - 0.8) / 0.2) ** 1.4 if head else 0.0)
+        neck = 0.55 + 0.45 * min(1.0, (x - x0) / 9.0)
+        rip = 0.9 * math.sin(x * 0.45 + k * 1.7 + ph) + 0.5 * math.sin(x * 0.21 - k * 1.1 + 2.0 + ph)
+        return max(0.6, hw_ * flare * neck + rip * (hw_ / hw))
+
+    def band(cv, hw_, col):
+        top = [(x, cy - w_at(x, hw_, 0.0)) for x in range(int(x0), int(x1) + 1, 2)]
+        bot = [(x, cy + w_at(x, hw_, 1.9)) for x in range(int(x1), int(x0) - 1, -2)]
+        cv.poly(top + bot, col)
+
+    if not fade:
+        _glow(c, lambda g: band(g, hw * 1.45, deep), k)
+        band(c, hw, deep)
+        band(c, hw * 0.78, acc)
+        band(c, hw * 0.55, hot)
+        band(c, hw * 0.28, core)
+    else:
+        _glow(c, lambda g: band(g, hw * 0.9, acc), k)
+        band(c, hw * 0.45, hot)
+        band(c, hw * 0.18, core)
+    for j in range(int(L / 5)):                                       # internal noise: streaks ride the inner bands
+        x = rng.uniform(x0 + 5, x1 - 7)
+        y = cy + rng.uniform(-hw * 0.5, hw * 0.5)
+        ln = rng.uniform(2, 6)
+        c.line((x, y), (x + ln, y), core if abs(y - cy) < hw * 0.3 else hot, 1)
+    for j in range(int(L / 7)):                                       # deep flecks ride the edges
+        x = rng.uniform(x0 + 6, x1 - 4)
+        s = rng.choice((-1, 1))
+        c.px(x, cy + s * (w_at(x, hw, 0.0 if s < 0 else 1.9) * 0.85), deep if not fade else acc)
+    if muzzle:
+        mx = x0 + hw * 0.35
+        for j in range(8):
+            a = j * 45 + k * 23
+            c.spike(mx, cy, a, hw * 2.0 if j % 2 else hw * 1.6, 1.0, hot if j % 2 else acc, inner=hw * 1.05)
+        _orb(c, mx, cy, hw * 1.2, ramp, spin=False)
+        c.disc(mx, cy, hw * 0.6, core)
+    if head:
+        hx = x1 - hw * 0.4
+        for j, a in enumerate((-62, -38, -14, 14, 38, 62)):
+            ln = hw * (0.9 + 0.5 * ((j + k) % 3))
+            c.spike(x1 - 1, cy, 180 + a + k * 5, ln, 1.0, hot if j % 2 else acc, inner=hw * 0.3)
+        c.arc_band(hx - hw * 0.4, cy, hw * 1.35, hw * 1.6, 180 - 55 + k * 7, 180 + 55 + k * 7, acc)
+        c.arc_band(hx - hw * 0.4, cy, hw * 1.0, hw * 1.15, 180 - 40 - k * 9, 180 + 40 - k * 9, core)
+
+
+def _wavy_band(c, cx, cy, r0, r1, a0, a1, col, k, amp=0.8, freq=5.0, steps=28):
+    """arc_band whose radii ripple along the arc (phase moves with k): an energy crescent, not a drawn arc."""
+    pts = []
+    for s in range(steps + 1):
+        a = math.radians(a0 + (a1 - a0) * s / steps)
+        w = amp * math.sin(s * freq * 0.35 + k * 1.4)
+        pts.append((cx + (r1 + w) * math.cos(a), cy + (r1 + w) * math.sin(a)))
+    for s in range(steps, -1, -1):
+        a = math.radians(a0 + (a1 - a0) * s / steps)
+        w = amp * math.sin(s * freq * 0.35 + k * 1.4 + 2.2)
+        pts.append((cx + (r0 + w) * math.cos(a), cy + (r0 + w) * math.sin(a)))
+    c.poly(pts, col)
+
+
 def fx_charge(pal, size, n, ms, rmax, motes=True):
-    """A growing ball of energy with orbiting motes (used for every charge phase)."""
+    """A growing ball of energy with particles converging on it (used for every charge phase)."""
     ramp = _energy(pal)
     out = []
     for k in range(n):
         c = Canvas(size, size)
         cx = cy = size / 2
         r = 1.5 + (rmax - 1.5) * k / max(1, n - 1)
+        _glow(c, lambda g: g.disc(cx, cy, r + 2.5 + (k % 2), ramp[3]), k)
         for a in range(0, 360, 60):
             rr = r + 2 + (k % 2)
             c.spike(cx, cy, a + k * 17, rr + 2.5, 0.8, ramp[2], inner=rr * 0.6)
         _orb(c, cx, cy, r, ramp, phase=k * 0.9, spin=k >= 1)
         if motes:
-            rng = random.Random(k + 31)
-            for j in range(4 + k):
-                a = rng.uniform(0, 2 * math.pi)
-                rr = r + 2 + rng.uniform(0, size / 2 - r - 3)
-                c.px(cx + rr * math.cos(a), cy + rr * math.sin(a), ramp[0] if j % 3 == 0 else ramp[1])
+            _converge(c, cx, cy, r + 1.5, size / 2 - 1.5, ramp, k, n, count=7 + k, seed=31)
         out.append((c.done(), ms[k] if isinstance(ms, (list, tuple)) else ms))
     return out
 
 
 def fx_impact(pal, size=28, n=5):
-    """A hit burst in the character's colours (special-projectile impacts, super bursts)."""
-    core, hot, acc, deep = _energy(pal)
+    """A hit burst in the character's colours (special-projectile impacts, super bursts): a flash, a licking burst with
+    a dithered halo, a ring, then embers."""
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     out = []
     for k in range(n):
         c = Canvas(size, size)
         cx = cy = size / 2
         R = size / 2 - 1
         if k == 0:
-            c.disc(cx, cy, R * 0.35, core)
+            c.disc(cx, cy, R * 0.45, core)
+            for a in range(0, 360, 60):
+                c.spike(cx, cy, a, R * 0.8, 1.0, hot, inner=R * 0.3)
         elif k == 1:
-            for a in range(0, 360, 45):
-                c.spike(cx, cy, a + 10, R * (0.95 if a % 90 == 0 else 0.7), 1.8, acc)
-            c.disc(cx, cy, R * 0.45, hot)
-            c.disc(cx, cy, R * 0.25, core)
+            _glow(c, lambda g: g.disc(cx, cy, R * 0.95, deep), k)
+            _burst(c, cx, cy, R * 0.55, ramp, k, spikes=8, ring=False)
         elif k == 2:
+            _glow(c, lambda g: g.disc(cx, cy, R, deep), k)
             c.ring(cx, cy, R * 0.7, 2, acc)
             c.ring(cx, cy, R * 0.62, 1, hot)
             for a in range(0, 360, 45):
@@ -535,125 +661,159 @@ def fx_impact(pal, size=28, n=5):
 
 
 def fx_big_proj(ch):
-    """The upgraded special projectile: the proj.png idea at ~2x with a trail, 3 looping frames."""
+    """The upgraded special projectile: the proj.png idea at ~2x, four looping frames that spin / pulse, each with a
+    dithered halo and a motion trail."""
     pal = ch.body.palette
-    core, hot, acc, deep = _energy(pal)
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     style = ch.projectile['style']
     out = []
-    for k in range(3):
-        c = Canvas(40, 24)
-        if style == 'arc':
-            for r, col, t in ((11 + k, deep, 3.5), (10 + k, acc, 2.4), (9.5 + k, hot, 1.3), (9.2 + k, core, 0.6)):
-                c.arc_band(14, 12, r - t, r, -62, 62, col)
-            for j in range(4):
-                c.line((2 + (k + j) % 3, 5 + j * 4.5), (8 + (j % 2) * 3, 5 + j * 4.5), acc if j % 2 else hot, 1)
-        elif style == 'term':
+    for k in range(4):
+        c = Canvas(44, 26)
+        cy = 13
+        if style == 'arc':                                            # a crescent wave that breathes and ripples
+            cx = 16
+            _glow(c, lambda g: _wavy_band(g, cx, cy, 8.5 + (k % 2) * 0.5, 13.5 + (k % 2) * 0.5, -70, 70, deep, k, amp=0.6), k)
+            for r0, r1, col in ((8.0, 11.8, deep), (8.4, 11.0, acc), (8.9, 10.3, hot), (9.3, 9.9, core)):
+                _wavy_band(c, cx, cy, r0 + (k % 2) * 0.4, r1 + (k % 2) * 0.4, -64, 64, col, k, amp=0.5)
+            for j, a in enumerate((-58, -30, 0, 30, 58)):
+                c.spike(cx + 11.5 * math.cos(math.radians(a)), cy + 11.5 * math.sin(math.radians(a)), a, 2.5 + ((j + k) % 2) * 2, 0.8, hot if j % 2 else acc)
+            _trail(c, cx - 4, cy, ramp, k, n=5, spread=6)
+        elif style == 'term':                                         # a terminal block bobbing on its glow, caret blinking
             ink = pal['ink']['base']
-            c.rect(10, 4, 36, 20, ink)
-            c.rect(11, 5, 35, 19, pal['trim']['base'] if ch.name == 'codex' else pal['cloth']['hi'])
-            c.rect(11, 15, 35, 19, pal['trim']['sh'] if ch.name == 'codex' else pal['cloth']['base'])
-            for dx, dy in ((0, 0), (1, 1), (2, 2), (3, 3), (2, 4), (1, 5), (0, 6)):
-                c.rect(14 + dx, 7 + dy, 15 + dx, 7 + dy, core)
+            face = pal['trim']['base'] if ch.name == 'codex' else pal['cloth']['hi']
+            shade = pal['trim']['sh'] if ch.name == 'codex' else pal['cloth']['base']
+            dy = (0, -1, 0, 1)[k]
+            _glow(c, lambda g: g.rect(11, 4 + dy, 39, 22 + dy, acc), k)
+            c.rect(13, 6 + dy, 37, 20 + dy, ink)
+            c.rect(14, 7 + dy, 36, 19 + dy, face)
+            c.rect(14, 16 + dy, 36, 19 + dy, shade)
+            for ddx, ddy in ((0, 0), (1, 1), (2, 2), (3, 3), (2, 4), (1, 5), (0, 6)):
+                c.rect(17 + ddx, 9 + dy + ddy, 18 + ddx, 9 + dy + ddy, core)
             if ch.projectile['glyph'].endswith('_'):
-                c.rect(21, 13, 29, 14, core)
+                c.rect(24, 15 + dy, 32, 16 + dy, core if k % 2 == 0 else hot)
             else:
-                c.rect(22, 7, 23 + (k == 1), 14, core)
-            for j in range(4 + k):
-                c.line((0, 6 + j * 3), (6 + (j % 2) * 3, 6 + j * 3), acc, 1)
-        elif style == 'star':
-            cx, cy = 24, 12
+                c.rect(25, 9 + dy, 26 + (k % 2), 16 + dy, core if k % 2 == 0 else hot)
+            for j in (0, 1):
+                c.px(13 + j * 24, 6 + dy + (k % 2) * 13, core)
+            _trail(c, 12, cy + dy, ramp, k, n=5, spread=6)
+        elif style == 'star':                                         # a four-point star that spins and pulses
+            cx = 27
+            rot_ = k * 22.5
+            pulse = (0, 1, 0, -1)[k]
+            _glow(c, lambda g: g.disc(cx, cy, 8 + pulse * 0.5, deep), k)
             for a in range(0, 360, 90):
-                c.spike(cx, cy, a + k * 15, 11, 2.2, acc)
-                c.spike(cx, cy, a + k * 15, 9, 1.2, hot)
+                c.spike(cx, cy, a + rot_, 12 + pulse, 2.4, acc)
+                c.spike(cx, cy, a + rot_, 10 + pulse, 1.3, hot)
             for a in range(45, 360, 90):
-                c.spike(cx, cy, a + k * 15, 6, 1.2, acc)
-            c.disc(cx, cy, 3, core)
-            for j in range(3):
-                c.px(4 + j * 4 + k, 5 + j * 5, hot)
-        else:
-            _orb(c, 26, 12, 9 + (k == 1), (core, hot, acc, deep), phase=k * 1.0)
-            for j in range(4 + k):
-                c.line((0 + j % 2, 4 + j * 4), (10 - (j % 2) * 3, 4 + j * 4), acc if j % 2 else hot, 1)
-        out.append((c.done(), 90))
-    return dict(frames=out, anchor='hand', offset=(14, 0), loop=True, travel=dict(speed=160))
+                c.spike(cx, cy, a + rot_, 6.5, 1.2, acc)
+                c.spike(cx, cy, a + rot_, 4.5, 0.6, core)
+            c.disc(cx, cy, 3.2, core)
+            for j in range(4):
+                a = math.radians(j * 90 + 45 - rot_ * 2)
+                c.px(cx + 10.5 * math.cos(a), cy + 10.5 * math.sin(a), hot)
+            _trail(c, cx - 11, cy, ramp, k, n=4, spread=5)
+        else:                                                         # an orb with spinning arms and a halo
+            cx = 29
+            pulse = (0, 1, 0, 1)[k] * 0.6
+            _glow(c, lambda g: g.disc(cx, cy, 11.5 + pulse, deep), k)
+            _orb(c, cx, cy, 9 + pulse, ramp, phase=k * 1.1)
+            for a in range(0, 360, 72):
+                aa = math.radians(a + k * 20)
+                c.px(cx + 11.3 * math.cos(aa), cy + 11.3 * math.sin(aa), hot)
+            _trail(c, cx - 9, cy, ramp, k, n=5, spread=6)
+        out.append((c.done(), 80))
+    return dict(frames=out, anchor='hand', offset=(16, 0), loop=True, travel=dict(speed=160))
 
 
 def fx_super_burst(pal):
-    """A flash ring for the supers: the big-glyph power-up gets a real burst."""
-    core, hot, acc, deep = _energy(pal)
+    """A flash ring for the supers: the big-glyph power-up gets a real burst with a shimmering halo."""
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     out = []
     for k in range(4):
         c = Canvas(48, 48)
         cx = cy = 24
         r = 6 + k * 5.5
+        _glow(c, lambda g: g.ring(cx, cy, r + 2.5, 3.5, deep), k)
         c.ring(cx, cy, r, 3 - k * 0.5, acc)
         c.ring(cx, cy, r - 1, 1.2, hot)
         for a in range(0, 360, 30):
             c.px(cx + (r + 2) * math.cos(math.radians(a + k * 10)), cy + (r + 2) * math.sin(math.radians(a + k * 10)), core if a % 60 else hot)
         if k == 0:
             c.disc(cx, cy, 4, core)
+            for a in range(0, 360, 45):
+                c.spike(cx, cy, a, 9, 1.0, hot, inner=4)
         out.append((c.done(), 60))
-    return dict(frames=out, anchor='center', offset=(0, 0), layer='back', shake=dict(frames=3, amp=2))
+    return dict(frames=out, anchor='center', offset=(0, 0), layer='back', shake=dict(frames=3, amp=2), flash=True)
 
 
 # ---- ultimates
 def fx_kamehameha(pal):
-    core, hot, acc, deep = _energy(pal)
+    """Frame 0 is the release flash (a white-hot muzzle burst and a core-only stub), 1 the beam reaching, 2-4 the full
+    beam (each with its own ripple phase and noise), 5 the dying beam, 6 embers.  `grow` tells the engine to stretch
+    the first 100 ms from the hands outward; `flash` marks frame 0 as the release flash."""
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
+    L, Hh = 128, 40
+    cy, hw = Hh / 2, 9
     out = []
-    L, Hh = 128, 28
-    for k in range(6):
+    for k in range(7):
         c = Canvas(L, Hh)
-        cy = Hh / 2
         if k == 0:
-            _orb(c, 8, cy, 6, (core, hot, acc, deep), spin=False)
-            for a in range(0, 360, 45):
-                c.spike(8, cy, a, 11, 1.0, hot, inner=6)
+            beam(c, 6, L * 0.32, cy, hw * 0.75, (core, core, hot, acc), 0, seed=3, head=False, muzzle=False)
+            _burst(c, 6 + hw * 0.4, cy, hw * 2.0, (core, core, hot, acc), 0, spikes=12, ring=False)
+            c.disc(6 + hw * 0.4, cy, hw * 1.1, core)
+        elif k == 1:
+            beam(c, 6, L * 0.72, cy, hw, ramp, 1, seed=3)
+        elif k <= 4:
+            beam(c, 6, L - 10, cy, hw, ramp, k, seed=3)
+            _burst(c, L - 13, cy, hw * (1.0 + 0.2 * (k - 2)), ramp, k, spikes=10)
+        elif k == 5:
+            beam(c, 6, L - 10, cy, hw * 0.8, ramp, k, seed=3, fade=True, muzzle=False, head=False)
+            c.ring(L - 13, cy, hw * 1.5, 1.2, acc)
+            c.ring(L - 13, cy, hw * 0.9, 0.8, hot)
         else:
-            reach = L if k > 1 else L * 0.55
-            fade = k == 5
-            for (hw, col) in ((11, deep), (9, acc), (6.5, hot), (3.5, core)):
-                if fade and hw > 6.5:
-                    continue
-                pts = []
-                for x in range(0, int(reach) + 1, 2):
-                    w = hw * (0.7 + 0.3 * min(1.0, x / 16.0)) + (0.9 * math.sin(x * 0.5 + k * 1.3) if hw > 4 else 0)
-                    pts.append((x, cy - w))
-                for x in range(int(reach), -1, -2):
-                    w = hw * (0.7 + 0.3 * min(1.0, x / 16.0)) + (0.9 * math.sin(x * 0.5 + k * 1.3 + 1.5) if hw > 4 else 0)
-                    pts.append((x, cy + w))
-                c.poly(pts, col)
-            if not fade:
-                _orb(c, 8, cy, 9, (core, hot, acc, deep), phase=k * 0.7, spin=False)
-                c.disc(8, cy, 5, core)
-            for j in range(0, int(reach), 9):                      # energy streaks along the beam
-                yy = cy + (-3 if (j // 9 + k) % 2 else 3)
-                c.line((j + 2, yy), (j + 6, yy), core if not fade else hot, 1)
-            if k >= 2 and reach >= L:
-                for a in range(-70, 71, 35):
-                    c.spike(L - 2, cy, 180 + a, 10, 1.2, hot, inner=4)
-        out.append((c.done(), (80, 80, 150, 150, 150, 120)[k]))
-    return dict(frames=out, anchor='hand', offset=(64, 0), hit_frame=1, shake=dict(frames=8, amp=3))
+            rng = random.Random(77)
+            for j in range(26):
+                x = rng.uniform(8, L - 4)
+                c.px(x, cy + rng.uniform(-hw * 0.9, hw * 0.9), (acc, deep, hot)[j % 3])
+            for a in range(0, 360, 45):
+                c.px(L - 13 + hw * 1.9 * math.cos(math.radians(a)), cy + hw * 1.9 * math.sin(math.radians(a)), deep if a % 90 else acc)
+        out.append((c.done(), (40, 60, 150, 150, 150, 110, 80)[k]))
+    return dict(frames=out, anchor='hand', offset=(64, 0), hit_frame=2, shake=dict(frames=8, amp=3),
+                grow=dict(from_w=28, to_w=L, ms=100), flash=True)
 
 
 def fx_rasengan_orb(pal):
+    """The sphere forming in the hand: it spins, pulses, and the air around it is pulled in (converging motes)."""
     out = []
     ramp = _energy(pal)
     for k in range(4):
-        c = Canvas(22, 22)
-        _orb(c, 11, 11, 7, ramp, phase=k * 1.3)
+        c = Canvas(28, 28)
+        r = 7 + (k % 2) * 0.6
+        _glow(c, lambda g: g.disc(14, 14, r + 3, ramp[3]), k)
+        _orb(c, 14, 14, r, ramp, phase=k * 1.3)
         for a in range(0, 360, 90):
-            c.px(11 + 9.5 * math.cos(math.radians(a + k * 25)), 11 + 9.5 * math.sin(math.radians(a + k * 25)), ramp[1])
+            c.px(14 + (r + 2.5) * math.cos(math.radians(a + k * 25)), 14 + (r + 2.5) * math.sin(math.radians(a + k * 25)), ramp[1])
+        _converge(c, 14, 14, r + 2, 13, ramp, k, 4, count=6, seed=5)
         out.append((c.done(), 60))
     return dict(frames=out, anchor='center', offset=(0, 0), loop=True)
 
 
 def fx_rasengan_burst(pal):
-    core, hot, acc, deep = _energy(pal)
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     out = []
     for k in range(6):
         c = Canvas(56, 56)
         cx = cy = 28
         R = 6 + k * 4.2
+        if k == 0:                                                    # release flash
+            c.disc(cx, cy, R * 1.6, core)
+            for a in range(0, 360, 30):
+                c.spike(cx, cy, a, R * 3.2, 1.0, hot, inner=R * 1.4)
+        _glow(c, lambda g: g.disc(cx, cy, R * 1.25, deep), k)
         c.disc(cx, cy, R, deep)
         c.disc(cx, cy, R * 0.8, acc)
         if k < 4:
@@ -669,8 +829,8 @@ def fx_rasengan_burst(pal):
         if k >= 2:
             for a in range(0, 360, 30):
                 c.spike(cx, cy, a + k * 7, R + 4 + (a % 60 == 0) * 3, 0.9, hot if a % 60 == 0 else acc, inner=R)
-        out.append((c.done(), (60, 60, 70, 80, 90, 100)[k]))
-    return dict(frames=out, anchor='hand', offset=(10, 0), hit_frame=1, shake=dict(frames=6, amp=3))
+        out.append((c.done(), (50, 60, 70, 80, 90, 100)[k]))
+    return dict(frames=out, anchor='hand', offset=(10, 0), hit_frame=1, shake=dict(frames=6, amp=3), flash=True)
 
 
 def fx_clone_poof():
@@ -709,48 +869,64 @@ def fx_shadow_clones(ch, hands):
 
 
 def fx_getsuga_charge(pal):
-    core, hot, acc, deep = _energy(pal)
+    """Energy gathering on the raised fist: black-edged licks, a growing core, motes converging."""
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     ink = INK
     out = []
-    for k in range(3):
-        c = Canvas(26, 26)
-        cx = cy = 13
+    for k in range(4):
+        c = Canvas(30, 30)
+        cx = cy = 15
+        _glow(c, lambda g: g.disc(cx, cy, 6 + k * 1.5, deep), k)
         for a in range(0, 360, 60):
-            c.spike(cx, cy, a + k * 20, 11, 1.3, ink, inner=5)
-            c.spike(cx, cy, a + k * 20, 9, 0.7, acc, inner=5)
-        _orb(c, cx, cy, 3 + k * 1.5, (core, acc, deep, ink), phase=k, spin=False)
-        out.append((c.done(), (200, 220, 240)[k]))
+            c.spike(cx, cy, a + k * 20, 11 + (k % 2), 1.3, ink, inner=5)
+            c.spike(cx, cy, a + k * 20, 9 + (k % 2), 0.7, acc, inner=5)
+        _orb(c, cx, cy, 3 + k * 1.2, (core, acc, deep, ink), phase=k, spin=False)
+        _converge(c, cx, cy, 5 + k, 14, ramp, k, 4, count=7, seed=9)
+        out.append((c.done(), (200, 220, 240, 180)[k]))
     return dict(frames=out, anchor='center', offset=(0, 0))
 
 
 def fx_getsuga(pal):
-    core, hot, acc, deep = _energy(pal)
+    """The crescent slash wave: dithered halo, ink edge, deep / accent / pale / white-hot bands that ripple along the
+    arc, ragged licks off the leading edge, a trail of streaks behind.  Four looping frames, none alike."""
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
+    pale = pal['fx']['c']
     out = []
     for k in range(4):
-        c = Canvas(52, 56)
-        cx, cy = 16, 28
-        a0, a1 = -72, 72
-        for (r0, r1, col) in ((19, 25, INK), (18, 24, deep), (17, 22, acc), (18, 20.5, pal['fx']['c']), (18.4, 19.6, core)):
-            c.arc_band(cx, cy, r0 + (k % 2) * 0.5, r1 + (k % 2) * 0.5, a0, a1, col)
-        for j in range(5):                                            # ragged energy flares off the outer edge
-            a = math.radians(a0 + (a1 - a0) * (j + 0.5) / 5)
-            L = 5 + ((j + k) % 3) * 2
-            c.spike(cx + 24 * math.cos(a), cy + 24 * math.sin(a), math.degrees(a), L, 1.4, INK)
-            c.spike(cx + 24 * math.cos(a), cy + 24 * math.sin(a), math.degrees(a), L * 0.7, 0.7, acc)
-        for j in range(3):                                            # trailing streaks behind the wave
-            yy = cy - 10 + j * 10
-            c.line((1, yy), (7 + (k + j) % 2 * 3, yy), deep if j % 2 else acc, 1)
+        c = Canvas(60, 64)
+        cx, cy = 18, 32
+        a0, a1 = -74, 74
+        _glow(c, lambda g: _wavy_band(g, cx, cy, 19, 29, a0 - 4, a1 + 4, deep, k, amp=1.0), k)
+        for (r0, r1, col) in ((19.5, 27.5, INK), (20.0, 26.5, deep), (20.5, 25.0, acc), (21.2, 23.6, pale), (21.8, 22.8, core)):
+            _wavy_band(c, cx, cy, r0, r1, a0, a1, col, k, amp=0.8 if col in (INK, deep) else 0.5)
+        for j in range(7):                                            # ragged energy flares off the outer edge
+            a = math.radians(a0 + (a1 - a0) * (j + 0.5) / 7)
+            Ln = 4 + ((j + k) % 3) * 2.5
+            px_, py_ = cx + 27 * math.cos(a), cy + 27 * math.sin(a)
+            c.spike(px_, py_, math.degrees(a), Ln, 1.4, INK)
+            c.spike(px_, py_, math.degrees(a), Ln * 0.75, 0.7, acc if j % 2 else hot)
+        for j in range(4):                                            # white-hot sparks dancing on the core
+            a = math.radians(a0 + 12 + (a1 - a0 - 24) * ((j * 3 + k) % 4) / 3.0)
+            c.px(cx + 22.3 * math.cos(a), cy + 22.3 * math.sin(a), core)
+        for j in range(5):                                            # trailing streaks behind the wave
+            yy = cy - 16 + j * 8
+            ln = 5 + ((k + j) % 3) * 3
+            x1 = cx + 1 + 18 * abs(math.cos(math.radians(a0 + (a1 - a0) * j / 4)))
+            c.line((x1 - ln, yy), (x1, yy), (deep, acc, hot)[j % 3], 1)
         out.append((c.done(), 70))
-    return dict(frames=out, anchor='center', offset=(18, 0), loop=True, travel=dict(speed=260), hit_frame=0)
+    return dict(frames=out, anchor='center', offset=(20, 0), loop=True, travel=dict(speed=260), hit_frame=0)
 
 
 def fx_getsuga_impact(pal):
     fr = fx_impact(pal, 40, 5)
-    return dict(frames=fr, anchor='center', offset=(0, 0), hit_frame=1, shake=dict(frames=5, amp=3))
+    return dict(frames=fr, anchor='center', offset=(0, 0), hit_frame=1, shake=dict(frames=5, amp=3), flash=True)
 
 
 def fx_odm_lines(pal):
-    core, hot, acc, deep = _energy(pal)
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     out = []
     L = 100
     for k in range(4):
@@ -767,6 +943,10 @@ def fx_odm_lines(pal):
                 for a in (-50, -20, 20, 50):
                     c.spike(hx + 2, hy, a, 4.5, 0.6, acc, inner=2)
                 c.px(hx + 3, hy, core)
+            if k == 0:                                                # gas burst at the launchers
+                for a in (150, 180, 210):
+                    c.spike(2, y0, a + j * 10, 5, 1.0, G2, inner=1)
+                c.px(1, y0, core)
         for j in range(0, int(reach), 12):                            # gas puffs along the line
             c.px(j + (k * 3) % 12, 12, G2)
         out.append((c.done(), (50, 50, 100, 100)[k]))
@@ -774,109 +954,170 @@ def fx_odm_lines(pal):
 
 
 def fx_odm_slash(pal):
-    core, hot, acc, deep = _energy(pal)
+    """The spinning cross slash: two blades drawn as layered energy with a halo, a flash ring on contact, embers."""
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     out = []
     for k in range(4):
-        c = Canvas(48, 48)
-        cx = cy = 24
-        L = (12, 20, 22, 22)[k]
+        c = Canvas(52, 52)
+        cx = cy = 26
+        L = (13, 22, 24, 24)[k]
+        if k < 3:
+            _glow(c, lambda g: [g.spike(cx, cy, a + k * 8, L + 3, 3.6, deep, inner=0) for a in (45, 135, 225, 315)], k)
         for a in (45, 135, 225, 315):
+            a_ = a + k * 8
             if k < 3:
-                c.spike(cx, cy, a, L, 2.4, deep, inner=0)
-                c.spike(cx, cy, a, L - 1, 1.5, acc, inner=0)
-                c.spike(cx, cy, a, L - 3, 0.7, core, inner=0)
+                c.spike(cx, cy, a_, L, 2.6, deep, inner=0)
+                c.spike(cx, cy, a_, L - 1, 1.6, acc, inner=0)
+                c.spike(cx, cy, a_, L - 3, 0.8, core, inner=0)
+                for j in (0.45, 0.75):                                 # licks off the blade edges
+                    px_, py_ = cx + L * j * math.cos(math.radians(a_)), cy + L * j * math.sin(math.radians(a_))
+                    c.spike(px_, py_, a_ + 60, 3 + k, 0.7, hot)
             else:
-                c.spike(cx, cy, a, L, 0.8, acc, inner=L - 6)
+                c.spike(cx, cy, a_, L, 0.8, acc, inner=L - 6)
+        if k == 0:
+            c.disc(cx, cy, 6, core)
         if k == 1:
             c.disc(cx, cy, 4, core)
             for a in range(0, 360, 45):
-                c.arc_band(cx, cy, 15, 17, a - 8, a + 8, hot)
+                c.arc_band(cx, cy, 16, 18.5, a - 8, a + 8, hot)
         if k == 2:
-            c.ring(cx, cy, 19, 1.2, acc)
+            c.ring(cx, cy, 21, 1.2, acc)
+            for a in range(0, 360, 60):
+                c.px(cx + 23 * math.cos(math.radians(a + 20)), cy + 23 * math.sin(math.radians(a + 20)), hot)
         out.append((c.done(), (50, 80, 80, 70)[k]))
-    return dict(frames=out, anchor='center', offset=(10, 0), hit_frame=1, shake=dict(frames=4, amp=2))
+    return dict(frames=out, anchor='center', offset=(10, 0), hit_frame=1, shake=dict(frames=4, amp=2), flash=True)
 
 
 def fx_wind_scar(pal):
-    core, hot, acc, deep = _energy(pal)
+    """Three claws of energy ripping along the ground: each a layered column (halo, deep, accent, hot, white core) with
+    rippling edges, licks off the tips, dirt and stone thrown up, and a burst at the leading claw once it bites."""
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
+    Wd, Hh = 104, 56
     out = []
-    Wd, Hh = 100, 52
     for k in range(5):
         c = Canvas(Wd, Hh)
         base = Hh - 3
+        claws = []
         for j in range(3):                                            # three claws, tallest in the middle
-            x = 14 + j * 30 + (k % 2) * 2
-            h = (32, 44, 36)[j] * (0.5 + 0.5 * min(1.0, k / 2.0))
+            x = 14 + j * 31 + (k % 2) * 2
+            h = (34, 46, 38)[j] * (0.5 + 0.5 * min(1.0, k / 2.0))
             lean = 8
-            for (wid, col) in ((9, deep), (7, acc), (4.5, hot), (2, core)):
-                c.poly([(x - wid, base), (x + wid, base), (x + lean + wid * 0.3, base - h * 0.55), (x + lean * 1.6, base - h)], col)
+            claws.append((x, h, lean))
+
+        def claw(cv, x, h, lean, wid, col, ph):
+            pts = []
+            for s in range(8):                                        # left edge up, rippling
+                t = s / 7.0
+                w = wid * (1.0 - 0.8 * t) + 0.8 * math.sin(t * 9 + k * 1.5 + ph)
+                pts.append((x - w + lean * 1.6 * t, base - h * t))
+            for s in range(7, -1, -1):
+                t = s / 7.0
+                w = wid * (1.0 - 0.8 * t) + 0.8 * math.sin(t * 9 + k * 1.5 + ph + 2)
+                pts.append((x + w + lean * 1.6 * t, base - h * t))
+            cv.poly(pts, col)
+        for x, h, lean in claws:
+            _glow(c, lambda g, x=x, h=h, lean=lean: claw(g, x, h + 3, lean, 12, deep, 0.0), k)
+        for x, h, lean in claws:
+            for (wid, col) in ((9, deep), (7, acc), (4.6, hot), (2.2, core)):
+                claw(c, x, h, lean, wid, col, 0.0)
+            tipx, tipy = x + lean * 1.6, base - h
+            for s in range(4):                                        # licks off the tip
+                a = -90 + (s - 1.5) * 28 + k * 9
+                c.spike(tipx, tipy + 2, a, 4 + ((s + k) % 3) * 2, 0.9, hot if s % 2 else acc, inner=1)
             for s in range(3):
-                c.px(x + lean * 1.6 + s * 2 - 2, base - h - 2 - (s % 2) * 2 - k, hot if s % 2 else core)
+                c.px(tipx + s * 2 - 2, tipy - 2 - (s % 2) * 2 - k, hot if s % 2 else core)
+        if k >= 2:                                                    # the leading claw bites: a burst at its foot
+            x, h, lean = claws[2]
+            _burst(c, x + 8, base - 6, 5 + k, ramp, k, spikes=8)
         for x in range(0, Wd, 6):                                     # ripped ground: dirt and stone
             c.rect(x + (k * 2) % 6, base - 1 + (x // 6) % 2, x + 3 + (k * 2) % 6, base + 1, G3 if x % 12 else G2)
             if k >= 1:
                 c.px(x + 2 + (k * 2) % 6, base - 3 - (x // 6) % 3 - k, G1 if x % 12 else G2)
         out.append((c.done(), (60, 70, 70, 70, 70)[k]))
-    return dict(frames=out, anchor='ground', offset=(36, -Hh // 2 + 2), loop=True, travel=dict(speed=240), hit_frame=1,
+    return dict(frames=out, anchor='ground', offset=(38, -Hh // 2 + 2), loop=True, travel=dict(speed=240), hit_frame=1,
                 shake=dict(frames=6, amp=3))
 
 
 def fx_wind_scar_impact(pal):
     fr = _explosion(56, (W_, pal['fx']['b'], pal['fx']['a'], EMB, SMK), 7)
-    return dict(frames=fr, anchor='center', offset=(0, 4), hit_frame=1, shake=dict(frames=6, amp=4))
+    return dict(frames=fr, anchor='center', offset=(0, 4), hit_frame=1, shake=dict(frames=6, amp=4), flash=True)
 
 
 def fx_bankai_aura(pal):
-    core, hot, acc, deep = _energy(pal)
+    """The pillar of aura: frame 0 is the release flash, then the pillar climbs as layered flame (halo, deep, accent,
+    teal, hot, white core) with rippling edges and rising streaks, then it breaks into drifting motes."""
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     teal = pal['fx']['c']
     out = []
-    Wd, Hh = 56, 100
+    Wd, Hh = 60, 100
     for k in range(6):
         c = Canvas(Wd, Hh)
         cx, base = Wd / 2, Hh - 4
         if k == 0:
-            c.ring(cx, base - 2, 14, 2.5, acc)
-            c.ring(cx, base - 2, 12, 1, core)
-            c.disc(cx, base - 10, 6, core)
+            c.ring(cx, base - 2, 16, 3.0, core)
+            c.ring(cx, base - 2, 12, 1.5, hot)
+            c.disc(cx, base - 10, 9, core)
+            for a in range(0, 360, 30):
+                c.spike(cx, base - 10, a, 18, 1.0, hot, inner=9)
         elif k <= 3:
             h = Hh * (0.5, 0.95, 1.0)[k - 1]
             top = base - h
-            for (hw, col) in ((24, deep), (20, acc), (15, teal), (9, hot), (4, core)):
+
+            def flame(cv, hw, col, wob, ph=0.0):
+                # each band ripples with its own phase and frequency, so the layers slide against each other like
+                # flame instead of stacking into stripes; the tip leans with the phase too
                 pts = []
-                wob = 0.6 if hw > 9 else 0.3                          # a flame edge, not a ribbon
                 for yy in range(int(top), int(base) + 1, 3):
                     t = (yy - top) / max(1.0, h)
-                    w = hw * (0.55 + 0.45 * t) + wob * math.sin(yy * 0.3 + k * 1.1)
+                    w = hw * (0.55 + 0.45 * t) + wob * math.sin(yy * (0.3 + 0.05 * ph) + k * 1.1 + ph) + 0.4 * wob * math.sin(yy * 0.9 - k + ph)
                     pts.append((cx - w, yy))
                 for yy in range(int(base), int(top) - 1, -3):
                     t = (yy - top) / max(1.0, h)
-                    w = hw * (0.55 + 0.45 * t) + wob * math.sin(yy * 0.3 + k * 1.1 + 2)
+                    w = hw * (0.55 + 0.45 * t) + wob * math.sin(yy * (0.3 + 0.05 * ph) + k * 1.1 + 2 + ph) + 0.4 * wob * math.sin(yy * 0.9 + k - ph)
                     pts.append((cx + w, yy))
-                pts.insert(0, (cx - 2, top - 4))                      # the pillar tapers to a flame tip
-                pts.append((cx + 2, top - 4))
-                c.poly(pts, col)
-            for j in range(8):                                        # rising streaks
-                xx = cx - 16 + j * 4.6
+                tip = 3 * math.sin(k * 1.3 + ph)
+                pts.insert(0, (cx - 2 + tip, top - 4 - (hw % 3)))    # the pillar tapers to a flame tip
+                pts.append((cx + 2 + tip, top - 4 - (hw % 3)))
+                cv.poly(pts, col)
+            _glow(c, lambda g: flame(g, 28, deep, 1.2, 0.0), k)
+            for j, (hw, col) in enumerate(((24, deep), (20, acc), (15, teal), (9, hot), (4, core))):
+                flame(c, hw, col, (1.4, 1.6, 1.8, 1.4, 0.8)[j], ph=j * 1.9)
+            rng = random.Random(k + 40)
+            for j in range(10):                                       # rising streaks inside the flame
+                xx = cx - 16 + j * 3.6
                 y0 = base - (j * 13 + k * 17) % int(h)
-                c.line((xx, y0), (xx, y0 - 6), core if j % 2 else hot, 1)
+                c.line((xx, y0), (xx, y0 - 4 - rng.randint(0, 4)), core if j % 2 else hot, 1)
+            for j in range(6):                                        # licks off the edges
+                side = -1 if j % 2 else 1
+                yy = base - (j * 17 + k * 11) % int(h) - 6
+                t = (yy - top) / max(1.0, h)
+                w = 24 * (0.55 + 0.45 * t)
+                c.spike(cx + side * w, yy, -90 + side * 40 + k * 10, 5 + (j % 3) * 2, 1.0, acc if j % 3 else hot)
             c.ring(cx, base - 2, 16 + k * 2, 1.5, acc)
         else:
-            for j in range(10):
-                xx = cx - 20 + j * 4.4
+            for j in range(12):
+                xx = cx - 22 + j * 4.0
                 y0 = base - (j * 17 + k * 23) % (Hh - 10)
                 c.line((xx, y0), (xx, y0 - 4), teal if j % 2 else acc, 1)
+                c.px(xx + 1, y0 - 7 - (j % 3), hot if j % 3 else core)
             if k == 4:
                 c.ring(cx, base - 2, 22, 1.2, acc)
         out.append((c.done(), (60, 70, 90, 120, 90, 90)[k]))
-    return dict(frames=out, anchor='ground', offset=(0, -Hh // 2 + 4), layer='back', hit_frame=2, shake=dict(frames=6, amp=3))
+    return dict(frames=out, anchor='ground', offset=(0, -Hh // 2 + 4), layer='back', hit_frame=2, shake=dict(frames=6, amp=3),
+                grow=dict(from_w=Wd // 2, to_w=Wd, ms=120), flash=True)
 
 
 def fx_bankai_slash(pal):
-    core, hot, acc, deep = _energy(pal)
+    ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     teal = pal['fx']['c']
     out = []
     for k in range(3):
         c = Canvas(44, 44)
+        _glow(c, lambda g: [g.spike(22 + (j - 1) * 5, 22 + (j - 1) * 3, -35 + j * 30 + k * 10, 20 - j * 2, 3.2, deep) for j in range(3)], k)
         for j in range(3):
             a = -35 + j * 30 + k * 10
             L = 18 - j * 2
@@ -894,40 +1135,47 @@ def fx_bankai_slash(pal):
 
 
 def fx_spirit_bomb_orb(pal):
+    """The ball gathering overhead: it grows, spins, pulses, and sparkles stream in from all round."""
     out = []
     ramp = _energy(pal)
     for k in range(4):
-        c = Canvas(44, 44)
+        c = Canvas(48, 48)
         r = 5 + k * 4
-        _orb(c, 22, 22, r, ramp, phase=k * 0.8, spin=k >= 2)
-        rng = random.Random(k + 7)
-        for j in range(6 + k * 3):                                    # gathered sparkles drifting in
-            a = rng.uniform(0, 2 * math.pi)
-            rr = r + 2 + rng.uniform(0, 20 - r)
-            c.px(22 + rr * math.cos(a), 22 + rr * math.sin(a), ramp[0] if j % 3 == 0 else ramp[1])
+        _glow(c, lambda g: g.disc(24, 24, r + 3 + (k % 2), ramp[3]), k)
+        _orb(c, 24, 24, r, ramp, phase=k * 0.8, spin=k >= 1)
+        _converge(c, 24, 24, r + 2, 23, ramp, k, 4, count=9 + k * 2, seed=7)
         out.append((c.done(), (240, 260, 300, 300)[k]))
     return dict(frames=out, anchor='center', offset=(2, -34))
 
 
 def fx_spirit_bomb(pal):
+    """The thrown ball: a big spinning orb with a shimmering halo, pulsing, its spin arms turning, a trail behind."""
     out = []
     ramp = _energy(pal)
+    core, hot, acc, deep = ramp
     for k in range(4):
-        c = Canvas(44, 44)
-        _orb(c, 22, 22, 17, ramp, phase=k * 0.9)
+        c = Canvas(56, 48)
+        cx, cy = 32, 24
+        pulse = (0, 0.7, 0, -0.5)[k]
+        _glow(c, lambda g: g.disc(cx, cy, 21 + pulse, deep), k)
+        _orb(c, cx, cy, 17 + pulse, ramp, phase=k * 0.9)
         for a in range(0, 360, 30):
-            c.px(22 + 20 * math.cos(math.radians(a + k * 8)), 22 + 20 * math.sin(math.radians(a + k * 8)), ramp[0] if a % 60 else ramp[1])
+            c.px(cx + (20 + pulse) * math.cos(math.radians(a + k * 8)), cy + (20 + pulse) * math.sin(math.radians(a + k * 8)), core if a % 60 else hot)
+        for j in range(4):                                            # arcs of energy skimming the surface
+            a0 = j * 90 + k * 25
+            c.arc_band(cx, cy, 13.5, 14.5, a0, a0 + 35, core if j % 2 else hot)
+        _trail(c, cx - 19, cy, ramp, k, n=6, spread=10, step=4)
         out.append((c.done(), 90))
     return dict(frames=out, anchor='center', offset=(24, -10), loop=True, travel=dict(speed=150), hit_frame=0)
 
 
 def fx_spirit_bomb_impact(pal):
     fr = _explosion(64, (W_, pal['fx']['b'], pal['fx']['a'], EMB, SMK), 7)
-    return dict(frames=fr, anchor='center', offset=(0, 0), hit_frame=1, shake=dict(frames=8, amp=5))
+    return dict(frames=fr, anchor='center', offset=(0, 0), hit_frame=1, shake=dict(frames=8, amp=5), flash=True)
 
 
 ULT_FX = {
-    'kamehameha': lambda ch, h: {'kamehameha_charge': dict(frames=fx_charge(ch.body.palette, 24, 5, (200, 220, 240, 260, 280), 8),
+    'kamehameha': lambda ch, h: {'kamehameha_charge': dict(frames=fx_charge(ch.body.palette, 28, 5, (200, 220, 240, 260, 280), 8),
                                                            anchor='center', offset=_hand_off(h, 'kamehameha', 2, 'hb')),
                                  'kamehameha': fx_kamehameha(ch.body.palette)},
     'rasengan': lambda ch, h: {'rasengan_orb': dict(fx_rasengan_orb(ch.body.palette), offset=_hand_off(h, 'rasengan', 1, 'hf', (1, -5))),
@@ -936,7 +1184,7 @@ ULT_FX = {
     'getsuga': lambda ch, h: {'getsuga_charge': dict(fx_getsuga_charge(ch.body.palette), offset=_hand_off(h, 'getsuga', 1, 'hf', (0, -4))),
                               'getsuga': fx_getsuga(ch.body.palette), 'getsuga_impact': fx_getsuga_impact(ch.body.palette)},
     'odm_strike': lambda ch, h: {'odm_lines': fx_odm_lines(ch.body.palette), 'odm_slash': fx_odm_slash(ch.body.palette)},
-    'wind_scar': lambda ch, h: {'wind_scar_charge': dict(frames=fx_charge(ch.body.palette, 28, 4, (200, 220, 240, 240), 9),
+    'wind_scar': lambda ch, h: {'wind_scar_charge': dict(frames=fx_charge(ch.body.palette, 32, 4, (200, 220, 240, 240), 9),
                                                          anchor='center', offset=_hand_off(h, 'wind_scar', 1, 'hf', (0, -5))),
                                 'wind_scar': fx_wind_scar(ch.body.palette), 'wind_scar_impact': fx_wind_scar_impact(ch.body.palette)},
     'bankai': lambda ch, h: {'bankai_aura': fx_bankai_aura(ch.body.palette), 'bankai_slash': fx_bankai_slash(ch.body.palette)},
@@ -967,14 +1215,26 @@ def _hand_off(hands, move, i, which, extra=(0, 0)):
 
 
 # ---------------------------------------------------------------- packing + json
+FX_SCHEMA_NOTES = {                              # V5.1 keys (every effect carries them; older engines ignore them)
+    'grow': 'optional {from_w, to_w, ms} (px at this res): the engine draws the effect stretched horizontally from from_w to '
+            'to_w over its first ms after spawn, the anchored end fixed, so a beam extends from the hands instead of '
+            'appearing whole; null = draw the frames as authored.',
+    'flash': 'bool: frame 0 is a one-frame release flash (white-hot); the engine may whiten the owner sprite / flash the '
+             'scene for that frame\'s ms.  Never true on a looping effect.',
+}
+
+
 def _scale_meta(e):
     """Design-unit placement -> px at this RES; exact schema keys only."""
     S = rig.RES
     off = e.get('offset', (0, 0))
+    grow = e.get('grow')
     return dict(anchor=e.get('anchor', 'center'), offset=[int(off[0]) * S, int(off[1]) * S], loop=bool(e.get('loop', False)),
                 layer=e.get('layer', 'front'), hit_frame=e.get('hit_frame'),
                 travel=(dict(speed=int(e['travel']['speed']) * S) if e.get('travel') else None),
-                shake=(dict(frames=int(e['shake']['frames']), amp=int(e['shake']['amp']) * S) if e.get('shake') else None))
+                shake=(dict(frames=int(e['shake']['frames']), amp=int(e['shake']['amp']) * S) if e.get('shake') else None),
+                grow=(dict(from_w=int(grow['from_w']) * S, to_w=int(grow['to_w']) * S, ms=int(grow['ms'])) if grow else None),
+                flash=bool(e.get('flash', False)))
 
 
 def pack(effects, width):
@@ -1026,7 +1286,7 @@ def write_sheet(effects, out_dir, res, cap, sheet_name='fx.png', json_name='fx.j
     assert {v for _, v in a.getcolors()} <= {0, 255}, 'partial alpha in fx sheet'
     os.makedirs(out_dir, exist_ok=True)
     sheet.save(os.path.join(out_dir, sheet_name))
-    meta = {'res': res, 'sheet': sheet_name, 'effects': {}}
+    meta = {'res': res, 'sheet': sheet_name, 'schema_notes': dict(FX_SCHEMA_NOTES), 'effects': {}}
     for name, e in effects.items():
         meta['effects'][name] = dict(frames=rects[name], **_scale_meta(e))
     for alias, (src, i) in ALIASES.items():
