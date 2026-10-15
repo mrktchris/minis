@@ -160,6 +160,29 @@ def platforms_from_cg(infos, own_pid, exclude=()):
     return out
 
 
+STATUS_LAYER = 25                                       # kCGStatusWindowLevel: menu-bar status items (and our panels)
+
+
+def status_item_shown(infos, pid, menubar_h=64):
+    """Is process `pid`'s menu-bar icon on screen?  True / False (macOS hides icons that do not fit: a full menu bar, or
+    the notch on a MacBook) / None (no status item found).  `infos` must come from kCGWindowListOptionAll, since a hidden
+    item is missing from the on-screen list.  Bounds and flags only, never a name."""
+    found = None
+    for d in infos or ():
+        try:
+            if int(d['kCGWindowOwnerPID']) != int(pid) or int(d['kCGWindowLayer']) != STATUS_LAYER:
+                continue
+            x, y, w, h = _bounds(d)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if y > 1 or h > menubar_h or w > 4 * menubar_h:       # a fighter / plate / scoreboard panel, not the status item
+            continue
+        if d.get('kCGWindowIsOnscreen'):
+            return True
+        found = False
+    return found
+
+
 def fullscreen_from_cg(infos, own_pid, screen_rect):
     """True when another process has a normal window covering the whole of `screen_rect` (l, t, r, b) - a full-screen
     app, game or presentation (a zoomed window leaves the menu bar uncovered, so it does not count)."""

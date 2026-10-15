@@ -50,6 +50,9 @@ python3.12 -m venv .venv
    - two small HUD plates and the scoreboard sit in the same strip.
    - a Taskbar Fighters icon in the menu bar. Left-click it: the fighter-select screen. Right-click (or Control-click): the
      menu (Pause, Flash effects, Plates, Rival mode, arena, Bout now, Restart, Quit).
+     macOS hides menu-bar icons that do not fit: on a MacBook with a notch and a busy menu bar the icon can sit behind the
+     notch. `python minis.py status` then prints `menu-bar icon: hidden by macOS`. Right-click a fighter for the same
+     controls, or Cmd-drag a few other icons out of the menu bar and restart.
    - no new icon in the Dock, and no app menu bar: it runs as a background (accessory) app.
 3. **Clicks:** clicking the empty space around a fighter goes to whatever is behind it. Clicking on a fighter grabs it (drag it
    along the strip); right-click on a fighter opens its menu; double-click plays a victory pose.

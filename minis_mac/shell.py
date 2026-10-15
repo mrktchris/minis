@@ -66,6 +66,7 @@ FILTER_NEAREST = _k(Quartz, 'kCAFilterNearest', 'nearest')
 CG_ONSCREEN = _k(Quartz, 'kCGWindowListOptionOnScreenOnly', 1)
 CG_NO_DESKTOP = _k(Quartz, 'kCGWindowListExcludeDesktopElements', 16)
 CG_NULL_WINDOW = _k(Quartz, 'kCGNullWindowID', 0)
+CG_ALL = _k(Quartz, 'kCGWindowListOptionAll', 0)
 CG_PREMULT_LAST = _k(Quartz, 'kCGImageAlphaPremultipliedLast', 1)
 CG_ORDER_DEFAULT = _k(Quartz, 'kCGBitmapByteOrderDefault', 0)
 CG_INTENT_DEFAULT = _k(Quartz, 'kCGRenderingIntentDefault', 0)
@@ -272,6 +273,14 @@ def monitors():
 def _cg_windows():
     infos = Quartz.CGWindowListCopyWindowInfo(CG_ONSCREEN | CG_NO_DESKTOP, CG_NULL_WINDOW)
     return list(infos or ())
+
+
+def menubar_icon_shown(pid):
+    """geometry.status_item_shown for process `pid` (the director): True, False (hidden by macOS) or None (unknown)."""
+    try:
+        return G.status_item_shown(list(Quartz.CGWindowListCopyWindowInfo(CG_ALL, CG_NULL_WINDOW) or ()), pid)
+    except Exception:
+        return None
 
 
 def window_rects(exclude=()):

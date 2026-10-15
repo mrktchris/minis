@@ -418,6 +418,14 @@ def cmd_status(args=None):
             elif a and a.get('dormant'):
                 line += '  (dormant partner: not detected right now, shown asleep)'
         print(line)
+    if plat.is_mac():
+        st, pid = proc_state('director')
+        shown = plat.shell().menubar_icon_shown(pid) if st == 'running' and pid else None
+        if shown is False:
+            print('menu-bar icon: hidden by macOS (the menu bar is full, or the icon sits behind the notch); right-click a '
+                  'fighter for the same controls, or remove a few menu-bar icons (Cmd-drag them out)')
+        elif shown:
+            print('menu-bar icon: shown')
     if data is None:
         print('assign.json: missing (fighters fall back to a=claude, b=codex)')
     else:

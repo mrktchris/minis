@@ -158,6 +158,18 @@ class QuartzWindowList(unittest.TestCase):
     def test_malformed_entries_are_skipped(self):
         self.assertEqual(G.platforms_from_cg([NoNames(kCGWindowLayer=0), {'kCGWindowLayer': 'x'}], 1), [])
 
+    def test_menu_bar_icon_shown_hidden_or_unknown(self):
+        def item(pid, onscreen):
+            d = cg(9, pid, 741, 0, 38, 38, layer=25)
+            if onscreen:
+                d['kCGWindowIsOnscreen'] = True
+            return d
+        panels = [cg(1, 7, 746, 965, 190, 44, layer=25), cg(2, 7, 40, 974, 128, 26, layer=25)]   # scoreboard, plate: not it
+        self.assertTrue(G.status_item_shown(panels + [item(7, True)], 7))
+        self.assertFalse(G.status_item_shown(panels + [item(7, False)], 7))                    # behind the notch / no room
+        self.assertIsNone(G.status_item_shown(panels + [item(8, True)], 7))                    # someone else's icon
+        self.assertIsNone(G.status_item_shown([{'kCGWindowLayer': 'x'}], 7))
+
 
 class DataDir(unittest.TestCase):
     def test_per_os_base(self):
