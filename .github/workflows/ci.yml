@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, mac-port]
   pull_request:
   workflow_dispatch:
 
@@ -50,12 +50,25 @@ jobs:
         shell: bash
         run: python -m unittest discover -s tests -v
 
-      # The only real-Mac check before the owner tests on his own machine: print what the doctor sees, never fail on it.
-      - name: macOS doctor (informational)
-        if: ${{ always() && runner.os == 'macOS' }}
+      # Environment + geometry + detection, no window. A backend that cannot even be imported fails this step.
+      - name: doctor --headless
+        if: ${{ always() }}
         shell: bash
-        run: |
-          python minis.py doctor --headless || echo "::warning::'minis.py doctor --headless' exited $? (not supported yet, or it found a problem - see the output above)"
+        run: python minis.py doctor --headless
+
+      # The runner has a GUI session: try real windows. Reported, not (yet) gating: a runner without a window server says so.
+      - name: macOS doctor with a real test window (informational)
+        if: ${{ always() && runner.os == 'macOS' }}
+        continue-on-error: true
+        shell: bash
+        run: python minis.py doctor
+
+      - name: macOS selftest-gui (informational)
+        if: ${{ always() && runner.os == 'macOS' }}
+        continue-on-error: true
+        timeout-minutes: 3
+        shell: bash
+        run: python minis.py selftest-gui
 
   package:
     name: package smoke test (wheel + sdist)
@@ -69,14 +82,32 @@ jobs:
         run: |
           python -m pip install --upgrade pip build
           python -m build
-      - name: Check the wheel carries the code and the art
+      - name: Check the wheel carries the code and the art (inside the package, never top-level assets/)
         run: |
           python - <<'EOF'
           import glob, zipfile
           whl = glob.glob('dist/*.whl')[0]
           names = zipfile.ZipFile(whl).namelist()
-          need = ['minis.py', 'minis_core/atlas.py', 'assets/icon/minis.ico', 'assets/claude/anim.json', 'assets_hd/claude/sheet.png']
+          need = ['minis.py', 'minis_core/atlas.py', 'minis_core/paths.py', 'minis_platform/__init__.py', 'minis_mac/shell.py',
+                  'minis_win/shell.py', 'taskbar_fighters_assets/__init__.py', 'taskbar_fighters_assets/assets/icon/minis.ico',
+                  'taskbar_fighters_assets/assets/claude/anim.json', 'taskbar_fighters_assets/assets_hd/claude/sheet.png']
           missing = [n for n in need if n not in names]
           assert not missing, f'missing from {whl}: {missing}'
+          stray = [n for n in names if n.startswith(('assets/', 'assets_hd/', 'tests/'))]
+          assert not stray, f'top-level data in {whl}: {stray[:5]}'
           print(f'{whl}: {len(names)} files, ok')
+          EOF
+      - name: Install the wheel and read the art from the installed copy
+        run: |
+          python -m venv /tmp/tfv
+          /tmp/tfv/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/tfv/bin/taskbar-fighters --help > /dev/null
+          /tmp/tfv/bin/python - <<'EOF'
+          from minis_core import paths
+          root = paths.bundle_root()
+          assert 'site-packages' in str(root) and root.name == 'taskbar_fighters_assets', root
+          n = sum(1 for p in paths.assets_dir().iterdir() if (p / 'anim.json').is_file())
+          assert n == 13, n
+          print('installed art:', root, n, 'characters')
           EOF

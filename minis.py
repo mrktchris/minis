@@ -21,6 +21,7 @@
   python minis.py detect         which known AI programs the sources see right now, and how (names and numbers only)
   python minis.py monitors       list monitors (index, rect, primary) for `arena --monitor N`
   python minis.py arena [--monitor N] [--freeze] [--seconds S] [--seed K]   arena mode (default monitor: the Arena button's)
+      [--rounds 1|3|5|endless] [--endless] [--intensity calm|normal|wild] [--no-intro] [--no-outro]   match options (docs/ARENA.md)
   python minis.py arena stop     ask the arena to leave (then force-stop it if it will not)
   python minis.py arena capture <png>   PrintWindow of the arena's OWN window only; refused while --freeze is on, and
                                         only under qa/ or the data folder
@@ -40,6 +41,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 from minis_core import config as cfgmod  # noqa: E402
+import minis_platform as plat  # noqa: E402  (backend selection; imports no desktop library)
+from minis_core import paths  # noqa: E402  (checkout / PyInstaller / py2app / wheel locations)
 
 logging.getLogger('minis.null').addHandler(logging.NullHandler())       # the default log of injectable parts: silent
 SLOTS = ('a', 'b')
@@ -47,10 +50,18 @@ LEGACY = ('claude', 'codex')                      # v2 fighters (`run claude|cod
 ROLES = ('director',) + SLOTS
 ARENA = 'arena'                                    # its own process: `run arena --monitor N ...` (argv prefix match)
 PYTHONS = {'python.exe', 'pythonw.exe', 'python3.exe', 'python', 'pythonw', 'python3'}
+
+
+def is_python_name(base):
+    """An interpreter's file name: the Windows / generic names above, or python3.N (macOS Homebrew / python.org; the
+    python.org framework build shows up as .../Python.app/Contents/MacOS/Python, i.e. 'python')."""
+    b = ntpath.basename(str(base)).lower()             # splits on / and \ alike: a Windows path reads right on a Mac too
+    return b in PYTHONS or (b.startswith('python3.') and b[8:].isdigit())
 DEFAULT_ASSIGN = {'a': {'source': 'claude', 'character': 'claude', 'program': 'Claude Code'},
                   'b': {'source': 'codex', 'character': 'codex', 'program': 'Codex'}}
 SYSROOT = os.environ.get('SystemRoot', r'C:\Windows')
-TASKKILL = os.path.join(SYSROOT, 'System32', 'taskkill.exe')
+import ntpath  # noqa: E402  (Windows paths built the same way on every OS, so the tests read the same everywhere)
+TASKKILL = ntpath.join(SYSROOT, 'System32', 'taskkill.exe')
 
 
 def other(slot):
@@ -123,18 +134,40 @@ def expected_tail(role):
     return ['director'] if role == 'director' else ['run', role]
 
 
-def argv_is_ours(argv, role, root=ROOT):
+def self_argv(*tail):
+    """The command that runs this program with `tail`: <python> <ROOT>/minis.py ... from a checkout, or the executable
+    itself when frozen (PyInstaller / py2app: there is no minis.py to hand a python)."""
+    if paths.frozen():
+        return [str(sys.executable)] + list(tail)
+    return [str(python_exe()), str(ROOT / 'minis.py')] + list(tail)
+
+
+def _frozen_argv_is_ours(argv, tail, role, exe=None):
+    """A frozen build's child: <the same executable> then exactly the tail (the arena: the tail as a prefix)."""
+    exe = exe or sys.executable
+    try:
+        same = os.path.normcase(os.path.normpath(str(argv[0]))) == os.path.normcase(os.path.normpath(str(exe)))
+    except (TypeError, ValueError):
+        return False
+    rest = list(argv[1:])
+    return same and (rest[:len(tail)] == tail if role == ARENA else rest == tail)
+
+
+def argv_is_ours(argv, role, root=ROOT, frozen=None):
     """Exact argv: <python>, <ROOT>\\minis.py, then `run <slot>` or `director`.  Substrings never count.
-    The arena is `run arena` followed by its own options (--monitor N ...), so that role matches on the prefix."""
+    The arena is `run arena` followed by its own options (--monitor N ...), so that role matches on the prefix.
+    A frozen build (PyInstaller / py2app) runs <its executable> <tail> instead, and only that form counts there."""
     if not argv:
         return False
     tail = expected_tail(role)
+    if paths.frozen() if frozen is None else frozen:
+        return _frozen_argv_is_ours(argv, tail, role)
     if role == ARENA:
         if len(argv) < 2 + len(tail) or list(argv[2:4]) != tail:
             return False
     elif len(argv) != 2 + len(tail):
         return False
-    if os.path.basename(argv[0]).lower() not in PYTHONS:
+    if not is_python_name(argv[0]):
         return False
     try:
         if not os.path.isabs(argv[1]):                   # relative paths would resolve against OUR cwd, not the process's
@@ -153,14 +186,16 @@ def read_pid(role):
 
 
 def pid_alive(pid):
-    from minis_win import procs
-    return procs.alive(pid)
+    return plat.procs().alive(pid)
 
 
 def proc_argv(pid):
-    """argv of a live process, or None when it cannot be read."""
-    from minis_win import procs
+    """argv of a live process, or None when it cannot be read.  On macOS `ps -o args=` joins argv with spaces, so the
+    split is anchored on ROOT/minis.py (a clone path with spaces still compares exactly)."""
+    procs = plat.procs()
     try:
+        if plat.is_mac():
+            return procs.argv(pid, str(ROOT / 'minis.py'))
         return procs.argv(pid)
     except OSError:
         return None
@@ -193,8 +228,17 @@ def python_exe(windowless=True):
 DETACHED = 0x00000008 | 0x00000200 | 0x08000000           # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
 
 
+def spawn_detached(argv):
+    """Start a background process with no console: Windows creation flags (unchanged), or on macOS its own session with
+    stdio on /dev/null (it outlives the shell that ran `start`)."""
+    if plat.is_windows():
+        return subprocess.Popen(argv, creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
+    return subprocess.Popen(argv, start_new_session=True, close_fds=True, cwd=str(ROOT), stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def role_argv(role):
-    return [str(python_exe()), str(ROOT / 'minis.py')] + expected_tail(role)
+    return self_argv(*expected_tail(role))
 
 
 def launch_role(role):
@@ -204,7 +248,7 @@ def launch_role(role):
     argv = role_argv(role)
     if not argv_is_ours(argv, role):
         return False
-    subprocess.Popen(argv, creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
+    spawn_detached(argv)
     return True
 
 
@@ -234,7 +278,7 @@ def on_screen(now=None, taskbar=None):
         parts.append(f"{s}: {a.get('program') or a.get('source')}{tail}")
     if taskbar is None:
         try:
-            from minis_win import shell
+            shell = plat.shell()
             taskbar = (shell.taskbar_rect(), shell.taskbar_autohide())
         except Exception:
             taskbar = None
@@ -299,7 +343,7 @@ def cmd_stop(args=None, roles=None):
         if not argv_is_ours(proc_argv(pid), role):            # re-check right before killing
             print(f'{role}: pid {pid} changed under us - left alone')
             continue
-        r = subprocess.run([TASKKILL, '/PID', str(pid), '/F'], capture_output=True)
+        r = kill_own(pid, role)
         if r.returncode == 0:
             pid_file(role).unlink(missing_ok=True)
             if role in SLOTS + LEGACY:
@@ -308,9 +352,18 @@ def cmd_stop(args=None, roles=None):
                 control.clear_arena_state()
             print(f'{role}: stopped (pid {pid})')
         else:
-            print(f'{role}: taskkill failed for pid {pid} (exit {r.returncode})')
+            print(f'{role}: {"taskkill" if plat.is_windows() else "kill"} failed for pid {pid} (exit {r.returncode})')
             rc = 1
     return rc
+
+
+def kill_own(pid, role):
+    """Kill one process already proven ours.  Windows: taskkill /F (unchanged).  macOS: SIGTERM, then SIGKILL only if the
+    pid still runs exactly our argv after the grace period.  -> an object with .returncode (0 = gone)."""
+    if plat.is_windows():
+        return subprocess.run([TASKKILL, '/PID', str(pid), '/F'], capture_output=True)
+    gone = plat.procs().terminate(pid, still_ours=lambda: argv_is_ours(proc_argv(pid), role))
+    return subprocess.CompletedProcess([], 0 if gone else 1)
 
 
 def status_line(now=None):
@@ -366,6 +419,14 @@ def cmd_status(args=None):
             elif a and a.get('dormant'):
                 line += '  (dormant partner: not detected right now, shown asleep)'
         print(line)
+    if plat.is_mac():
+        st, pid = proc_state('director')
+        shown = plat.shell().menubar_icon_shown(pid) if st == 'running' and pid else None
+        if shown is False:
+            print('menu-bar icon: hidden by macOS (the menu bar is full, or the icon sits behind the notch); right-click a '
+                  'fighter for the same controls, or remove a few menu-bar icons (Cmd-drag them out)')
+        elif shown:
+            print('menu-bar icon: shown')
     if data is None:
         print('assign.json: missing (fighters fall back to a=claude, b=codex)')
     else:
@@ -562,10 +623,11 @@ def cmd_detect(args=None):
 
 
 def cmd_monitors(args=None):
-    from minis_win import shell
+    shell = plat.shell()
     for m in shell.monitors():
         l, t, r, b = m['rect']
-        print(f"{m['index']}: {r - l}x{b - t} at ({l},{t}){'  primary' if m['primary'] else ''}")
+        extra = f"  scale {m['scale']:g}" if m.get('scale') and m['scale'] != 1 else ''
+        print(f"{m['index']}: {r - l}x{b - t} at ({l},{t}){'  primary' if m['primary'] else ''}{extra}")
     return 0
 
 
@@ -577,22 +639,65 @@ def pick_arena_monitor(cfg, mons):
     return others[0] if len(others) == 1 else None
 
 
-def start_arena(monitor, freeze=False, seconds=None, seed=None):
+def arena_cli_options(args):
+    """The arena options the user actually set on the command line (rounds, endless, intensity, seconds, intro, outro),
+    for Arena(options=...).  Unset flags are left out, so minis.json "arena" and control.json "arena_opts" still apply."""
+    out = {}
+    rounds = getattr(args, 'rounds', None)
+    if rounds is not None:
+        if str(rounds) == 'endless':
+            out['endless'] = True
+        else:
+            out['rounds'] = int(rounds)
+    if getattr(args, 'endless', False):
+        out['endless'] = True
+    if getattr(args, 'intensity', None):
+        out['intensity'] = args.intensity
+    if getattr(args, 'seconds', None):
+        out['seconds'] = float(args.seconds)
+    if getattr(args, 'no_intro', False):
+        out['intro'] = False
+    if getattr(args, 'no_outro', False):
+        out['outro'] = False
+    return out
+
+
+def arena_option_argv(options):
+    """Arena options back to the child's flags (`run arena ...`); the inverse of arena_cli_options (seconds travels
+    separately as --seconds)."""
+    options = options or {}
+    argv = []
+    if options.get('endless'):
+        argv.append('--endless')
+    if options.get('rounds') is not None:
+        argv += ['--rounds', str(int(options['rounds']))]
+    if options.get('intensity'):
+        argv += ['--intensity', str(options['intensity'])]
+    if options.get('intro') is False:
+        argv.append('--no-intro')
+    if options.get('outro') is False:
+        argv.append('--no-outro')
+    return argv
+
+
+def start_arena(monitor, freeze=False, seconds=None, seed=None, options=None):
     """Launch the arena as its own detached process (a crash never takes the taskbar fighters down).
-    `seed` fixes the choreography (previews, captures); without it the wall clock seeds the match."""
+    `seed` fixes the choreography (previews, captures); without it the wall clock seeds the match.
+    `options` (arena_cli_options) become the child's --rounds / --endless / --intensity / --no-intro / --no-outro."""
     if os.environ.get('MINIS_TESTING'):                                    # a test run must never put a real arena on the screen
         return 'arena: refused under tests (MINIS_TESTING)', 1
     st, pid = proc_state(ARENA)
     if st == 'running':
         return f'arena: already running (pid {pid})', 1
-    argv = [str(python_exe()), str(ROOT / 'minis.py'), 'run', 'arena', '--monitor', str(int(monitor))]
+    argv = self_argv('run', 'arena', '--monitor', str(int(monitor)))
     if freeze:
         argv.append('--freeze')
     if seconds:
         argv += ['--seconds', str(float(seconds))]
     if seed is not None:
         argv += ['--seed', str(int(seed))]
-    subprocess.Popen(argv, creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
+    argv += arena_option_argv(options)
+    spawn_detached(argv)
     return f'arena: started on monitor {monitor}' + (' (freeze)' if freeze else ''), 0
 
 
@@ -635,7 +740,7 @@ def capture_allowed(path):
         target = Path(path).resolve()
     except (OSError, ValueError):
         return False
-    for base in (ROOT / 'qa', cfgmod.data_dir()):
+    for base in [b for b in (paths.qa_dir(), cfgmod.data_dir()) if b is not None]:      # never inside an installed bundle
         try:
             if target.is_relative_to(base.resolve()):
                 return True
@@ -662,8 +767,12 @@ def stop_arena(wait_s=4.0):
     return 'arena: force-stopped' if rc == 0 else 'arena: could not stop', rc
 
 
+MAC_NO_FREEZE = ('arena --freeze is not available on macOS: it would need a screen capture, which needs the Screen Recording '
+                 'permission, and Taskbar Fighters never asks for it. Run the arena without --freeze.')
+
+
 def cmd_arena(args):
-    from minis_win import shell
+    shell = plat.shell()
     if args.action == 'stop':
         msg, rc = stop_arena()
         print(msg)
@@ -672,6 +781,9 @@ def cmd_arena(args):
         from minis_core import control
         if not args.path:
             print('arena capture <png>: a path is needed')
+            return 2
+        if plat.is_mac():
+            print('arena capture: Windows only (on macOS reading another process\'s window needs Screen Recording, never requested)')
             return 2
         st = control.arena_state()
         if st and st.get('freeze'):
@@ -692,6 +804,9 @@ def cmd_arena(args):
         im.save(args.path)
         print(f'arena capture: {im.size[0]}x{im.size[1]} -> {args.path}')
         return 0
+    if args.freeze and plat.is_mac():
+        print(MAC_NO_FREEZE)
+        return 2
     if args.monitor is None:
         try:
             args.monitor = pick_arena_monitor(load_config(), shell.monitors())       # the same pick as the Arena button
@@ -704,7 +819,7 @@ def cmd_arena(args):
     if args.monitor not in mons:
         print(f'arena: monitor {args.monitor} does not exist; have {sorted(mons)}')
         return 2
-    msg, rc = start_arena(args.monitor, args.freeze, args.seconds, getattr(args, 'seed', None))
+    msg, rc = start_arena(args.monitor, args.freeze, args.seconds, getattr(args, 'seed', None), options=arena_cli_options(args))
     print(msg)
     return rc
 
@@ -714,7 +829,7 @@ def quit_all():
     in its own process because a slot cannot stop the others and then itself from inside its own loop.  Refused under tests."""
     if os.environ.get('MINIS_TESTING'):
         return False
-    subprocess.Popen([str(python_exe()), str(ROOT / 'minis.py'), 'stop'], creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
+    spawn_detached(self_argv('stop'))
     return True
 
 
@@ -723,7 +838,7 @@ def restart_all():
     because it stops the director that asked for it.  Refused under tests."""
     if os.environ.get('MINIS_TESTING'):
         return False
-    subprocess.Popen([str(python_exe()), str(ROOT / 'minis.py'), 'restart'], creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
+    spawn_detached(self_argv('restart'))
     return True
 
 
@@ -760,12 +875,23 @@ def desktop_dir():
 def shortcut_spec(root=ROOT):
     """What the shortcut holds: pythonw.exe running `"<root>/minis.py" start`, in the repo, with the minis icon."""
     root = Path(root)
+    desc = 'Taskbar Fighters - pixel fighters on the taskbar'
+    if paths.frozen():                                     # the executable itself, with its own icon
+        exe = Path(sys.executable)
+        return dict(target=str(exe), arguments='start', workdir=str(exe.parent), icon=f'{paths.icon_path()},0', description=desc)
     return dict(target=str(python_exe(windowless=True)), arguments=f'"{root / "minis.py"}" start', workdir=str(root),
-                icon=f'{root / "assets" / "icon" / "minis.ico"},0', description='Taskbar Fighters - pixel fighters on the taskbar')
+                icon=f'{paths.icon_path()},0', description=desc)          # the checkout's assets/, or the wheel's package
 
 
 def shortcut_is_ours(target, arguments, root=ROOT):
-    """A .lnk is ours only when it runs a python(w).exe on exactly `"<root>/minis.py" start`."""
+    """A .lnk is ours only when it runs a python(w).exe on exactly `"<root>/minis.py" start` (frozen: this executable
+    with exactly `start`)."""
+    if paths.frozen():
+        try:
+            same = os.path.normcase(os.path.normpath(str(target or ''))) == os.path.normcase(os.path.normpath(sys.executable))
+        except (TypeError, ValueError):
+            return False
+        return same and (arguments or '').strip() == 'start'
     if not target or os.path.basename(str(target)).lower() not in PYTHONS:
         return False
     return os.path.normcase((arguments or '').strip()) == os.path.normcase(shortcut_spec(root)['arguments'])
@@ -804,6 +930,9 @@ def read_shortcut(path):
 def cmd_shortcut(args, writer=None, reader=None, dirs=None):
     """`shortcut [--desktop]` writes "Taskbar Fighters.lnk"; `shortcut remove` deletes it (and an old Minis.lnk) while it still runs this minis.py.
     writer(path, spec) -> bool, reader(path) -> (target, arguments) | None and dirs (folders) are injectable for tests."""
+    if plat.is_mac() and writer is None and reader is None and dirs is None:
+        print(MAC_SHORTCUT_NOTE)
+        return 0
     writer, reader = writer or write_shortcut, reader or read_shortcut
     if dirs is None:
         dirs = [start_menu_dir()] + ([desktop_dir()] if args.desktop or args.action == 'remove' else [])
@@ -822,7 +951,7 @@ def cmd_shortcut(args, writer=None, reader=None, dirs=None):
             print(f'removed {p}')
         return rc
     spec = shortcut_spec()
-    if not (ROOT / 'assets' / 'icon' / 'minis.ico').exists():
+    if not paths.icon_path().exists():
         print('note: assets/icon/minis.ico is missing (`python art/build_icon.py` makes it)')
     rc = 0
     for d in dirs:
@@ -844,20 +973,58 @@ def cmd_shortcut(args, writer=None, reader=None, dirs=None):
     return rc
 
 
+MAC_SHORTCUT_NOTE = ('macOS has no Start menu, so `shortcut` makes nothing here.\n'
+                     '  start it:          python minis.py start   (from this folder, inside .venv if you used scripts/setup_mac.sh)\n'
+                     '  start at login:    python minis.py autostart on    (writes one LaunchAgent plist; `autostart off` removes it)\n'
+                     '  while it runs, its icon sits in the menu bar (left click: fighter select, right click: the menu).')
+
+
 def cmd_print_startup(args=None):
-    exe = Path(sys.executable).with_name('pythonw.exe')
+    if plat.is_mac():
+        from minis_mac import launchd
+        print('# Not installed for you. `python minis.py autostart on` writes this file; `autostart off` removes it.\n')
+        print(f'# {launchd.plist_path()}')
+        print(launchd.plist_bytes(sys.executable, ROOT, argv=self_argv('start')).decode('utf-8'))
+        print(f'# it takes effect at your next login; to start it now as well:  launchctl load -w "{launchd.plist_path()}"')
+        print('# remove later:  python minis.py autostart off   (or delete the file above)')
+        return 0
+    if paths.frozen():
+        exe = Path(sys.executable)
+        cmd_q, cmd = f'\\"{exe}\\" start', f'"{exe}" start'
+    else:
+        exe = Path(sys.executable).with_name('pythonw.exe')
+        cmd_q, cmd = f'\\"{exe}\\" \\"{ROOT / "minis.py"}\\" start', f'"{exe}" "{ROOT / "minis.py"}" start'
     print('# Not run for you. Either of these starts the director and both fighter slots at logon:\n')
-    print(f'schtasks /Create /SC ONLOGON /TN "MinisFighters" /TR "\\"{exe}\\" \\"{ROOT / "minis.py"}\\" start" /RL LIMITED /F')
+    print(f'schtasks /Create /SC ONLOGON /TN "MinisFighters" /TR "{cmd_q}" /RL LIMITED /F')
     print('\n# or drop a shortcut to this into  shell:startup :')
-    print(f'"{exe}" "{ROOT / "minis.py"}" start')
+    print(cmd)
     print('\n# remove later:  schtasks /Delete /TN "MinisFighters" /F')
     return 0
 
 
+def cmd_autostart(args, home=None):
+    """macOS only: `autostart on|off|status` - the LaunchAgent that runs `minis.py start` at login.  Only on request."""
+    if not plat.is_mac():
+        print('autostart is the macOS LaunchAgent. On Windows use `python minis.py print-startup` (schtasks) or '
+              '`python minis.py shortcut`.')
+        return 2
+    from minis_mac import launchd
+    p = launchd.plist_path(home)
+    if args.state == 'status':
+        on = p.exists() and launchd.is_ours(p.read_bytes(), ROOT, argv=self_argv('start'))
+        print(f'autostart: {"on" if on else "off"} ({p})')
+        return 0
+    if args.state == 'on':
+        ok, msg = launchd.install(sys.executable, ROOT, home, argv=self_argv('start'))
+    else:
+        ok, msg = launchd.uninstall(ROOT, home, argv=self_argv('start'))
+    print(msg)
+    return 0 if ok else 1
+
+
 def _own_process(role):
-    """Single instance per role (named mutex) + pid file removed on exit."""
-    from minis_win import shell
-    return _own_process_with(shell, role)
+    """Single instance per role (named mutex / lock file) + pid file removed on exit."""
+    return _own_process_with(plat.shell(), role)
 
 
 def mutex_name(role):
@@ -877,9 +1044,39 @@ def _own_process_with(shell, role):
 
 
 # ------------------------------------------------------------------ director process
+def arm_fault_log(role):
+    """A native crash (ctypes / AppKit) kills a pythonw process without a Python traceback; faulthandler writes the stack
+    of every thread to <data>/<role>.fault so the next silent death has a cause."""
+    if os.environ.get('MINIS_TESTING'):
+        return None
+    try:
+        import faulthandler
+        f = open(cfgmod.data_dir() / f'{role}.fault', 'a', encoding='utf-8')
+        f.write(f'--- {time.strftime("%Y-%m-%d %H:%M:%S")} {role} pid {os.getpid()} started\n')
+        f.flush()
+        faulthandler.enable(file=f, all_threads=True)
+        return f
+    except Exception:
+        return None
+
+
 def cmd_director(args):
-    from minis_win import shell
-    return run_director(shell, load_config(log=get_logger('director')))
+    _fault = arm_fault_log('director')  # noqa: F841  (kept open for the life of the process)
+    return run_director(plat.shell(), load_config(log=get_logger('director')))
+
+
+def drive(shell, step, sleep=None):
+    """Run a loop body until it returns None.  `step()` -> seconds to wait.  A backend with run_loop (macOS: AppKit must own
+    the main thread, so an NSTimer inside NSApplication.run calls the step) drives it; otherwise - Windows and the test
+    shells - the plain sleep loop the program has always used."""
+    runner = getattr(shell, 'run_loop', None)
+    if runner is not None:
+        return runner(step)
+    while True:
+        dt = step()
+        if dt is None:
+            return 0
+        (sleep or time.sleep)(dt)
 
 
 def run_director(shell, cfg, detector_sources=None, wall=time.time, mono=time.monotonic, max_iterations=None):
@@ -911,34 +1108,35 @@ def run_director(shell, cfg, detector_sources=None, wall=time.time, mono=time.mo
             tray = None
     log.info('director started')
     dog = Watchdog(log=log, mono=mono)
-    errors = 0
-    next_poll = next_tip = -1e9
-    n = 0
+    st = dict(errors=0, next_poll=-1e9, next_tip=-1e9, n=0)
+
+    def step():
+        """One director iteration -> seconds to wait, or None to stop."""
+        now = mono()
+        try:
+            if now >= st['next_poll']:
+                st['next_poll'] = now + cfg['director_poll_s'] + (2.0 if st['errors'] > 20 else 0.0)
+                data, acts = runner.step(wall())
+                hist.record(acts, wall())
+                dog.check(now)
+                st['errors'] = 0
+            if board is not None and board.step() is None:
+                return None
+            if tray is not None:
+                if board is None and not tray.pump():      # otherwise the board's pump serves the tray window too
+                    return None
+                if now >= st['next_tip']:
+                    st['next_tip'] = now + 1.0
+                    tray.step()
+        except Exception as e:                        # never die silently: log and keep going
+            st['errors'] += 1
+            log.error(safe_traceback(e))
+        st['n'] += 1
+        if max_iterations is not None and st['n'] >= max_iterations:
+            return None
+        return 0.05 if board is not None or tray is not None else max(0.2, st['next_poll'] - mono())
     try:
-        while True:
-            now = mono()
-            try:
-                if now >= next_poll:
-                    next_poll = now + cfg['director_poll_s'] + (2.0 if errors > 20 else 0.0)
-                    data, acts = runner.step(wall())
-                    hist.record(acts, wall())
-                    dog.check(now)
-                    errors = 0
-                if board is not None and board.step() is None:
-                    break
-                if tray is not None:
-                    if board is None and not tray.pump():      # otherwise the board's pump serves the tray window too
-                        break
-                    if now >= next_tip:
-                        next_tip = now + 1.0
-                        tray.step()
-            except Exception as e:                        # never die silently: log and keep going
-                errors += 1
-                log.error(safe_traceback(e))
-            n += 1
-            if max_iterations is not None and n >= max_iterations:
-                break
-            time.sleep(0.05 if board is not None or tray is not None else max(0.2, next_poll - mono()))
+        drive(shell, step)
     finally:
         if tray is not None:
             tray.remove()
@@ -1033,6 +1231,16 @@ class Watchdog:
         return done
 
 
+def hud_density(shell):
+    """How many times finer the HUD (plates, scoreboard) is drawn: macOS draws it at the screen's backing scale (2 on
+    Retina, so the text is sharp); Windows and anything without the call: 1, i.e. unchanged."""
+    fn = getattr(shell, 'hud_density', None) if plat.is_mac() else None
+    try:
+        return max(1, min(3, int(fn()))) if fn else 1
+    except Exception:
+        return 1
+
+
 class Scoreboard:
     """The right-side widget (minis_core.scoreboard draws it): names + records per program, HP bars / result line /
     status, three buttons.  Lives in the director process; solid to the mouse only on its names, buttons and a visible
@@ -1056,6 +1264,20 @@ class Scoreboard:
         self.quit = False
         self.select = None                                # the open SelectWindow, or None
         self.stopper = ArenaStopper()
+        self.hud_k = 1                                    # HUD pixel density (2 on a Retina Mac)
+
+    def left(self):
+        """Logical x of the widget.  Windows: left of the icon cluster (SB.left_x).  macOS, unless scoreboard_x is set: the
+        right end of the strip, over the Dock's trash end, instead of the middle of the screen (the roam zone was
+        measured on a 2560 px Windows taskbar)."""
+        x = self.SB.left_x(self.cfg)
+        if plat.is_mac() and self.cfg.get('scoreboard_x') is None:
+            try:
+                sw = int(self.shell.screen_size()[0]) // max(1, self.g['scale'] if self.g else 1)
+                x = max(x, sw - self.SB.W - 12)
+            except Exception:
+                pass
+        return x
 
     def geometry(self):
         l, t, r, b, edge = self.shell.taskbar_rect()
@@ -1071,7 +1293,8 @@ class Scoreboard:
     def setup(self):
         from minis_core import control
         self.g = self.geometry()
-        self.ov = self.shell.Overlay('minis-scoreboard', self.SB.left_x(self.cfg) * self.g['scale'], self.g['y'], self.SB.W, self.SB.H,
+        self.hud_k = hud_density(self.shell)
+        self.ov = self.shell.Overlay('minis-scoreboard', self.left() * self.g['scale'], self.g['y'], self.SB.W, self.SB.H,
                                      scale=self.g['scale'], on_event=self.on_event,
                                      on_hittest=lambda x, y: self.SB.hit(x, y, self.state) is not None)
         self.ov.show(False)
@@ -1131,6 +1354,11 @@ class Scoreboard:
         model = select.Model(slots, rows, lu, lineup.characters(), select.Portraits(self.lib), now=self.mono())
         sc = max(2, self.g['scale'] * 2 if self.g else 2)
         centre = (self.cfg['zone'][0] + self.cfg['zone'][1]) // 2 * (self.g['scale'] if self.g else 1)
+        if plat.is_mac():                                  # the zone is a Windows-taskbar measurement: centre on the screen
+            try:
+                centre = int(self.shell.screen_size()[0]) // 2
+            except Exception:
+                pass
         self.select = SelectWindow(self.shell, model, self.mono, self.select_done, scale=sc, centre_x=centre)
 
     def select_done(self, model):
@@ -1175,7 +1403,7 @@ class Scoreboard:
             g2 = self.geometry()
             if g2['scale'] != self.g['scale'] or g2['y'] != self.g['y']:
                 self.ov.set_scale(g2['scale'])
-                self.ov.move(self.SB.left_x(self.cfg) * g2['scale'], g2['y'])
+                self.ov.move(self.left() * g2['scale'], g2['y'])
                 self.last['sig'] = None
             self.g = g2
             hidden = not g2['usable'] or self.shell.fullscreen_busy() or not self.cfg.get('scoreboard', True)
@@ -1199,7 +1427,7 @@ class Scoreboard:
             self.state = self.read_state()
             sig = self.SB.signature(self.state)
             if sig != self.last['sig']:
-                self.ov.present(self.SB.render(self.state), x=self.SB.left_x(self.cfg) * self.g['scale'])
+                self.ov.present(self.SB.render(self.state, k=self.hud_k), x=self.left() * self.g['scale'])
                 self.last['sig'] = sig
         elif not self.ov.visible and now - self.last['read'] >= 0.25:
             self.last['read'] = now
@@ -1230,7 +1458,10 @@ class Fighter:
         self.assign_path, self.control_path, self.bus_root = assign_path, control_path, bus_root
         self.detector_for = detector_for or sources.detector_for
         self.log = log or logging.getLogger('minis.null')
+        self.size = 64                # fighter_size (64 | 96 | 128), resolved in setup(); the logic always runs in RES 1 px
+        self.k = 1.0                  # size / 64: the window shows the RES 1 world k times larger (HD art above 64)
         self.cell = 64
+        self.hd = None                # Library(hd=True) for sizes above 64
         z0, z1 = cfg['zone']
         self.win_x = int(z0 - 36)
         self.zone_w = int(z1 + 36 - self.win_x)
@@ -1246,6 +1477,7 @@ class Fighter:
         self.brain = None
         self.ov = None                # the fighter window (sprite + projectile), moves with the fighter
         self.pov = None               # the HUD plate window, fixed at the left end of the zone
+        self.hud_k = 1                # HUD pixel density (2 on a Retina Mac)
         self.g = None
         self.last = dict(tele=-1e9, bus=-1e9, top=-1e9, tb=-1e9, draw=-1e9, sig=None, pbus=-1e9, assign=-1e9, ctl=-1e9, pubkey=None, evkey=None,
                          psig=None, demo=None, notes=0)
@@ -1264,20 +1496,55 @@ class Fighter:
         band = max(24, b - t)
         sc = cfgmod.ui_scale(band)
         py = b - band + max(0, (band - cfgmod.PLATE_H * sc) // 2)          # plate: vertically centred in the taskbar band
-        return dict(scale=sc, y=b - self.cell * sc, bottom=b, usable=ok, plate_y=py)
+        # the window's bottom stays at the taskbar bottom (feet on the same line at every size); a bigger fighter reaches higher
+        return dict(scale=sc, y=b - (self.cell - cfgmod.feet_drop(self.size)) * sc, bottom=b, usable=ok, plate_y=py)
 
     def plate_x(self):
         return cfgmod.plate_left(self.cfg, self.slot) * self.g['scale']
+
+    def resolve_size(self):
+        """fighter_size from control.json (`minis.py size N`, the menu) or the config.  Applied at setup; a change restarts."""
+        from minis_core import control
+        self.size = control.fighter_size(self.control_path, default=self.cfg.get('fighter_size', 128))
+        self.k = self.size / 64.0
+        self.cell = self.size
+        if self.size > 64 and self.hd is None:
+            from minis_core.atlas import Library
+            self.hd = Library(hd=True)
+
+    def logic_zone(self):
+        """Where the brain may stand, in RES 1 px: the fight zone divided by k, so spacing, reach and walking keep the art's
+        real proportions at every size.  None at 64 px (the brain's own default, unchanged)."""
+        if self.k == 1:
+            return None
+        z0, z1 = cfgmod.fight_zone(self.cfg)
+        return (z0 / self.k, z1 / self.k)
+
+    def compose(self, v, now):
+        """-> (image, x0): one fighter frame in screen-logical px.  64: the RES 1 art as always.  128: the HD atlas (real
+        128 px art) with the view mapped to its pixels.  96: the 128 render reduced 3/4 with a box filter - nearest
+        neighbour at 3/4 drops every fourth row and with it the HD art's 1 px outline; a box filter keeps every line
+        (slightly soft) and the silhouette stays whole."""
+        from minis_core import render
+        b = self.brain
+        hd = self.hd[b.character] if self.hd is not None else None
+        if self.k == 1 or hd is None or v['anim'] not in hd.anim:
+            return render.compose(b.atlas, b.atlas, v, self.snap, now, self.cfg, show_plate=False)
+        im, x0 = render.compose(hd, hd, hd_view(v, hd, b.atlas), self.snap, now, self.cfg, show_plate=False)
+        if self.size != 128:
+            im, x0 = shrink(im, self.k / 2.0), int(round(x0 * self.k / 2.0))
+        return im, x0
 
     def setup(self):
         from minis_core import control
         from minis_core.brain import Brain
         from minis_core.telemetry import Snapshot
+        self.resolve_size()
         self.g = self.geometry()
         now = self.mono()
         self._apply_assignment(self._read_assignment(), now, force=True)
         atlas = self.lib[self.assigned['character'] if self.assigned else 'claude']
-        self.brain = Brain(self.slot, atlas, self.lib, self.cfg, self.rng, now, record=self._record)
+        self.brain = Brain(self.slot, atlas, self.lib, self.cfg, self.rng, now, zone=self.logic_zone(), record=self._record)
         self.snap = Snapshot(atlas.character, 'sleeping')
         self.ov = self.shell.Overlay(f'minis-{self.slot}', int(self.cfg['zone'][0]), self.g['y'], 64, self.cell, scale=self.g['scale'],
                                      on_event=self.on_event, on_timer=self.menu_tick)
@@ -1285,6 +1552,10 @@ class Fighter:
         self.pov = self.shell.Overlay(f'minis-{self.slot}-plate', self.plate_x(), self.g['plate_y'], cfgmod.PLATE_W, cfgmod.PLATE_H,
                                       scale=self.g['scale'], on_event=self.on_plate_event, on_timer=self.menu_tick)
         self.pov.show(False)
+        self.hud_k = hud_density(self.shell)
+        if plat.is_mac():                                  # over app windows, not a taskbar: see-through + click-through on hover
+            self.pov.fade_on_hover = True                  # (the fighter's own right-click menu stays)
+            self.pov.on_hittest = lambda x, y: False
         d = control.demo(self.control_path, now=self.wall())
         self.last['demo'] = d and d.get('id')                # a demo asked for before this process started is not replayed
 
@@ -1371,8 +1642,8 @@ class Fighter:
                 elif vmax > 600:
                     b.stun(now)                                   # a fast drag leaves it dizzy
             return
-        sx = ov.x / ov.scale + mx                          # window-relative -> screen x (logical px)
-        if kind == 'down' and abs(sx - b.x) <= 24 and my >= 8:
+        sx = (ov.x / ov.scale + mx) / self.k               # window-relative -> screen x (logical px) -> brain px (RES 1)
+        if kind == 'down' and abs(sx - b.x) <= 24 and my / self.k >= 8:
             self.st['drag'], self.st['dx'] = True, sx - b.x
             self.st.update(drag_t=now, drag_x=sx, drag_v=0.0, drag_vmax=0.0)
         elif kind == 'move' and self.st['drag']:
@@ -1408,12 +1679,18 @@ class Fighter:
         data = director.read_assign(self.assign_path) or {}
         if self.assigned and not director.slot_assignment(data, self.slot):
             data = dict(data, **{self.slot: self.assigned})
+        flags['size'] = self.size
         items, actions = L.fighter_menu(self.slot, data, lu, flags, L.characters())
         choice = self.ov.menu(items)
         self.last['ctl'] = -1e9
         if choice in actions:
             kind, val = actions[choice]
-            if kind == 'pick':
+            if kind == 'size':
+                if val != self.size and control.set_fighter_size(val, cp):
+                    self.log.info('fighter size %s: restarting', val)
+                    if not restart_all():                 # every window is rebuilt at the new size
+                        self.log.info('restart: refused (tests)')
+            elif kind == 'pick':
                 control.set_pick(self.slot, val, cp)
             elif kind == 'skin' and (self.assigned or {}).get('source'):
                 control.set_skin(self.assigned['source'], val, cp)
@@ -1545,7 +1822,7 @@ class Fighter:
                     cur = self.shell.cursor_pos()
                 except Exception:
                     cur = None
-                b.eye = eyes.look_at(b.x * self.g['scale'], self.g['y'] + 20 * self.g['scale'], cur) if cur else (0, 0)
+                b.eye = eyes.look_at(b.x * self.k * self.g['scale'], self.g['y'] + 20 * self.k * self.g['scale'], cur) if cur else (0, 0)
             elif b.eye != (0, 0):
                 b.eye = (0, 0)
         if self.assigned is not None:
@@ -1584,7 +1861,7 @@ class Fighter:
             min_dt = 1.0 / (self.cfg['fps_idle'] if quiet else fps)
             stale = (not self.paused) and now - self.last['draw'] > 1.0
             if (sig != self.last['sig'] and now - self.last['draw'] >= min_dt) or stale:
-                im, x0 = render.compose(b.atlas, b.atlas, v, self.snap, now, self.cfg, show_plate=False)
+                im, x0 = self.compose(v, now)
                 ov.present(im, x=x0 * self.g['scale'])
                 self.last['sig'], self.last['draw'] = sig, now
         if self.pov.visible:
@@ -1604,7 +1881,7 @@ class Fighter:
         psig = (name, self.brain.character, snap.state, render.shown_pct(snap.ctx_pct), render.shown_pct(snap.plan_pct), snap.plan_label,
                 render.blink_phase(snap, now))
         if psig != self.last['psig']:
-            self.pov.present(render.plate(self.brain.atlas, snap, now, name=name), x=self.plate_x())
+            self.pov.present(render.plate(self.brain.atlas, snap, now, name=name, k=self.hud_k), x=self.plate_x())
             self.last['psig'] = psig
 
     def _log_bout_notes(self):
@@ -1626,13 +1903,70 @@ class Fighter:
         bus.write_gone(self.slot, root=self.bus_root, now=self.wall())
 
 
+_UP_CACHE = {}
+
+
+def _up(im, m):
+    """An effect / banner image scaled m x (nearest, cached by identity: the effect player hands out cached images)."""
+    key = (id(im), m)
+    got = _UP_CACHE.get(key)
+    if got is not None and got[0] is im:
+        return got[1]
+    out = im.resize((im.width * m, im.height * m), 0)       # Image.NEAREST
+    if len(_UP_CACHE) > 512:
+        _UP_CACHE.clear()
+    _UP_CACHE[key] = (im, out)
+    return out
+
+
+def hd_view(v, hd, base):
+    """A brain view (RES 1 px) mapped onto an HD atlas's pixels: positions times hd.res / base.res, effect and banner images
+    scaled to match (nearest), the frame index clamped to the HD animation's length."""
+    m = max(1, int(round(hd.res / float(max(1, base.res)))))
+    out = dict(v)
+    out['x'] = v['x'] * m
+    n = len(hd.anim[v['anim']]['frames'])
+    out['frame'] = min(int(v['frame']), n - 1)
+    out['fx'] = [(_up(im, m), lx * m, ty * m) + tuple(rest) for im, lx, ty, *rest in (v.get('fx') or [])]
+    if v.get('banner'):
+        bim, bx = v['banner']
+        out['banner'] = (_up(bim, m), bx * m)
+    sx, sy = v.get('shake') or (0, 0)
+    out['shake'] = (sx * m, sy * m)
+    if v.get('proj'):
+        out['proj'] = dict(v['proj'], x=v['proj']['x'] * m)
+    return out
+
+
+def shrink(im, f):
+    """Reduce a frame by f (< 1) with a box filter (Pillow premultiplies RGBA, so edges get no dark fringe)."""
+    from PIL import Image
+    w, h = max(1, int(round(im.width * f))), max(1, int(round(im.height * f)))
+    return im.resize((w, h), Image.BOX)
+
+
+def cmd_size(args):
+    """`size 64|96|128`: the taskbar fighters' height.  Saved in control.json; running fighters restart to apply it."""
+    from minis_core import control
+    if not control.set_fighter_size(args.px):
+        print('could not write control.json')
+        return 1
+    print(f'fighter size: {args.px} px' + (' (HD art)' if args.px > 64 else ''))
+    if any(running(r) for r in ROLES):
+        print('restarting so every window is rebuilt at the new size ...')
+        return cmd_restart()
+    return 0
+
+
 def cmd_run(args):
-    from minis_win import shell
+    _fault = arm_fault_log(args.slot)  # noqa: F841
+    shell = plat.shell()
     if args.slot == ARENA:
         if args.monitor is None:
             print('run arena: --monitor N is required')
             return 2
-        return run_arena(dict(monitor=args.monitor, freeze=args.freeze, seconds=args.seconds), shell, load_config(log=get_logger('arena')),
+        return run_arena(dict(monitor=args.monitor, freeze=args.freeze, seconds=args.seconds, options=arena_cli_options(args)), shell,
+                         load_config(log=get_logger('arena')),
                          seed=getattr(args, 'seed', None))
     return run_slot(args.slot, shell, load_config(log=get_logger(args.slot)))
 
@@ -1659,6 +1993,9 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
     else:
         rect, work = tuple(monitor_rect), tuple(monitor_rect)
     floor_y = work[3] if work[3] < rect[3] else rect[3]      # the taskbar top when the taskbar is on this monitor
+    if opts.get('freeze') and backdrop is None and plat.is_mac():
+        log.info('arena: --freeze ignored on macOS (no screen capture)')
+        opts = dict(opts, freeze=False)
     if opts.get('freeze') and backdrop is None:
         try:
             from PIL import ImageGrab
@@ -1679,10 +2016,12 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
     scores = {s: rounds.score_of_bus(buses[s]) for s in SLOTS}
     arena = AR.Arena(AR.Stage(rect, [], floor_y, tuple(cfg.get('arena_min_window_px', (160, 100)))), atl, fxmod.default(),
                      seed=seed if seed is not None else int(wall() * 1000) % 100000, mode=control.winners(), scores=scores, backdrop=backdrop,
-                     names=names, chars=chars, now=mono(), cfg=cfg, record=lambda w, l, where='arena': _arena_record(arena, w, l, where))
+                     names=names, chars=chars, now=mono(), cfg=cfg, record=lambda w, l, where='arena': _arena_record(arena, w, l, where),
+                     options=opts.get('options') or None)
     own = []
     if surface is None:
-        from minis_win.arena_window import ArenaWindow, VK_ESCAPE
+        aw = plat.module('arena_window')
+        ArenaWindow, VK_ESCAPE = aw.ArenaWindow, aw.VK_ESCAPE
         win = ArenaWindow(rect, on_hittest=arena.hit_exit, on_click=lambda x, y: arena.request_exit(mono()) if arena.hit_exit(x, y) else None,
                           on_key=lambda vk: arena.request_exit(mono()) if vk == VK_ESCAPE else None)
         own = [win.hwnd]
@@ -1695,49 +2034,54 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
     fps = int(cfg.get('arena_fps', 30))
     budget = float(cfg.get('arena_cpu_budget_pct', 10.0))
     log.info('arena started monitor=%s freeze=%s seconds=%s', mon, backdrop is not None, seconds)
-    last_win, last_hb, last_cpu, cpu_pct = -1e9, -1e9, None, 0.0
+    lp = dict(last_win=-1e9, last_hb=-1e9, last_cpu=None, cpu_pct=0.0, fps=fps)
     try:
-        from minis_win import procs
+        procs = plat.procs()
     except Exception:
         procs = None
+
+    def step():
+        """One arena frame -> seconds until the next, or None when the arena is done."""
+        if arena.phase == 'done':
+            return None
+        t0 = mono()
+        try:
+            if not win.pump():
+                return None
+            now = mono()
+            if now - lp['last_win'] >= 1.0:
+                lp['last_win'] = now
+                try:
+                    arena.stage.update(windows_fn())
+                except Exception as e:
+                    log.error(safe_traceback(e))
+            paused = control.paused()
+            if paused != arena.paused:
+                arena.paused = paused
+            if control.arena_stop_requested(started) or (seconds and wall() - started >= float(seconds)):
+                arena.request_exit(now)
+            arena.tick(now)
+            comp.render(now)
+            if now - lp['last_hb'] >= 1.0:
+                lp['last_hb'] = now
+                st = arena.state()
+                control.write_arena_state(dict(active=True, pid=os.getpid(), monitor=mon, fps=lp['fps'], cpu_pct=round(lp['cpu_pct'], 1),
+                                               freeze=backdrop is not None, **st), now=wall())
+                if procs is not None:
+                    tm = procs.times(os.getpid())
+                    if tm and lp['last_cpu'] is not None:
+                        lp['cpu_pct'] = (tm[1] - lp['last_cpu'][0]) / max(1e-3, wall() - lp['last_cpu'][1]) * 100.0
+                        if lp['cpu_pct'] > budget and lp['fps'] > 20:
+                            lp['fps'] = 20
+                            log.info('arena: cpu %.1f%% over budget, 20 fps', lp['cpu_pct'])
+                    if tm:
+                        lp['last_cpu'] = (tm[1], wall())
+        except Exception as e:
+            log.error(safe_traceback(e))
+            time.sleep(0.1)
+        return max(0.0, 1.0 / lp['fps'] - (mono() - t0))
     try:
-        while arena.phase != 'done':
-            t0 = mono()
-            try:
-                if not win.pump():
-                    break
-                now = mono()
-                if now - last_win >= 1.0:
-                    last_win = now
-                    try:
-                        arena.stage.update(windows_fn())
-                    except Exception as e:
-                        log.error(safe_traceback(e))
-                paused = control.paused()
-                if paused != arena.paused:
-                    arena.paused = paused
-                if control.arena_stop_requested(started) or (seconds and wall() - started >= float(seconds)):
-                    arena.request_exit(now)
-                arena.tick(now)
-                comp.render(now)
-                if now - last_hb >= 1.0:
-                    last_hb = now
-                    st = arena.state()
-                    control.write_arena_state(dict(active=True, pid=os.getpid(), monitor=mon, fps=fps, cpu_pct=round(cpu_pct, 1),
-                                                   freeze=backdrop is not None, **st), now=wall())
-                    if procs is not None:
-                        tm = procs.times(os.getpid())
-                        if tm and last_cpu is not None:
-                            cpu_pct = (tm[1] - last_cpu[0]) / max(1e-3, wall() - last_cpu[1]) * 100.0
-                            if cpu_pct > budget and fps > 20:
-                                fps = 20
-                                log.info('arena: cpu %.1f%% over budget, 20 fps', cpu_pct)
-                        if tm:
-                            last_cpu = (tm[1], wall())
-            except Exception as e:
-                log.error(safe_traceback(e))
-                time.sleep(0.1)
-            time.sleep(max(0.0, 1.0 / fps - (mono() - t0)))
+        drive(shell if surface is None else None, step)
     finally:
         try:
             control.clear_arena_state()
@@ -1782,19 +2126,19 @@ def run_slot(slot, shell, cfg, detector_for=None):
         log.error('setup failed\n' + safe_traceback(e))
         raise
     log.info('slot %s started', slot)
-    errors = 0
+    st = dict(errors=0)
+
+    def step():
+        try:
+            dt = f.step()
+            st['errors'] = 0
+        except Exception as e:                    # one bad frame must not end the process, and must not pass silently
+            st['errors'] += 1
+            log.error(safe_traceback(e))
+            dt = 2.0 if st['errors'] > 20 else 0.25
+        return dt
     try:
-        while True:
-            try:
-                dt = f.step()
-                errors = 0
-            except Exception as e:                    # one bad frame must not end the process, and must not pass silently
-                errors += 1
-                log.error(safe_traceback(e))
-                dt = 2.0 if errors > 20 else 0.25
-            if dt is None:
-                break
-            time.sleep(dt)
+        drive(shell, step)
     finally:
         f.close()
         log.info('slot %s stopped', slot)
@@ -1817,7 +2161,10 @@ def count(mask, region=None):
 
 def cmd_selftest(args):
     """Real-desktop check.  Refuses unless the taskbar is at the bottom and <= 96 px high; captures only the taskbar rows
-    of the roam zone, keeps nothing but thresholded difference masks, and restores whatever was running before."""
+    of the roam zone, keeps nothing but thresholded difference masks, and restores whatever was running before.
+    On macOS: selftest_mac (no capture at all - it reports window frames)."""
+    if plat.is_mac():
+        return selftest_mac(args)
     from PIL import ImageGrab, Image, ImageDraw
     from minis_win import shell
     from minis_core import director
@@ -1857,7 +2204,7 @@ def cmd_selftest(args):
         comp = Image.new('L', (w, h * 3 + 12), 64)
         for i, m in enumerate(masks):
             comp.paste(m, (0, i * (h + 6)))
-        out = ROOT / 'qa' / 'gui-mask.png'
+        out = (paths.qa_dir() or cfgmod.data_dir()) / 'gui-mask.png'
         out.parent.mkdir(exist_ok=True)
         comp.save(out)
         print(res)
@@ -1872,8 +2219,199 @@ def cmd_selftest(args):
     return 0 if ok else 1
 
 
+def selftest_mac(args, shell=None, seconds=5.0, out=print):
+    """macOS real-desktop check without any screen capture: two fighter windows (Claude, Codex idle frames) stand on the Dock
+    strip for `seconds`, then the frames AppKit really gave them are compared with what was asked for.  It opens its own two
+    windows (a running Taskbar Fighters is left alone) and closes them again."""
+    from minis_core import control
+    from minis_core.atlas import Library
+    shell = shell or plat.shell()
+    cfg = load_config()
+    l, t, r, b, edge = shell.taskbar_rect()
+    sc = cfgmod.ui_scale(max(24, b - t))
+    size = control.fighter_size(default=cfg.get('fighter_size', 128))       # the art the real fighters use (64 | 96 | 128)
+    lib = Library(hd=size > 64)
+    z0, z1 = cfgmod.fight_zone(cfg)
+    wins, ok = [], True
+    try:
+        for i, (char, facing) in enumerate((('claude', 1), ('codex', -1))):
+            img = lib[char].frame_image('idle', 0, facing)
+            if size == 96:
+                img = shrink(img, 0.75)                                      # the same box-filter reduction Fighter.compose uses
+            x = int(z0 + (z1 - z0) * (0.35 if i == 0 else 0.65)) * sc
+            y = b - img.height * sc
+            ov = shell.Overlay(f'minis-selftest-{char}', x, y, img.width, img.height, scale=sc)
+            ov.present(img, x=x)
+            wins.append((char, (x, y, x + img.width * sc, y + img.height * sc), ov))
+        out(f'selftest-gui (macOS): strip {(l, t, r, b)} (bottom = Dock top / visible-frame bottom), sprite scale {sc}, '
+            f'fighter size {size} px; '
+            f'showing two fighters for {seconds:g} s ...')
+        shell.spin(seconds)
+        for char, want, ov in wins:
+            got = tuple(ov.actual_rect())
+            vis = bool(ov.panel.isVisible())
+            close = all(abs(a - c) <= 1 for a, c in zip(want, got))
+            on_strip = abs(got[3] - b) <= 1
+            ok = ok and vis and close and on_strip
+            out(f'  {char:6s} asked {want} got {got} visible={vis} level={int(ov.panel.level())} '
+                f'{"OK" if vis and close and on_strip else "MISMATCH"}')
+    except Exception as e:
+        ok = False
+        out(f'  error: {type(e).__name__}: {redact(str(e))[:200]}')
+    finally:
+        for _, _, ov in wins:
+            try:
+                ov.close()
+            except Exception:
+                pass
+    out('selftest-gui: ' + ('PASS' if ok else 'FAIL') + ' (no screenshot was taken; positions come from the windows themselves)')
+    return 0 if ok else 1
+
+
+# ------------------------------------------------------------------ doctor
+ISSUES_URL = 'https://github.com/mrktchris/taskbar-fighters/issues'
+
+
+def redact(text, home=None):
+    """The home folder becomes ~ (doctor output is meant to be pasted publicly)."""
+    s = str(text)
+    home = str(home if home is not None else Path.home())
+    if len(home) > 3:
+        s = s.replace(home, '~')
+    return s
+
+
+def _version(mod_name, attr='__version__'):
+    try:
+        import importlib
+        m = importlib.import_module(mod_name)
+        return str(getattr(m, attr, '?'))
+    except Exception as e:
+        return f'missing ({type(e).__name__})'
+
+
+def cmd_doctor(args=None, shell=None, probe=None, describe=None, out=print):
+    """One report to paste to an AI agent or an issue: versions, backend, geometry, data dir, detected programs, and a
+    real test window.  Names and numbers only; the home folder is shown as ~; no window titles; nothing is written."""
+    import platform as pyplat
+    checks = []
+    headless = bool(getattr(args, 'headless', False))
+
+    def check(name, ok, detail='', soft=False):
+        """soft: under --headless a desktop check that cannot run is reported, not failed (CI has no GUI session)."""
+        if soft and headless and not ok:
+            out(f'  [skip] {name}' + (f': {redact(detail)}' if detail else '') + ' (headless)')
+            return
+        checks.append((name, bool(ok)))
+        out(f'  [{"ok" if ok else "FAIL"}] {name}' + (f': {redact(detail)}' if detail else ''))
+
+    out('Taskbar Fighters doctor')
+    osname = plat.current()
+    mac_ver = pyplat.mac_ver()[0] if osname == 'mac' else ''
+    out(f'  os: {pyplat.system()} {mac_ver or pyplat.release()} ({pyplat.machine()})')
+    out(f'  python: {pyplat.python_version()} ({redact(sys.executable)})')
+    out(f'  Pillow: {_version("PIL")}')
+    if osname == 'mac':
+        out(f'  PyObjC: {_version("objc")}')
+    out(f'  backend: {plat.label()}')
+    out(f'  code: {redact(ROOT)}')
+    out(f'  data dir: {redact(cfgmod.data_dir())}')
+    check('python 3.12+', sys.version_info >= (3, 12), pyplat.python_version())
+    if osname == 'mac':
+        try:
+            major = int((mac_ver or '0').split('.')[0])
+        except ValueError:
+            major = 0
+        check('macOS 13+', major >= 13, mac_ver or 'unknown')
+    check('Pillow', not _version('PIL').startswith('missing'))
+    if shell is None:
+        try:
+            shell = plat.shell()
+        except Exception as e:
+            check('desktop backend loads', False, f'{type(e).__name__}: {str(e)[:300]}')   # importing needs no display: always a FAIL
+            shell = None
+    if shell is not None:
+        check('desktop backend loads', True, plat.label())
+        if plat.is_mac() and hasattr(shell, 'MinisView'):
+            out(f'  AppKit classes: {shell.MinisPanel.__name__}, {shell.MinisView.__name__} defined')
+        try:
+            sw, sh = shell.screen_size()
+            l, t, r, b, edge = shell.taskbar_rect()
+            mons = shell.monitors()
+            out(f'  screen: {sw}x{sh}, {len(mons)} monitor(s): ' + ', '.join(
+                f"{m['index']}={m['rect'][2] - m['rect'][0]}x{m['rect'][3] - m['rect'][1]}" + (f"@{m['scale']:g}x" if m.get('scale') else '')
+                for m in mons))
+            if osname == 'mac' and hasattr(shell, 'dock_info'):
+                d = shell.dock_info()
+                out(f"  dock: {d['dock']}; fighter strip {d['rect']} (fighters stand on y={d['rect'][3]})")
+            else:
+                out(f'  taskbar: {(l, t, r, b)} edge={edge} autohide={shell.taskbar_autohide()}')
+            check('screen geometry', sw > 0 and sh > 0 and b > t, f'band {b - t} high, sprite scale {cfgmod.ui_scale(max(24, b - t))}')
+        except Exception as e:
+            check('screen geometry', False, f'{type(e).__name__}: {str(e)[:200]}', soft=True)
+        if headless:
+            out('  [skip] test overlay window (headless)')
+        else:
+            try:
+                ok, detail = (probe or getattr(shell, 'probe_overlay', None) or (lambda: _probe_overlay_generic(shell)))()
+                check('test overlay window', ok, detail)
+            except Exception as e:
+                check('test overlay window', False, f'{type(e).__name__}: {str(e)[:200]}')
+    try:
+        from minis_core import sources
+        cfg = load_config()
+        rows = (describe or (lambda: sources.describe(cfg, time.time())))()
+        seen = [r for r in rows if r['state'] != '-']
+        out(f'  AI programs seen: {len(seen)} of {len(rows)}' + (': ' + ', '.join(f"{r['program']} ({r['state']})" for r in seen) if seen else ''))
+        check('program detection runs', True)
+    except Exception as e:
+        check('program detection runs', False, f'{type(e).__name__}: {str(e)[:200]}')
+    try:
+        st = {r: proc_state(r)[0] for r in ROLES}
+        out('  running now: ' + ', '.join(f'{r}={s}' for r, s in st.items()))
+    except Exception as e:
+        out(f'  running now: unknown ({type(e).__name__})')
+    bad = [n for n, ok in checks if not ok]
+    out(('PASS' if not bad else 'FAIL') + f': {len(checks) - len(bad)} of {len(checks)} checks passed' + (f' (failed: {", ".join(bad)})' if bad else ''))
+    out(f'Paste this output to your AI agent, or into an issue at {ISSUES_URL}')
+    return 0 if not bad else 1
+
+
+def _probe_overlay_generic(shell, seconds=1.0):
+    """Windows: open a tiny transparent overlay for a second, pump it, close it."""
+    from PIL import Image
+    ov = shell.Overlay('minis-doctor', 40, 40, 8, 8)
+    try:
+        ok = ov.present(Image.new('RGBA', (8, 8), (255, 0, 0, 0)))
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            ov.pump()
+            time.sleep(0.05)
+        return bool(ok), 'layered window created, drawn and closed'
+    finally:
+        ov.close()
+
+
+def add_arena_option_flags(p):
+    """The match options shared by `arena` and its child `run arena` (docs/ARENA.md, Options)."""
+    p.add_argument('--rounds', choices=('1', '3', '5', 'endless'), default=None, help='best of 1, 3 or 5, or endless')
+    p.add_argument('--endless', action='store_true', help='free-for-all: rounds continue until stopped, nothing recorded')
+    p.add_argument('--intensity', choices=('calm', 'normal', 'wild'), default=None, help='how much destruction and effects')
+    p.add_argument('--no-intro', action='store_true', help='skip the VS card before round 1')
+    p.add_argument('--no-outro', action='store_true', help="skip the winner's pose on the highest window")
+
+
+def prog_name():
+    """What --help calls this program: `python minis.py` in a checkout, `taskbar-fighters` for a pip install, the
+    executable's own name in a frozen build."""
+    if paths.frozen():
+        return Path(sys.executable).name
+    base = Path(sys.argv[0] if sys.argv and sys.argv[0] else 'minis.py').name.lower()
+    return 'taskbar-fighters' if base.startswith('taskbar-fighters') else 'python minis.py'
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog=prog_name(), description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
     for name, fn in (('start', cmd_start), ('stop', cmd_stop), ('status', cmd_status), ('pause', cmd_pause), ('resume', cmd_resume),
                      ('print-startup', cmd_print_startup), ('director', cmd_director), ('restart', cmd_restart)):
@@ -1884,6 +2422,7 @@ def main(argv=None):
     r.add_argument('--freeze', action='store_true')
     r.add_argument('--seconds', type=float, default=None)
     r.add_argument('--seed', type=int, default=None)
+    add_arena_option_flags(r)
     r.set_defaults(fn=cmd_run)
     w = sub.add_parser('winners', help='how match winners are drawn')
     w.add_argument('mode', choices=('decided', 'random'))
@@ -1922,6 +2461,7 @@ def main(argv=None):
     ar.add_argument('--freeze', action='store_true', help='snapshot the monitor into RAM as the stage backdrop')
     ar.add_argument('--seconds', type=float, default=None, help='leave on its own after this long')
     ar.add_argument('--seed', type=int, default=None, help='fix the choreography seed (captures, previews)')
+    add_arena_option_flags(ar)
     ar.set_defaults(fn=cmd_arena)
     p = sub.add_parser('plates', help='show or hide both HUD plates')
     p.add_argument('state', choices=('on', 'off'))
@@ -1932,8 +2472,26 @@ def main(argv=None):
     s = sub.add_parser('selftest-gui')
     s.add_argument('--keep', action='store_true', help='leave the fighters running afterwards')
     s.set_defaults(fn=cmd_selftest)
+    dr = sub.add_parser('doctor', help='check this machine and print a report to paste to your AI agent or an issue')
+    dr.add_argument('--headless', action='store_true', help='no test window (CI): environment, geometry and detection only')
+    dr.set_defaults(fn=cmd_doctor)
+    sz = sub.add_parser('size', help='taskbar fighter size in px: 64, 96 or 128 (HD); restarts running fighters')
+    sz.add_argument('px', type=int, choices=cfgmod.FIGHTER_SIZES)
+    sz.set_defaults(fn=cmd_size)
+    au = sub.add_parser('autostart', help='macOS: start at login with a LaunchAgent (on | off | status)')
+    au.add_argument('state', choices=('on', 'off', 'status'))
+    au.set_defaults(fn=cmd_autostart)
     a = ap.parse_args(argv)
-    return a.fn(a)
+    try:
+        return a.fn(a)
+    except plat.UnsupportedPlatform as e:
+        print(str(e))
+        return 2
+    except ImportError as e:                         # a missing desktop library (PyObjC on a Mac): say what to do
+        if 'PyObjC' in str(e):
+            print(str(e))
+            return 2
+        raise
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ from helpers import ROOT, CFG, Isolated  # noqa: E402
 from minis_core import sources as S  # noqa: E402
 
 CPU = dict(CFG, proc_working_cpu_pct=15, proc_window_s=6)
+WIN = 'win32'                                       # FakeInfo tables are Windows process lists (claude.exe ...)
 
 
 class FakeInfo:
@@ -37,7 +38,7 @@ class FakeInfo:
 
 
 def scan_ids(info, now=100.0):
-    return sorted(S.ProcessSource(CPU, S.ProcessScanner(CPU, info)).poll(now), key=lambda a: a.source_id)
+    return sorted(S.ProcessSource(CPU, S.ProcessScanner(CPU, info, platform=WIN)).poll(now), key=lambda a: a.source_id)
 
 
 class Matching(unittest.TestCase):
@@ -45,7 +46,7 @@ class Matching(unittest.TestCase):
         i = FakeInfo()
         i.add(10, 1, 'chatgpt.exe', path=r'C:\Program Files\WindowsApps\OpenAI.Codex_1.2.3_x64__abc\app\ChatGPT.exe')
         i.add(11, 10, 'chatgpt.exe', path=r'C:\Program Files\WindowsApps\OpenAI.Codex_1.2.3_x64__abc\app\ChatGPT.exe')
-        sc = S.ProcessScanner(CPU, i)
+        sc = S.ProcessScanner(CPU, i, platform=WIN)
         self.assertEqual(S.ProcessSource(CPU, sc).poll(1.0), [])            # no 'chatgpt' fighter, no second codex
         self.assertEqual(sc.claimed, {'codex': 2})
 
@@ -84,7 +85,7 @@ class Matching(unittest.TestCase):
     def test_command_lines_are_read_once_per_process(self):
         i = FakeInfo()
         i.add(13, 1, 'node.exe', argv=['node.exe', r'C:\x\gemini.js'])
-        sc = S.ProcessScanner(CPU, i)
+        sc = S.ProcessScanner(CPU, i, platform=WIN)
         for t in range(5):
             sc.scan(100.0 + t)
         self.assertEqual(i.argv_reads, 1)
@@ -95,7 +96,7 @@ class Cpu(unittest.TestCase):
         i = FakeInfo()
         i.add(10, 1, 'ollama.exe')
         i.add(11, 10, 'ollama_llama_server.exe')                         # child process: part of the tree
-        src = S.ProcessSource(CPU, S.ProcessScanner(CPU, i))
+        src = S.ProcessSource(CPU, S.ProcessScanner(CPU, i, platform=WIN))
         states, evs = {}, []
         for t in range(0, 60, 2):
             if 4 <= t < 30:
@@ -113,7 +114,7 @@ class Cpu(unittest.TestCase):
         i.add(10, 1, 'cursor.exe')
         i.add(11, 10, 'claude.exe')                                      # Claude Code running inside Cursor's terminal
         i.add(12, 11, 'node.exe', argv=['node.exe', r'C:\x\tool.js'])     # ... and its child
-        src = S.ProcessSource(CPU, S.ProcessScanner(CPU, i))
+        src = S.ProcessSource(CPU, S.ProcessScanner(CPU, i, platform=WIN))
         for t in range(0, 20, 2):
             i.burn(11, 1.8)
             i.burn(12, 1.8)
@@ -123,7 +124,7 @@ class Cpu(unittest.TestCase):
     def test_a_new_process_does_not_count_its_past_cpu(self):
         i = FakeInfo()
         i.add(10, 1, 'cursor.exe', cpu=5000.0)                           # long-running: lifetime CPU is not "now"
-        src = S.ProcessSource(CPU, S.ProcessScanner(CPU, i))
+        src = S.ProcessSource(CPU, S.ProcessScanner(CPU, i, platform=WIN))
         for t in range(0, 10, 2):
             acts = src.poll(1000.0 + t)
         self.assertEqual(acts[0].state, 'idle')
@@ -132,7 +133,7 @@ class Cpu(unittest.TestCase):
     def test_program_closing_removes_the_source(self):
         i = FakeInfo()
         i.add(10, 1, 'cursor.exe')
-        src = S.ProcessSource(CPU, S.ProcessScanner(CPU, i))
+        src = S.ProcessSource(CPU, S.ProcessScanner(CPU, i, platform=WIN))
         self.assertEqual(len(src.poll(1.0)), 1)
         del i.p[10]
         self.assertEqual(src.poll(3.0), [])
@@ -216,7 +217,7 @@ class NewPrograms(unittest.TestCase):
         i = FakeInfo()
         i.add(10, 1, 'cursor.exe', path=r'C:\Users\secret-project\cursor\cursor.exe')
         i.add(11, 10, 'cursor.exe', path=r'C:\Users\secret-project\cursor\cursor.exe', argv=['cursor.exe', r'C:\secret-project\notes.md'])
-        sc = S.ProcessScanner(CPU, i)
+        sc = S.ProcessScanner(CPU, i, platform=WIN)
         srcs = S.Sources(CPU, detectors=[S.ProcessSource(CPU, sc)])
         srcs.poll(100.0)
         i.burn(11, 1.5)

@@ -12,6 +12,7 @@ from helpers import CFG, ROOT, Isolated  # noqa: E402
 import minis  # noqa: E402
 from minis_core import control, director as D, lineup as L, records, scoreboard as SB, select as S, sources  # noqa: E402
 from minis_core.sources import Activity  # noqa: E402
+from minis_platform.menus import menu_entries  # noqa: E402  (the same normalisation as minis_win.shell's)
 from test_minis import FakeOverlay, FakeShell, FakeDetector  # noqa: E402
 
 HOUR = 3600.0
@@ -204,7 +205,7 @@ class Cli(Isolated):
         D.write_assign({'a': {'source': 'claude', 'character': 'claude', 'program': 'Claude Code'},
                         'b': dict(D.SPARRING_ASSIGN), 'ts': 1.0})
         with mock.patch.object(minis, 'launch_role', fake_launch), mock.patch.object(minis, 'proc_state', lambda r: (state.get(r, 'stopped'), None)), \
-                mock.patch('minis_win.shell.taskbar_rect', lambda: (0, 1392, 2560, 1440, 3)), mock.patch('minis_win.shell.taskbar_autohide', lambda: False), \
+                mock.patch.object(minis.plat.shell(), 'taskbar_rect', lambda: (0, 1392, 2560, 1440, 3)), mock.patch.object(minis.plat.shell(), 'taskbar_autohide', lambda: False), \
                 redirect_stdout(io.StringIO()) as out:
             rc = minis.cmd_start(wait_s=3.0, sleep=slept.append)
         self.assertEqual((rc, launched, slept), (0, ['director', 'a', 'b'], [3.0]))
@@ -497,7 +498,7 @@ class Menu(Isolated):
         self.f.setup()
         self.go(0.3)
         items, _ = self.items()
-        entries = {e[1]: e for e in __import__('minis_win.shell', fromlist=['x']).menu_entries(items) if e[0] == 'sub'}
+        entries = {e[1]: e for e in menu_entries(items) if e[0] == 'sub'}
         self.assertIn('Fighter (left side)', entries)
         self.assertIn('Look (Claude)', entries)
         auto = L.find_item(items, 'Auto')
@@ -577,12 +578,18 @@ class Reliability(Isolated):
 
     def test_capture_refused_during_freeze_and_outside_qa_or_data(self):
         control.write_arena_state({'active': True, 'pid': 1, 'monitor': 2, 'freeze': True})
-        with mock.patch('minis_win.shell.find_own_window', lambda *a: self.fail('looked for a window')):
+        if minis.plat.is_mac():                                         # macOS never captures a window (no Screen Recording)
+            with mock.patch.object(minis.plat.shell(), 'find_own_window', lambda *a: self.fail('looked for a window')):
+                rc, out = run(['arena', 'capture', str(ROOT / 'qa' / 'x.png')])
+            self.assertEqual(rc, 2)
+            self.assertIn('Windows only', out)
+            return
+        with mock.patch.object(minis.plat.shell(), 'find_own_window', lambda *a: self.fail('looked for a window')):
             rc, out = run(['arena', 'capture', str(ROOT / 'qa' / 'x.png')])
         self.assertEqual(rc, 2)
         self.assertIn('freeze', out)
         control.write_arena_state({'active': True, 'pid': 1, 'monitor': 2, 'freeze': False})
-        with mock.patch('minis_win.shell.find_own_window', lambda *a: self.fail('looked for a window')):
+        with mock.patch.object(minis.plat.shell(), 'find_own_window', lambda *a: self.fail('looked for a window')):
             rc, out = run(['arena', 'capture', r'C:\Windows\Temp\x.png'])
         self.assertEqual(rc, 2)
         self.assertIn('refused', out)
@@ -628,8 +635,7 @@ class Reliability(Isolated):
 
 class ShellMenuSpec(unittest.TestCase):
     def test_menu_entries_normalises_items_separators_and_submenus(self):
-        from minis_win import shell
-        got = shell.menu_entries([(1, 'a'), None, '-', ('Sub', [(2, 'b', {'checked': True})]), (3, 'c', {'disabled': True})])
+        got = menu_entries([(1, 'a'), None, '-', ('Sub', [(2, 'b', {'checked': True})]), (3, 'c', {'disabled': True})])
         self.assertEqual(got, [('item', 1, 'a', {}), ('sep',), ('sep',), ('sub', 'Sub', [(2, 'b', {'checked': True})]),
                                ('item', 3, 'c', {'disabled': True})])
 

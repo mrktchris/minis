@@ -132,6 +132,7 @@ def look_of(source_id, lu, assign=None) -> str:
 QUIT_ALL, HIDE_1H, PLATES, PAUSE, BOUT, MATCH, WIN_DECIDED, ARENA, RIVAL, HIDE, SELECT, WIN_RANDOM, FLASH = range(1, 14)
 PICK_AUTO, PICK_BASE = 100, 101
 LOOK_DEFAULT, LOOK_BASE = 300, 301
+SIZE_BASE = 400                                    # SIZE_BASE + px: the Fighter size submenu (464 / 496 / 528)
 
 
 def fighter_menu(slot, assign, lu, flags, chars):
@@ -162,6 +163,10 @@ def fighter_menu(slot, assign, lu, flags, chars):
             mid = LOOK_BASE + i
             actions[mid] = ('skin', c['id'])
             looks.append((mid, c['display'], {'radio': True, 'checked': cur == c['id']}))
+    sizes = []
+    for px in (64, 96, 128):
+        actions[SIZE_BASE + px] = ('size', px)
+        sizes.append((SIZE_BASE + px, f'{px} px' + (' (HD)' if px > 64 else ''), {'radio': True, 'checked': flags.get('size', 128) == px}))
     name = sources.short_label(src, me.get('program')) if src else 'this side'
     items = [(f'Fighter ({"left" if slot == "a" else "right"} side)', fighters)]
     if looks:
@@ -173,6 +178,7 @@ def fighter_menu(slot, assign, lu, flags, chars):
               (RIVAL, 'Rival mode (wake a sleeping partner to fight)', {'checked': bool(flags.get('rival', True))}),
               ('Who wins', [(WIN_DECIDED, 'Healthier program usually wins', {'radio': True, 'checked': flags.get('winners') != 'random'}),
                             (WIN_RANDOM, 'Coin flip', {'radio': True, 'checked': flags.get('winners') == 'random'})]),
+              ('Fighter size', sizes),
               None,
               (BOUT, 'Start a bout now'), (MATCH, 'Start a match now (best of 3)'),
               (ARENA, 'Arena mode', {'checked': bool(flags.get('arena'))}),

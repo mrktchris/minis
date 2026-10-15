@@ -115,7 +115,8 @@ _class_registered = False
 _wndproc_ref = None
 
 # ---------------------------------------------------------------- the app icon (assets/icon/minis.ico)
-ICON_PATH = Path(__file__).resolve().parent.parent / 'assets' / 'icon' / 'minis.ico'
+from minis_core import paths as _paths  # noqa: E402  (checkout / PyInstaller / wheel)
+ICON_PATH = _paths.icon_path('minis.ico')
 user32.LoadImageW.argtypes = [wt.HINSTANCE, wt.LPCWSTR, wt.UINT, ctypes.c_int, ctypes.c_int, wt.UINT]
 user32.LoadImageW.restype = wt.HANDLE
 _class_icons = None

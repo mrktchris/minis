@@ -1,4 +1,4 @@
-import io, json, os, sys, unittest
+import io, json, ntpath, os, sys, unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
@@ -17,7 +17,8 @@ class Identity(unittest.TestCase):
     def test_exact_argv_only(self):
         ok = minis.argv_is_ours
         self.assertTrue(ok([PY, SCRIPT, 'run', 'a'], 'a'))
-        self.assertTrue(ok([r'C:\Python314\python.exe', SCRIPT.upper(), 'director'], 'director'))
+        if sys.platform == 'win32':                                                       # Windows paths ignore case; macOS paths do not
+            self.assertTrue(ok([r'C:\Python314\python.exe', SCRIPT.upper(), 'director'], 'director'))
         self.assertTrue(ok([PY, SCRIPT, 'run', 'claude'], 'claude'))                     # v2 fighters
         self.assertFalse(ok([PY, SCRIPT, 'run', 'b'], 'a'))
         self.assertFalse(ok([PY, SCRIPT, 'run', 'a', '--x'], 'a'))
@@ -46,7 +47,8 @@ class Stop(Isolated):
             return mock.Mock(returncode=0)
         out = io.StringIO()
         with mock.patch.object(minis, 'pid_alive', alive), mock.patch.object(minis, 'proc_argv', lambda pid: argvs.get(pid)), \
-                mock.patch.object(minis.subprocess, 'run', fake_run), redirect_stdout(out):
+                mock.patch.object(minis.subprocess, 'run', fake_run), redirect_stdout(out), \
+                mock.patch('minis_platform.current', lambda platform=None: 'win'):        # the Windows (taskkill) path, on any OS
             rc = minis.cmd_stop()
         return rc, out.getvalue()
 
@@ -66,7 +68,7 @@ class Stop(Isolated):
         self.assertEqual(sorted(c[2] for c in self.killed), ['111', '222', '333'])
         for c in self.killed:
             self.assertEqual(c[0], minis.TASKKILL)
-            self.assertTrue(os.path.isabs(c[0]) and c[0].lower().endswith(r'system32\taskkill.exe'))
+            self.assertTrue(ntpath.isabs(c[0]) and ntpath.normcase(c[0]).endswith(r'system32\taskkill.exe'))   # a Windows path on any OS
         for role in ('a', 'b', 'director'):
             self.assertFalse((self.data / f'{role}.pid').exists())
         self.assertIsNone(bus.read('a', now=__import__('time').time()))          # a killed fighter reads as gone
@@ -243,7 +245,8 @@ class FighterLoop(Isolated):
             self.dets[src] = FakeDetector(src)
             return self.dets[src]
         self.shell = FakeShell()
-        self.f = minis.Fighter('a', dict(CFG), self.shell, mono=lambda: self.t['mono'], wall=lambda: self.t['wall'], detector_for=det)
+        self.f = minis.Fighter('a', dict(CFG, fighter_size=64), self.shell, mono=lambda: self.t['mono'], wall=lambda: self.t['wall'],
+                               detector_for=det)                  # 64 px geometry (test_fighter_size covers 96 / 128)
 
     def assign(self, a=None, b=None):
         director.write_assign({'a': a, 'b': b, 'ts': self.t['wall']})
@@ -491,7 +494,7 @@ class FighterLoop(Isolated):
         self.assertTrue(self.f.brain.view(self.t['mono'])['dim'])
 
     def test_arena_cli_requires_a_monitor_and_stop_asks_first(self):
-        from minis_win import shell
+        shell = minis.plat.shell()                                           # the backend minis.main uses on this OS
         one = [{'index': 1, 'rect': (0, 0, 1, 1), 'work': (0, 0, 1, 1), 'primary': True}]
         two = one + [{'index': 2, 'rect': (1, 0, 2, 1), 'work': (1, 0, 2, 1), 'primary': False}]
         with mock.patch.object(shell, 'monitors', lambda: one), redirect_stdout(io.StringIO()) as out:
@@ -500,7 +503,7 @@ class FighterLoop(Isolated):
         self.assertIn('no default monitor', out.getvalue())
         started = []
         with mock.patch.object(shell, 'monitors', lambda: two), \
-                mock.patch.object(minis, 'start_arena', lambda mon, *a: started.append(mon) or ('ok', 0)), redirect_stdout(io.StringIO()):
+                mock.patch.object(minis, 'start_arena', lambda mon, *a, **k: started.append(mon) or ('ok', 0)), redirect_stdout(io.StringIO()):
             self.assertEqual(minis.main(['arena']), 0)
         self.assertEqual(started, [2])                                       # the same pick as the Arena button
         with mock.patch.object(shell, 'monitors', lambda: [{'index': 1, 'rect': (0, 0, 1, 1), 'work': (0, 0, 1, 1), 'primary': True}]), \

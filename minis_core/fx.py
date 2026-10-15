@@ -28,7 +28,8 @@ from PIL import Image, ImageDraw
 
 from .render import font
 
-ROOT = Path(__file__).resolve().parent.parent
+from . import paths as _paths
+ROOT = _paths.bundle_root()                         # the folder holding assets/ and assets_hd/ (paths.py)
 CANDIDATES = (ROOT / 'assets_hd' / 'fx' / 'fx.json', ROOT / 'assets_hd' / 'fx.json', ROOT / 'assets' / 'fx' / 'fx.json', ROOT / 'assets' / 'fx.json')
 GENERIC = ('hit_light', 'hit_heavy', 'block_spark', 'dust', 'ko_stars', 'crack_small', 'crack_big', 'shatter', 'explosion', 'letters', 'ko_text', 'round_text')
 BANNERS = ('round1', 'round2', 'round3', 'fight', 'ko', 'winner', 'time')

@@ -103,7 +103,9 @@ class Planner(unittest.TestCase):
                 if move in ('fistbump', 'highfive'):
                     continue
                 self.assertIn(round(tc, 2), hits[dfn], f'{move} contact at {tc} has no matching reaction')
-                self.assertIn(hits[dfn][round(tc, 2)], ('block_hit', 'hit', 'hit_heavy', 'parry', 'whiff', 'knockdown'))   # V5: every answer is logged at the contact instant
+                self.assertIn(hits[dfn][round(tc, 2)], ('block_hit', 'hit', 'hit_heavy', 'parry', 'whiff', 'knockdown',     # V5: every answer is
+                                                        'pulled', 'guard_crush', 'launched', 'air_hit', 'spiked',     # logged at the
+                                                        'hit_high', 'hit_low', 'hit_back', 'clash'))                 # contact instant
                 pairs += 1
         self.assertGreaterEqual(pairs, 4, 'a spar has at least four exchanges')
 
@@ -124,7 +126,13 @@ class Planner(unittest.TestCase):
     def test_fighters_never_overlap_more_than_20px(self):
         cfg, atl, brains = placed(3, bout_min_s=5, bout_max_s=6)
         closest = [999]
-        drive(brains, idle_tele(), 60, each=lambda now, b: closest.__setitem__(0, min(closest[0], abs(brains[LEFT].x - brains[RIGHT].x))))
+        passing = lambda: any((brains[w].atlas.anim.get(brains[w].anim) or {}).get('type') == 'through' or brains[w].anim == 'jump'
+                              for w in (LEFT, RIGHT))
+
+        def note(now, b):
+            if not passing():                                   # V7: a dash-through runs THROUGH the opponent (and vaults back) on purpose
+                closest[0] = min(closest[0], abs(brains[LEFT].x - brains[RIGHT].x))
+        drive(brains, idle_tele(), 60, each=note)
         self.assertGreaterEqual(closest[0], 20)
 
     def test_handoff_after_b_finishes_the_finisher_gives(self):
@@ -345,7 +353,7 @@ class UsageBouts(unittest.TestCase):
         lib = Library()
         sig = lib['claude'].signature()
         self.assertEqual({k: sig[k] for k in ('strike', 'special', 'super')}, {'strike': 'spin_kick', 'special': 'slash_wave', 'super': 'reverse'})
-        self.assertIn(sig['ultimate'], (None, 'kamehameha'))               # None until the V4 art build lands
+        self.assertIn(sig['ultimate'], (None, 'radiant_beam'))               # None until the V4 art build lands
         self.assertEqual(lib['codex'].signature()['special'], 'deploy')
         brains, _, _ = sim.run(40, idle_tele(), seed=4, cfg_over={'bout_min_s': 5, 'bout_max_s': 6, 'bout_kinds': ['ranged']}, place=PLACE)
         fired = {p['move'] for b in brains.values() if b.script for p in b.script['projs']} | {n for b in brains.values() for _, n in b.hit_log}

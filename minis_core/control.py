@@ -81,6 +81,21 @@ def set_flashes(flag: bool, path=None) -> bool:
     return _update(path, flashes=bool(flag))
 
 
+def fighter_size(path=None, default=128) -> int:
+    """Taskbar fighter size in px (64 | 96 | 128): control.json `fighter_size` (set by `minis.py size N` and the menu),
+    else `default` (config `fighter_size`)."""
+    from .config import fighter_size_of
+    v = read(path).get('fighter_size')
+    return fighter_size_of(default, 128) if v is None else fighter_size_of(v, fighter_size_of(default, 128))
+
+
+def set_fighter_size(size, path=None) -> bool:
+    from .config import FIGHTER_SIZES
+    if int(size) not in FIGHTER_SIZES:
+        return False
+    return _update(path, fighter_size=int(size))
+
+
 PICKER_MAX_AGE_S = 5.0
 
 
