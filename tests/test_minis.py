@@ -497,10 +497,17 @@ class FighterLoop(Isolated):
         shell = minis.plat.shell()                                           # the backend minis.main uses on this OS
         one = [{'index': 1, 'rect': (0, 0, 1, 1), 'work': (0, 0, 1, 1), 'primary': True}]
         two = one + [{'index': 2, 'rect': (1, 0, 2, 1), 'work': (1, 0, 2, 1), 'primary': False}]
-        with mock.patch.object(shell, 'monitors', lambda: one), redirect_stdout(io.StringIO()) as out:
-            rc = minis.main(['arena'])
-        self.assertEqual(rc, 2)
-        self.assertIn('no default monitor', out.getvalue())
+        if minis.plat.is_mac():                                              # macOS: a single display hosts the arena
+            picked = []
+            with mock.patch.object(shell, 'monitors', lambda: one), \
+                    mock.patch.object(minis, 'start_arena', lambda mon, *a: picked.append(mon) or ('ok', 0)), redirect_stdout(io.StringIO()):
+                self.assertEqual(minis.main(['arena']), 0)
+            self.assertEqual(picked, [1])
+        else:
+            with mock.patch.object(shell, 'monitors', lambda: one), redirect_stdout(io.StringIO()) as out:
+                rc = minis.main(['arena'])
+            self.assertEqual(rc, 2)
+            self.assertIn('no default monitor', out.getvalue())
         started = []
         with mock.patch.object(shell, 'monitors', lambda: two), \
                 mock.patch.object(minis, 'start_arena', lambda mon, *a: started.append(mon) or ('ok', 0)), redirect_stdout(io.StringIO()):

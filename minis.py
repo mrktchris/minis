@@ -631,9 +631,12 @@ def cmd_monitors(args=None):
 
 
 def pick_arena_monitor(cfg, mons):
-    """The monitor the Arena button / menu item uses: cfg `arena_monitor`, else the one non-primary monitor, else None."""
+    """The monitor the Arena button / menu item uses: cfg `arena_monitor`, else the one non-primary monitor, else None.
+    macOS: with a single display the arena opens on it (click-through except EXIT; Esc leaves)."""
     if cfg.get('arena_monitor'):
         return int(cfg['arena_monitor'])
+    if plat.is_mac() and len(mons) == 1:
+        return mons[0]['index']
     others = [m['index'] for m in mons if not m['primary']]
     return others[0] if len(others) == 1 else None
 
@@ -2001,8 +2004,8 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
             if now - lp['last_hb'] >= 1.0:
                 lp['last_hb'] = now
                 st = arena.state()
-                control.write_arena_state(dict(active=True, pid=os.getpid(), monitor=mon, fps=lp['fps'], cpu_pct=round(lp['cpu_pct'], 1),
-                                               freeze=backdrop is not None, **st), now=wall())
+                control.write_arena_state(dict(st, active=True, pid=os.getpid(), monitor=mon, fps=lp['fps'], cpu_pct=round(lp['cpu_pct'], 1),
+                                               freeze=backdrop is not None), now=wall())   # st carries `freeze` too: ours wins
                 if procs is not None:
                     tm = procs.times(os.getpid())
                     if tm and lp['last_cpu'] is not None:
