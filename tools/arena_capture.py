@@ -6,7 +6,7 @@ Starts the arena (`minis.start_arena`, its own process), then polls PrintWindow 
 short RAM ring and reads the arena heartbeat (`arena.json`, 1 Hz, carries the last 16 content-free events with their
 monotonic times).  For each wanted moment the frame nearest the event time (+ a small offset) is written once:
 
-    <prefix>-<effect>.png     'beam' event + 0.06 s (an ultimate's main effect mid-extension, named after it: kamehameha, rasengan_burst ...)
+    <prefix>-<effect>.png     'beam' event + 0.06 s (an ultimate's main effect mid-extension, named after it: radiant_beam, spiral_orb_burst ...)
     <prefix>-flash.png        'flash' event + 0.035 s (the one-frame white flash of an ultimate landing; at 20 fps it is sometimes the frame beside it)
     <prefix>-air.png          'air_exchange' + 0.2 s (both fighters up: an air-to-air strike)
     <prefix>-knockdown.png    'knockdown' + 0.45 s  (the defender going down)
@@ -76,7 +76,7 @@ def main():
                 seen.add(key)
                 name, off = MOMENTS[kind]
                 if kind == 'beam' and len(ev) > 2 and ev[2]:
-                    name = str(ev[2])                      # the file is named after the effect that fired (kamehameha, rasengan_burst ...)
+                    name = str(ev[2])                      # the file is named after the effect that fired (radiant_beam, spiral_orb_burst ...)
                 if name not in saved and name not in wanted:
                     wanted[name] = float(t) + off
         for name, tt in list(wanted.items()):

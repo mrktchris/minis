@@ -6,6 +6,8 @@ Everything is real (minis.run_arena, Arena, Compositor, control / arena.json hea
 - the monitor is a synthetic rect from <data>/harness.json {"arena": {"rect": [l, t, r, b], "windows": [[id, l, t, r, b], ...],
   "seconds": S, "freeze": bool}}; the window list is that fixed list (no EnumWindows)
 - the surface is minis_core.arena.Surface (RAM) instead of the layered window; a synthetic backdrop stands in for a screen grab
+- V7: an optional "options" dict ({"rounds", "intensity", "seconds", "endless", "intro", "outro"}) reaches the arena the way
+  minis.json does (cfg["arena"]), so the real option path is exercised
 """
 import json, sys
 from pathlib import Path
@@ -37,6 +39,8 @@ def main():
     rect = tuple(a['rect'])
     cfg = cfgmod.load()
     cfg.update(h.get('cfg', {}))
+    if isinstance(a.get('options'), dict):
+        cfg['arena'] = dict(a['options'])
     surface = AR.Surface(rect[2] - rect[0], rect[3] - rect[1])
     bd = AR.synthetic_backdrop(surface.w, surface.h) if a.get('freeze') else None
     windows = [tuple(w) for w in a.get('windows', [])]
