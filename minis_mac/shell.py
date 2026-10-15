@@ -435,6 +435,7 @@ class MinisView(NSView):
     def isOpaque(self):
         return False
 
+    @objc.python_method                                # a Python helper, not an Objective-C selector
     def _send(self, kind, event):
         o = getattr(self, 'minis_owner', None)
         if o is not None:
@@ -497,12 +498,12 @@ class Overlay:
         p.setOpaque_(False)
         p.setBackgroundColor_(NSColor.clearColor())
         p.setHasShadow_(False)
+        p.setFloatingPanel_(True)                        # before setLevel_: it resets the level to NSFloatingWindowLevel (3)
         p.setLevel_(STATUS_LEVEL + (1 if activatable else 0))
         p.setCollectionBehavior_(BEHAVIOR)
         p.setHidesOnDeactivate_(False)                   # NSPanel hides when its app deactivates - ours never is active
         p.setReleasedWhenClosed_(False)
         p.setAcceptsMouseMovedEvents_(True)
-        p.setFloatingPanel_(True)
         v = MinisView.alloc().initWithFrame_(NSMakeRect(0, 0, self.w, self.h))
         v.minis_owner = self
         self.layer = new_layer()
