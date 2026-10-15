@@ -117,19 +117,32 @@ def save_gif(frames, name, ms=100, colors=96, hold_last=1200):
 
 
 # ======================================================================== the taskbar strip, offline
-def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), names=('Claude Code', 'Codex')):
-    """Simulated live strip (screen x 0..940, 16 desktop rows + the 48 taskbar rows): plates at the left, fighters in the
-    fight zone, the scoreboard at the right - the layout minis.py draws, with DEMO numbers from the real planner."""
+def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), names=('Claude Code', 'Codex'), size=128):
+    """Simulated live strip (screen x 0..940, desktop rows + the 48 taskbar rows at the bottom): plates at the left,
+    fighters in the fight zone, the scoreboard at the right - the layout minis.py draws, with DEMO numbers from the real
+    planner.  `size` = fighter_size (64 | 128): at 128 the fighters are the HD art, the brain runs in a zone halved the
+    way Fighter.logic_zone does it, and the strip is size + 16 rows tall (64 px: the original 64-row strip)."""
     from minis_core import sim, render, scoreboard as SB
+    from minis_core.atlas import Library
     from minis_core.brain import LEFT, RIGHT
+    from minis import hd_view
+    k = size // 64
+    H = 64 if k == 1 else size + 16
+    drop = cfgmod.feet_drop(size)
+    hdl = Library(hd=True) if k > 1 else None
     cfg = dict(cfgmod.DEFAULTS)
     cfg.update({'bout_min_s': 999, 'bout_max_s': 999, 'clash_min_s': 999, 'clash_max_s': 999, 'match_min_s': 3, 'match_max_s': 4})
     tele = {LEFT: sim.FakeTelemetry(LEFT, [(0, 'idle', 48.0)], plan=(12.0, 'wk')),
             RIGHT: sim.FakeTelemetry(RIGHT, [(0, 'idle', 31.0)])}
     cfg, atl, brains = sim.make(seed, cfg, 1000.0, chars={LEFT: chars[0], RIGHT: chars[1]})
+    if k > 1:
+        z0, z1 = cfgmod.fight_zone(cfg)
+        for w in (LEFT, RIGHT):
+            brains[w].zone = (z0 / k, z1 / k)
     for w, x in ((LEFT, 420), (RIGHT, 610)):
+        x = x / k
         brains[w].x = brains[w].home_x = x
-        brains[w].home = (x - 40, x + 40)
+        brains[w].home = (x - 40 / k, x + 40 / k)
     bus, frames, meta = {}, [], []
     sbx = SB.left_x(cfg)
     rec = {'a': [12, 7], 'b': [7, 12]}
@@ -137,15 +150,24 @@ def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), 
     for i in range(int(seconds * fps) + 1):
         now = 1000.0 + i / fps
         sim.step(brains, tele, now, bus)
-        im = Image.new('RGBA', (940, 64), (0, 0, 0, 0))
-        bg = Image.new('RGBA', (940, 64), (24, 26, 34, 255))
+        im = Image.new('RGBA', (940, H), (0, 0, 0, 0))
+        bg = Image.new('RGBA', (940, H), (24, 26, 34, 255))
         dd = ImageDraw.Draw(bg)
-        dd.rectangle([0, 16, 940, 63], fill=(32, 32, 32, 255))
-        dd.line([(0, 16), (940, 16)], fill=(58, 58, 62, 255))
+        dd.rectangle([0, H - 48, 940, H - 1], fill=(32, 32, 32, 255))
+        dd.line([(0, H - 48), (940, H - 48)], fill=(58, 58, 62, 255))
         for w in (LEFT, RIGHT):
-            im.alpha_composite(render.compose_full(atl[w], atl[w], brains[w].view(now), brains[w].snap, now, 940, cfg, win_x=0, show_plate=False))
-        for k, w in enumerate((LEFT, RIGHT)):
-            bg.alpha_composite(render.plate(atl[w], brains[w].snap, now, name=names[k]), (cfgmod.plate_left(cfg, w), 27))
+            v = brains[w].view(now)
+            hd = hdl[brains[w].character] if hdl is not None else None
+            if hd is None or v['anim'] not in hd.anim:
+                fr = render.compose_full(atl[w], atl[w], v, brains[w].snap, now, 940, cfg, win_x=0, show_plate=False)
+                im.alpha_composite(fr, (0, H - 64))
+            else:                                                   # Fighter.compose at 128: the HD atlas, view mapped to its px
+                fr = render.compose_full(hd, hd, hd_view(v, hd, brains[w].atlas), brains[w].snap, now, 940, cfg, win_x=0, show_plate=False)
+                layer = Image.new('RGBA', (940, H), (0, 0, 0, 0))
+                layer.paste(fr.crop((0, 0, 940, min(fr.height, H - (H - size + drop)))), (0, H - size + drop))
+                im.alpha_composite(layer)
+        for i, w in enumerate((LEFT, RIGHT)):
+            bg.alpha_composite(render.plate(atl[w], brains[w].snap, now, name=names[i]), (cfgmod.plate_left(cfg, w), H - 37))
         hp = {w: brains[w].hp for w in (LEFT, RIGHT)}
         lm = brains[LEFT].last_match
         if lm and lm.get('winner') and last_result is None:
@@ -159,10 +181,10 @@ def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), 
             lm = last_result[1]
             sc = lm.get('wins') or {}
             st['result'] = f"{('CLAUDE' if lm['winner'] == 'a' else 'CODEX')} WINS {max(sc.values() or [2])}-{min(sc.values() or [1])}"
-        bg.alpha_composite(SB.render(st), (sbx, 18))
+        bg.alpha_composite(SB.render(st), (sbx, H - 46))
         bg.alpha_composite(im)
         frames.append(bg)
-        meta.append(dict(t=i / fps, script=any(brains[w].script is not None for w in (LEFT, RIGHT)), x={w: brains[w].x for w in (LEFT, RIGHT)},
+        meta.append(dict(t=i / fps, script=any(brains[w].script is not None for w in (LEFT, RIGHT)), x={w: brains[w].x * k for w in (LEFT, RIGHT)},
                          hp=hp, result='result' in st))
     return frames, meta, cfg
 
@@ -173,21 +195,24 @@ def hero():
     a, b = max(0, idx[0] - 10), min(len(frames) - 1, idx[-1] + 40) if idx else (0, len(frames) - 1)
     clip = frames[a:b + 1]
     cand = [i for i in range(a, b) if meta[i]['hp'].get('a') is not None and 0 < (meta[i]['hp'].get('a') or 0) < 100 and 0 < (meta[i]['hp'].get('b') or 0) < 100]
-    white = lambda i: frames[i].crop((300, 0, 740, 64)).convert('L').point(lambda v: 255 if v > 240 else 0).histogram()[255]   # impact silhouettes
-    still_i = min(cand[::3], key=white) if cand else a + (b - a) // 2
+    H = frames[0].height
+    off = H - 64                                                    # callouts are placed on the bottom 64 rows
+    white = lambda i: frames[i].crop((300, 0, 740, H)).convert('L').point(lambda v: 255 if v > 240 else 0).histogram()[255]   # impact silhouettes
+    apart = [i for i in cand if abs(meta[i]['x']['a'] - meta[i]['x']['b']) >= 90]      # both silhouettes readable, not a clinch
+    still_i = min((apart or cand)[::3], key=white) if cand else a + (b - a) // 2
     K, X0 = 2, 30
     notes_base = []
 
     def frame(im, m):
-        strip = up(im.crop((X0, 0, 940, 64)), K)
+        strip = up(im.crop((X0, 0, 940, H)), K)
         c, (ox, oy) = card(strip, 'Taskbar Fighters on the Windows 11 taskbar', 'Rendered offline by the real planner and renderer (DEMO numbers)',
                            mt=78, mb=70)
         d = ImageDraw.Draw(c)
         sx = lambda x: ox + (x - X0) * K
-        sy = lambda y: oy + y * K
+        sy = lambda y: oy + (y + off) * K
         callout(d, (sx(60), sy(30)), (sx(40), oy - 72), 'HUD plates: program, state,\ncontext meter + number', YEL)
         fx = int((m['x']['a'] + m['x']['b']) / 2)
-        callout(d, (sx(fx), sy(20)), (sx(fx) - 120, oy - 72), 'two fighters, one per AI program\n(at most two on stage)', CYA)
+        callout(d, (sx(fx), sy(-30 if off else 20)), (sx(fx) - 120, oy - 72), 'two fighters, one per AI program\n(at most two on stage)', CYA)
         callout(d, (sx(840), sy(24)), (sx(940) - 2, oy - 72), 'scoreboard: W-L, HP, result,\nPause / Arena / Bout now', PNK, anchor='rt')
         d.text((sx(X0) + 4, sy(64) + 14), 'Fighters only use the empty stretch left of the taskbar icons; the Start button and icons are never covered.',
                fill=DIM, font=F(15, False))
@@ -263,7 +288,7 @@ def roster_img():
         else:
             for i, ln in enumerate(('plays: ' + PROGRAMS[nm]).split('\n')):
                 d.text((x + 16, y + 314 + i * 19), ln, fill=CYA, font=F(14))
-    c, _ = card(body, 'The V6 roster: 13 armed fighters', 'Top row: one character per AI program.  Bottom row: six extras, picked as a "look" for any program (4x, idle frame 1)',
+    c, _ = card(body, 'The roster: 13 armed fighters', 'Top row: one character per AI program.  Bottom row: six extras, picked as a "look" for any program (4x, idle frame 1)',
                 foot='Every frame is drawn by art/rig.py from pose data (python art/build_fighters.py).  Generic "Agent" stands in for every program without its own character.')
     save_png(c, 'roster.png')
 
@@ -306,28 +331,45 @@ def _blit(canvas, im, lx, ty):
 def moves():
     from minis_core.atlas import Library
     from minis_core import fx as fxmod
+    from minis_core.atlas import available
     HD, FX = Library(hd=True), fxmod.default()
-    for who in ('claude', 'codex', 'knight'):
+    V7 = ('string', 'riposte', 'air', 'spike', 'throw', 'through', 'guard_break', 'pull', 'gust', 'boomerang')
+    LABEL = {'string': 'WEAPON', 'riposte': 'RIPOSTE', 'air': 'AIR JUGGLE', 'spike': 'AIR SPIKE', 'throw': 'THROW',
+             'through': 'DASH-THROUGH', 'guard_break': 'GUARD BREAK', 'pull': 'CHAIN PULL', 'gust': 'GUST', 'boomerang': 'BOOMERANG'}
+    for who in available():                                   # V7: every character, signatures + its weapon moves
         a = HD[who]
         sig = a.signature()
-        cw, lab = 176, 190
-        rows = [(k, sig[k], _move_strip(a, sig[k], FX, cw=cw, kind=k)) for k in ('strike', 'special', 'super', 'ultimate')]
-        n = max(len(r[2]) for r in rows)
+        fam = next((m['family'] for m in a.anim.values() if m.get('family')), '')
+        cw, lab = 176, 210
+        rows = [(k.upper(), sig[k], '', _move_strip(a, sig[k], FX, cw=cw, kind=k)) for k in ('strike', 'special', 'super', 'ultimate')]
+        for n_, m in a.anim.items():
+            if m.get('type') in V7:
+                p = int(m.get('power') or 1)
+                inp = m.get('input', '')
+                for k_, v_ in (('fwd', '->'), ('back', '<-'), ('down', 'dn'), ('up', 'up')):
+                    inp = inp.replace(k_, v_)
+                rows.append((LABEL[m['type']], n_, f"{inp}  |  {('light', 'medium', 'heavy')[min(2, p - 1)]} {p * 12}",
+                             _move_strip(a, n_, FX, cw=cw, kind='special' if m.get('cat') == 'special' else 'strike')))
+        n = max(len(r[3]) for r in rows)
         body = Image.new('RGBA', (lab + n * cw, len(rows) * (a.cell[1] + 30)), (0, 0, 0, 0))
         d = ImageDraw.Draw(body)
-        for r, (kind, move, fr) in enumerate(rows):
+        cols = (YEL, CYA, VIO, PNK, GRN, ORA)
+        for r, (kind, move, note, fr) in enumerate(rows):
             y = r * (a.cell[1] + 30)
-            d.text((0, y + 40), kind.upper(), fill=(YEL, CYA, VIO, PNK)[r], font=F(18))
-            d.text((0, y + 64), move, fill=INK, font=F(16, False))
+            d.text((0, y + 30), kind, fill=cols[r % len(cols)] if r < 4 else (GRN if kind == 'WEAPON' else ORA), font=F(17))
+            d.text((0, y + 54), move, fill=INK, font=F(16, False))
+            if note:
+                d.text((0, y + 76), note, fill=DIM, font=F(12, False))
             for i, (im, ms, hit, smear) in enumerate(fr):
                 x = lab + i * cw
                 d.rounded_rectangle([x + 2, y, x + cw - 2, y + a.cell[1] - 2], 6, fill=(30, 33, 42))
                 body.alpha_composite(im, (x, y))
                 tag = f'{ms} ms' + ('  HIT' if hit else '') + ('  smear' if smear else '')
                 d.text((x + 6, y + a.cell[1] + 2), tag, fill=YEL if hit else DIM, font=F(14, hit))
-        c, _ = card(body, f'{a.display}: strike, special, super, ultimate', 'HD sheets (assets_hd/) with the effects from fx.json, frame by frame; every frame shows how long it holds',
-                    foot='HIT = the contact frame (hitstop freezes both fighters there).  smear = a streak/crescent frame that sells the swing.\n'
-                         'python art/qa_v6.py sheet <character> renders the full rig contact sheet.')
+        c, _ = card(body, f'{a.display} ({fam}): signature moves and weapon moves',
+                    'HD sheets (assets_hd/) with the effects from fx.json, frame by frame; every frame shows how long it holds',
+                    foot='HIT = the contact frame (hitstop freezes both fighters there).  smear = the crescent / streak frame that sells the swing.\n'
+                         'Inputs are move-list notation only (-> forward, <- back, dn down); the choreographer picks every move itself.  MOVELIST.md has them all.')
         save_png(c, f'moves-{who}.png')
 
 
@@ -377,10 +419,17 @@ def arena_imgs():
     ko_frames = []
 
     def crop_mid(ar, surf, w=760, h=520):
+        """A 760x520 window on both fighters; it grows (same aspect) when they are far apart - V7's outro perches the
+        winner on the highest window while the loser is still on the floor, and both must stay in the frame."""
         xs = [ar.f[s].x for s in 'ab']
         ys = [ar.f[s].y for s in 'ab']
-        cx, cy = int(sum(xs) / 2), int(min(max(sum(ys) / 2 - 120, h // 2), 1080 - h // 2))
+        top, bot = min(ys) - 240, max(ys) + 40                      # y is the feet line; ~200 px of HD body above it
+        left, right = min(xs) - 160, max(xs) + 160
+        k = max(1.0, (bot - top) / h, (right - left) / w)
+        w, h = min(1920, int(w * k)), min(1080, int(h * k))
+        cx, cy = int((left + right) / 2), int((top + bot) / 2)
         cx = min(max(cx, w // 2), 1920 - w // 2)
+        cy = min(max(cy, h // 2), 1080 - h // 2)
         return surf.canvas.crop((cx - w // 2, cy - h // 2, cx + w // 2, cy + h // 2))
 
     def want(now, ar, surf):
@@ -420,33 +469,269 @@ def arena_imgs():
     ar = arena_run(want=want)
     print('arena:', ar.state()['phase'], 'winner', ar.winner, 'cracks', sum(ar.cracks.count.values()), 'shattered', len(ar.cracks.shattered),
           'explosions', ar.explosions, 'shots', sorted(shots))
-    tag = 'VISUAL ONLY - nothing real happens to your windows'
-    # the four-panel still
-    panels = [(k, t) for k, t in (('ledge', 'Fighters stand on window ledges; knock-backs crack them'), ('shatter', 'Three cracks shatter a window: shards + letters'),
-                                  ('explosion', 'Ultimates explode, flash and shake the overlay'), ('banner', 'Match over: the winner banner over three shattered windows'))
-              if k in shots]
-    pw, ph = 900, 506
-    body = Image.new('RGBA', (2 * pw + 20, ((len(panels) + 1) // 2) * (ph + 40)), (0, 0, 0, 0))
-    d = ImageDraw.Draw(body)
-    for i, (k, t) in enumerate(panels):
-        x, y = (i % 2) * (pw + 20), (i // 2) * (ph + 40)
-        body.alpha_composite(shots[k].resize((pw, ph), Image.LANCZOS).convert('RGBA'), (x, y))
-        d.text((x, y + ph + 6), t, fill=INK, font=F(17))
-    c, (ox, oy) = card(body, 'Arena mode: the fight breaks out onto a whole monitor', 'Headless render on a synthetic desktop (blank windows drawn for this image)',
-                       foot=f'{tag}: the arena is a click-through overlay that only reads window rectangles; it never moves, focuses, closes or types into a window.\n'
-                            'python minis.py arena [--monitor N] [--seconds S]   |   ESC, the EXIT button, `arena stop` or the scoreboard end it.')
-    dd = ImageDraw.Draw(c)
-    label_box(dd, (c.width - 30, 20), tag, PNK, 16, anchor='rt')
-    save_png(c, 'arena.png')
-    # the GIF: ~7 s around the first shatter (or the middle)
-    t0 = st.get('shatter_t') or (gif[len(gif) // 2][0] if gif else 0)
-    seq = [im for t, im in gif if t0 - 4.0 <= t <= t0 + 3.0] or [im for t, im in gif[:100]]
-    fr = []
-    for im in seq[::2]:
-        cc, _ = card(im, 'Arena mode (visual only)', 'Headless render, synthetic desktop')
-        fr.append(cc)
-    save_gif(fr, 'arena.gif', ms=133, colors=96)
+    arena_overview()                                                # V7: arena.png + arena.gif
     return shots, ko_frames
+
+
+# ------------------------------------------------------------------------ arena V7 (docs/ARENA.md): one image per feature
+ARENA_TAG = 'VISUAL ONLY - nothing real happens to your windows'
+V7_WINS = [(1, 140, 380, 820, 900), (2, 1060, 470, 1740, 990), (3, 620, 640, 1180, 1000), (4, 1460, 330, 1860, 600)]
+
+
+def _busy_desktop(w=1920, h=1080, wins=V7_WINS, seed=4):
+    """A deliberately busy synthetic desktop (blobs, icons, windows with title bars, blocks of fake text, thumbnails, a
+    taskbar): readability is judged against this, never against a screen capture."""
+    import random as _r
+    rng = _r.Random(seed)
+    im = Image.new('RGBA', (w, h), (0, 0, 0, 255))
+    d = ImageDraw.Draw(im)
+    for y in range(h):
+        t = y / h
+        d.line([(0, y), (w, y)], fill=(int(40 + 60 * t), int(70 + 40 * t), int(110 + 50 * (1 - t)), 255))
+    for _ in range(40):
+        x, y, r = rng.uniform(0, w), rng.uniform(0, h), rng.uniform(40, 220)
+        d.ellipse([x - r, y - r, x + r, y + r], fill=(rng.randrange(60, 230), rng.randrange(60, 200), rng.randrange(60, 220), 255))
+    for i in range(7):
+        d.rounded_rectangle([22, 20 + i * 104, 86, 84 + i * 104], 10, fill=(rng.randrange(80, 255), rng.randrange(80, 255), rng.randrange(80, 255), 255))
+    for _, l, t, r, b in wins[::-1]:
+        d.rectangle([l, t, r, b], fill=(246, 247, 250, 255), outline=(120, 126, 140, 255))
+        d.rectangle([l, t, r, t + 32], fill=(rng.randrange(40, 220), rng.randrange(40, 220), rng.randrange(40, 220), 255))
+        yy = t + 50
+        while yy < b - 24:
+            if rng.random() < 0.18 and yy < b - 110:
+                d.rectangle([l + 24, yy, l + 24 + rng.randrange(120, 260), yy + 90], fill=(rng.randrange(90, 230), rng.randrange(90, 230), rng.randrange(90, 230), 255))
+                yy += 104
+            else:
+                d.rounded_rectangle([l + 24, yy, l + 24 + int((r - l - 60) * rng.uniform(0.3, 0.95)), yy + 10], 4, fill=(60, 64, 76, 255))
+                yy += 22
+    d.rectangle([0, 1032, w, h], fill=(30, 30, 36, 255))
+    for i in range(12):
+        d.rounded_rectangle([760 + i * 40, 1042, 788 + i * 40, 1070], 6, fill=(rng.randrange(80, 255), rng.randrange(80, 255), rng.randrange(80, 255), 255))
+    return im
+
+
+_DESK = {}
+
+
+def _v7_arena(seed=3, chars=('claude', 'codex'), names=None, options=None):
+    from minis_core import arena as AR, fx as fxmod
+    from minis_core.atlas import Library
+    HD = _DESK.setdefault('lib', Library(hd=True))
+    st = AR.Stage((0, 0, 1920, 1080), V7_WINS, floor_y=1032)
+    ar = AR.Arena(st, {'a': HD[chars[0]], 'b': HD[chars[1]]}, fxmod.default(), seed=seed, now=0.0, record=lambda *a, **k: None,
+                  names=names, options=options or {})
+    ar.flashes = True
+    surf = AR.Surface(1920, 1080)
+    return ar, surf, AR.Compositor(ar, surf)
+
+
+def _v7_frame(surf, box):
+    """The transparent overlay over the synthetic desktop (shifted by the overlay's shake, as the real window moves)."""
+    desk = _DESK.setdefault('desk', _busy_desktop())
+    dx, dy = surf.offsets[-1] if surf.offsets else (0, 0)
+    x0, y0, x1, y1 = box
+    base = desk.crop(box)
+    base.alpha_composite(surf.canvas.crop((x0 - dx, y0 - dy, x1 - dx, y1 - dy)))
+    return base
+
+
+def _v7_box(cx, cy, w=760, h=430):
+    x0 = int(min(max(cx - w / 2, 0), 1920 - w))
+    y0 = int(min(max(cy - h / 2, 0), 1080 - h))
+    return (x0, y0, x0 + w, y0 + h)
+
+
+def _v7_scene(setup, wants, secs, seed=3, chars=('claude', 'codex'), center=None, size=(760, 430)):
+    """Run to the fight, stop the procedural exchanges, apply `setup(ar, now)`, then grab a crop at each wanted moment:
+    wants = [(event, seconds after its first occurrence, caption)] (event None = seconds after the setup)."""
+    ar, surf, comp = _v7_arena(seed, chars)
+    now = 0.0
+    while ar.phase != 'fight':
+        now += 1 / 30.0
+        ar.tick(now)
+        comp.render(now)
+    ar.exchange, ar.cooldown_until, ar.next_hazard = None, 1e9, 1e9
+    t0 = now
+    setup(ar, now)
+    first, shots = {}, {}
+    center = center or (lambda ar: ((ar.f['a'].x + ar.f['b'].x) / 2, (ar.f['a'].y + ar.f['b'].y) / 2 - 110))
+    for _ in range(int(secs * 30)):
+        now += 1 / 30.0
+        ar.tick(now)
+        comp.render(now)
+        if ar.exchange is None:
+            ar.cooldown_until = now + 99
+        for k, t, kw in ar.events:
+            if t > t0 and k not in first:
+                first[k] = t
+        for i, (ev, off, cap) in enumerate(wants):
+            base = t0 if ev is None else first.get(ev)
+            if i not in shots and base is not None and now >= base + off:
+                shots[i] = (cap, _v7_frame(surf, _v7_box(*center(ar), *size)))
+    return [shots[i] for i in sorted(shots)], ar
+
+
+def _v7_card(rows, title, sub, foot, name, pw=480, ph=272):
+    """rows: [[(caption, image)]] -> an annotated card saved as docs/img/<name>."""
+    cols = max(len(r) for r in rows)
+    body = Image.new('RGBA', (cols * (pw + 14), len(rows) * (ph + 34)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(body)
+    for j, row in enumerate(rows):
+        for i, (cap, im) in enumerate(row):
+            x, y = i * (pw + 14), j * (ph + 34)
+            body.alpha_composite(im.resize((pw, ph), Image.LANCZOS).convert('RGBA'), (x, y))
+            d.text((x, y + ph + 6), cap, fill=INK, font=F(15))
+    c, _ = card(body, title, sub, foot=foot + '\n' + ARENA_TAG + ': overlay paint only; it reads window rectangles and never moves, '
+                'focuses, closes or types into a window.')
+    label_box(ImageDraw.Draw(c), (c.width - 30, 20), ARENA_TAG, PNK, 16, anchor='rt')
+    save_png(c, name)
+    return c
+
+
+def arena_v7_imgs():
+    """arena-setpieces / -clash / -stage / -air / -camera / -hazards / -intro .png (one per V7 feature group)."""
+    from minis_core import arena_setpieces as SPM
+
+    def sp(name):
+        def go(ar, now):
+            plan = ar._setpiece_plan(name, ar.f['a'], ar.f['b'])
+            ar._start_sp_setup(name, 'a', 'b', plan, now)
+        return go
+    rows = []
+    for name, chars, wants in (
+            ('vanishing_cut', ('claude', 'codex'), [('setpiece', 0.3, 'stance, the blade drawn in flame'), ('setpiece', 0.66, 'vanished: behind it, a frozen beat'),
+                                                   ('setpiece', 1.06, 'the cut lands: an ink-wash frame'), ('setpiece', 1.3, 'the painted trail fades')]),
+            ('flurry', ('knight', 'barbarian'), [('setpiece', 0.33, 'dash in, first cut (water)'), ('setpiece', 0.62, 'a flurry with afterimages'),
+                                                 ('setpiece', 1.0, 'wind-up for the last cut'), ('setpiece', 1.2, 'the big cut sends it down')]),
+            ('stance_finisher', ('kunoichi', 'monk'), [('setpiece', 0.6, 'stance + charge, focus lines'), ('setpiece', 1.16, 'a vanishing dash'),
+                                                       ('setpiece', 1.63, 'the finisher: ink frame + colour flash'), ('setpiece', 1.9, 'petals in the cut')])):
+        shots, _ = _v7_scene(sp(name), wants, SPM.SETPIECES[name]['dur'] + 2.0, chars=chars)
+        rows.append(shots)
+    _v7_card(rows, 'Arena set pieces: sword scenes, frame by frame', 'Hand-authored timelines for both fighters, 2-4 a match, mixed with the procedural fight',
+             'Elemental trails (flame, water, lightning, wind, petal, ink) are chosen from each fighter\'s colours; poses come from slots, so any pairing works.',
+             'arena-setpieces.png')
+
+    def clash(ar, now):
+        first = dict(who='att', kind='super', anim=ar.f['a'].atlas.signature()['super'], dmg=24, outcome='hit')
+        ar._start_clash('a', 'b', first, now)
+    shots, _ = _v7_scene(clash, [('clash_charge', 0.3, 'both charge in the air'), ('clash_meet', 0.05, 'the beams meet'),
+                                 ('clash_meet', 1.1, 'the struggle sways; the overlay trembles'), ('clash_win', 0.05, 'one overpowers')],
+                         6.0, seed=7, size=(1100, 560))
+    _v7_card([shots], 'Beam clash', 'Both fighters fire at once: two beams meet, push back and forth, one wins',
+             'Triggered when a super meets a super, or both fighters are charged; at most one a match (two on wild).', 'arena-clash.png')
+
+    def knock(b, now, x, y, vx, vy, down=False):
+        b.x, b.y, b.vx, b.vy, b.grounded, b.knocked_until, b.down = float(x), float(y), float(vx), float(vy), False, now + 1.0, down
+        b.play('knockdown' if down else 'hit_heavy', now, loop=False, hold='knockdown' if down else 'idle')
+    on_b = lambda ar: (ar.f['b'].x, ar.f['b'].y - 110)
+
+    def tech(ar, now):
+        ar.I['tech_p'] = 1.0
+        knock(ar.f['b'], now, 320, 1000, -1100, -300, down=True)
+
+    def ledge(ar, now):
+        b = ar.f['b']
+        b.x, b.y, b.vx, b.vy, b.grounded = 870.0, 470.0, 0.0, 250.0, False
+
+    def through(ar, now):
+        knock(ar.f['b'], now, 960, 760, -1400, -200, down=True)
+
+    def meteor(ar, now):
+        knock(ar.f['b'], now, 1300, 300, 160, 1900, down=True)
+        ar.f['b'].meteor = True
+
+    def skid(ar, now):
+        ar.I['tech_p'] = 0.0
+        knock(ar.f['b'], now, 1120, 400, 1000, 150, down=True)
+    row1 = _v7_scene(tech, [('wall_bounce', 0.0, 'a wall bounce off the monitor edge'), ('tech', 0.12, '... and a tech recovery')], 1.4, center=on_b)[0]
+    row1 += _v7_scene(ledge, [('ledge_grab', 0.1, 'a ledge grab on a window top'), ('climb', 0.3, 'the climb-up')], 1.6, center=on_b)[0]
+    row2 = _v7_scene(through, [('through', 0.1, 'knocked through: its outline cracked in')], 0.6, center=on_b)[0]
+    row2 += _v7_scene(skid, [('skid', 0.12, 'a skid along a window top, sparks')], 0.8, center=on_b)[0]
+    row2 += _v7_scene(meteor, [('meteor_through', 0.0, 'a meteor spike through a ledge'), ('crater', 0.2, 'a crater on the taskbar line')], 1.2,
+                      center=lambda ar: (ar.f['b'].x, min(ar.f['b'].y - 60, 900)))[0]
+    _v7_card([row1, row2], 'Arena stage interaction', 'Window rectangles as walls, ledges and glass; the taskbar line as the floor',
+             'All physics is eased and decays at a constant rate (skids decelerate linearly, bounces keep 55 % of their speed).', 'arena-stage.png')
+
+    def air(ar, now):
+        for s in 'ab':
+            ar.f[s].air_plan = dict(y=640.0, stage=0)
+    rowa = _v7_scene(air, [(None, 0.25, 'jump ...'), ('double_jump', 0.08, '... double jump at the apex'), ('double_jump', 0.4, 'hover: air-to-air')], 1.4)[0]
+    _v7_card([rowa], 'Arena aerial game', 'Double jumps, air dashes, air-to-air exchanges, juggles, meteor spikes, recovery jumps',
+             'A juggle follows a launcher; a spiked fighter falls through the window tops it passes and cracks each one.', 'arena-air.png')
+
+    def cam(ar, now):
+        plan = ar._setpiece_plan('stance_finisher', ar.f['a'], ar.f['b'])
+        ar._start_sp_setup('stance_finisher', 'a', 'b', plan, now)
+        ar.f['b'].hp = 20                                                   # so the cut is the match-deciding KO (finisher camera)
+        ar.wins['a'] = ar.to_win - 1
+    rowc = _v7_scene(cam, [('setpiece', 0.45, 'letterbox + focus lines while it charges'), ('zoom', 0.35, 'zoom punch: an eased lens on the fighters'),
+                           ('radial', 0.12, 'final KO: slow motion + radial burst')], 4.0, size=(1100, 620))[0]
+    _v7_card([rowc], 'Arena camera', 'Letterbox, zoom punch, speed lines, focus lines, colour flashes (off with `flash off`)',
+             'The zoom is a seamless lens over the fighters\' region, never past the monitor; bars sit behind the fighters.', 'arena-camera.png')
+
+    def hazard(ar, now):
+        ar.I['hazard_s'], ar.next_hazard = 99, 0.0
+        ar._hazards(now)
+        ar.next_hazard = 1e9
+    rowh = _v7_scene(hazard, [('hazard_crack', 0.45, 'a crack spreads across a window'), ('hazard_shard', 0.2, 'a glass shard drops out'),
+                              ('shard_platform', 0.3, 'it lands: a platform for a while')], 2.6, center=lambda ar: (480, 820), size=(900, 520))[0]
+
+    def rain(ar, now):
+        ar._shatter(ar.stage.windows[0], now, 480, 640)
+    rowh += _v7_scene(rain, [(None, 0.9, 'letter rain from a shattered window')], 1.2, center=lambda ar: (480, 700), size=(900, 520))[0]
+    _v7_card([rowh], 'Arena stage hazards', 'Drawn by the arena only: random glyphs and glass, never anything read from a window', '', 'arena-hazards.png')
+
+    shots, out = [], []
+    ar, surf, comp = _v7_arena(3, ('claude', 'codex'), names={'a': 'Claude', 'b': 'Codex'})
+    now, got = 0.0, {}
+    while ar.phase != 'done' and now < 200:
+        now += 1 / 30.0
+        ar.tick(now)
+        comp.render(now)
+        el = now - ar.phase_t0
+        for ph, at, cap in (('entry', 0.25, 'out of the taskbar'), ('vs', 0.9, 'the VS card'), ('winner', 1.4, 'winner on the highest window'),
+                            ('exit', 0.35, 'both dive back down')):
+            if ar.phase == ph and el >= at and cap not in got:
+                got[cap] = _v7_frame(surf, (0, 0, 1920, 1080))
+    _v7_card([[(k, v) for k, v in got.items()]], 'Arena intro and outro', 'Fighters burst out of the taskbar, a VS card, and the winner\'s perch at the end',
+             'Options: rounds 1 / 3 / 5 or endless, intensity calm / normal / wild, seconds, intro / outro (docs/ARENA.md).', 'arena-intro.png')
+
+
+def arena_overview():
+    """docs/img/arena.png (one still per feature group) and arena.gif (a real-speed stretch of a match).  Two passes over the
+    same seeded match: the first finds when things happen, the second renders only the frames it needs."""
+    def match():
+        return _v7_arena(3, ('claude', 'codex'), names={'a': 'Claude', 'b': 'Codex'})
+    ar, surf, comp = match()
+    now, first = 0.0, {}
+    while ar.phase != 'done' and now < 200:
+        now += 1 / 30.0
+        ar.tick(now)
+        for k, t, kw in ar.events:
+            first.setdefault(k, t)
+    t_sp = first.get('setpiece', now / 2)
+    wants = {k: first[k] + off for k, off in (('ink', 0.1), ('clash_meet', 1.0), ('crater', 0.2), ('winner', 1.4)) if k in first}
+    caps = {'ink': 'A set piece: the cut lands (an ink-wash frame)', 'clash_meet': 'Beam clash', 'crater': 'Crater on the taskbar line',
+            'winner': 'Winner on the highest window'}
+    ar, surf, comp = match()
+    now, gif, picks = 0.0, [], {}
+    while ar.phase != 'done' and now < 200:
+        now += 1 / 30.0
+        ar.tick(now)
+        comp.render(now)
+        if t_sp - 2.0 <= now <= t_sp + 5.0 and int(round(now * 30)) % 2 == 0:
+            cc, _ = card(_v7_frame(surf, (0, 0, 1920, 1080)).resize((640, 360), Image.BILINEAR), 'Arena mode (visual only)',
+                         'Headless render on a synthetic desktop, 15 fps')
+            gif.append(cc)
+        for k, t in wants.items():
+            if k not in picks and now >= t:
+                picks[k] = (caps[k], _v7_frame(surf, (0, 0, 1920, 1080)))
+    save_gif(gif, 'arena.gif', ms=66, colors=96)
+    order = [picks[k] for k in ('ink', 'clash_meet', 'crater', 'winner') if k in picks]
+    _v7_card([order[:2], order[2:]], 'Arena mode: the fight breaks out onto a whole monitor',
+             'Headless render on a synthetic desktop (blank windows drawn for this image)',
+             'python minis.py arena [--monitor N] [--rounds 1|3|5|endless] [--intensity calm|normal|wild] [--seconds S]   |   ESC, EXIT, `arena stop` or the scoreboard end it.', 'arena.png',
+             pw=900, ph=506)
 
 
 def impact_imgs(shots, ko_frames):
@@ -471,12 +756,12 @@ def impact_imgs(shots, ko_frames):
         body = Image.new('RGBA', (cols * 420, ((n + cols - 1) // cols) * 320), (0, 0, 0, 0))
         d = ImageDraw.Draw(body)
         t_ko = ko_frames[min(2, n - 1)][0]
-        labels = ['the last exchange', 'the deciding blow', 'KO contact: impact frame', 'the freeze holds', 'the fall, in slow motion', 'down; the winner turns', 'winner pose, KO stars', 'the loser slumps up']
+        labels = ['the last exchange', 'the deciding blow', 'KO contact: impact frame', 'the freeze holds', 'the fall, in slow motion', 'down; the winner turns', 'the winner perches on the highest window', 'the loser slumps up']
         for i, (t, im) in enumerate(ko_frames):
             x, y = (i % cols) * 420, (i // cols) * 320
             body.alpha_composite(im.resize((400, 274), Image.LANCZOS).convert('RGBA'), (x, y))
             d.text((x, y + 280), f'{i + 1}. {labels[i] if i < len(labels) else ""}  ({t - t_ko:+.2f} s)', fill=INK, font=F(15))
-        c, _ = card(body, 'The KO finisher', 'The match-deciding KO: a long freeze on contact, the fall in slow motion, dust, the winner\'s pose under the banner (3.4 s in all)',
+        c, _ = card(body, 'The KO finisher', 'The match-deciding KO: a long freeze on contact, the fall in slow motion, dust, then the winner flies to the highest window',
                     foot='Arena render (HD) of the same finisher beat the taskbar plays (minis_core/rounds.py, POST_KO_S = 3.4).')
         save_png(c, 'ko-finisher.png')
 
@@ -794,6 +1079,7 @@ def main(argv=None):
                 fn()
         if 'arena' in only:
             impact_imgs(*arena_imgs())
+            arena_v7_imgs()
     finally:
         shutil.rmtree(_TMP, True)
     return 0

@@ -1,46 +1,99 @@
-# <img src="assets/icon/minis-256.png" alt="" width="40" height="40" align="top"> Taskbar Fighters
+<div align="center">
 
-**Your AI coding tools, as pixel fighters on the Windows 11 taskbar - and they fight based on what those tools are really doing.**
+<img src="https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/assets/icon/minis-256.png" alt="Taskbar Fighters icon" width="96" height="96">
 
-![Two fighters, Claude Code and Codex, in a best-of-3 bout in the empty stretch of the taskbar, with HUD plates on the left and the scoreboard on the right](docs/img/hero-bout.gif)
+# Taskbar Fighters
 
-<sub>Rendered offline by the app's own planner and renderer with DEMO numbers (`python tools/doc_images.py`). The command-line tool is
-`minis.py`; "minis" is the internal short name you will see in commands, folders and the data directory.</sub>
+**Your AI agents fight in your taskbar.**
 
-> **Install with your AI agent.** Paste this into Claude Code, Codex, Cursor or any coding agent:
+Claude Code, Codex, Gemini, Cursor, Ollama, LM Studio and more, auto-detected and battling as pixel-art fighters based on what they're really doing.
+
+[![CI](https://github.com/mrktchris/taskbar-fighters/actions/workflows/ci.yml/badge.svg)](https://github.com/mrktchris/taskbar-fighters/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mrktchris/taskbar-fighters?color=f0a184)](https://github.com/mrktchris/taskbar-fighters/releases/latest)
+[![PyPI](https://img.shields.io/pypi/v/taskbar-fighters?color=3776ab)](https://pypi.org/project/taskbar-fighters/)
+[![License: MIT](https://img.shields.io/github/license/mrktchris/taskbar-fighters?color=blue)](https://github.com/mrktchris/taskbar-fighters/blob/master/LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2011%20%7C%20macOS%20(beta)-0078d4)](#install-and-run)
+[![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/downloads/)
+
+<img src="https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/demo.gif" alt="Claude Code and Codex fighting on the Windows taskbar: a clash, a beam, a K.O., with the scoreboard underneath" width="820">
+
+</div>
+
+- **Auto-detects your AI tools.** Every agent on your computer gets its own armed fighter (13 in all), with no hooks or
+  config edits.
+- **Fights from real usage.** They clash while an agent works, hand off when a task finishes, and get K.O.'d at the
+  context limit. Best-of-3 matches, supers, ultimates and hand-directed cinematic set pieces.
+- **Private by design.** It reads numbers only, never your prompts or files, and makes no network calls.
+
+<div align="center">
+
+[![Download for Windows](https://img.shields.io/badge/Download-Windows%20.zip-0078d4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/mrktchris/taskbar-fighters/releases/latest/download/TaskbarFighters-windows.zip)
+[![pip install](https://img.shields.io/badge/pip-install%20taskbar--fighters-3776ab?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/taskbar-fighters/)
+[![macOS beta](https://img.shields.io/badge/macOS-beta-555555?style=for-the-badge&logo=apple&logoColor=white)](#macos-experimental)
+
+**⭐ Star it if your agents deserve a fight.**
+
+</div>
+
+## Install
+
+| | |
+| --- | --- |
+| **Windows, no Python needed** | Download [TaskbarFighters-windows.zip](https://github.com/mrktchris/taskbar-fighters/releases/latest/download/TaskbarFighters-windows.zip), unzip it and double-click `TaskbarFighters.exe`. The zip is not code-signed, so SmartScreen may ask once: **More info > Run anyway**. Quit from the tray icon or with `TaskbarFighters-cli.exe stop`. |
+| **pip, Windows (Python 3.12+)** | `pip install taskbar-fighters` then `taskbar-fighters start` |
+| **pip, macOS (experimental)** | `pip install "taskbar-fighters[mac]"` then `taskbar-fighters doctor` and `taskbar-fighters start` |
+| **From source** | see [Install and run](#install-and-run) (Windows) or [macOS](#macos-experimental) |
+
+> **Or paste this to your AI agent.** Claude Code, Codex, Cursor or any coding agent:
 >
 > ```
 > Install and run Taskbar Fighters from https://github.com/mrktchris/taskbar-fighters - follow AGENTS.md.
 > ```
 >
-> The agent follows [AGENTS.md](AGENTS.md): it checks your PC, installs one Python package, runs the tests, starts the fighters and
-> asks you before adding a startup entry or a Start-menu shortcut. Prefer to do it yourself? See [Install and run](#install-and-run).
+> The agent follows [AGENTS.md](https://github.com/mrktchris/taskbar-fighters/blob/master/AGENTS.md) on Windows and on macOS: it checks your computer, installs the Python packages
+> (Pillow; on a Mac also PyObjC, into a `.venv`), runs the tests, starts the fighters and asks you before adding a startup
+> entry or a shortcut.
+
+Run one copy at a time: a git checkout, a pip install and the Windows zip share one data folder (`%LOCALAPPDATA%\minis`,
+on macOS `~/Library/Application Support/minis`), so stop one before starting another. With pip, every `python minis.py ...`
+command below is `taskbar-fighters ...`; in the zip it is `TaskbarFighters-cli.exe ...`.
+
+<sub>The command-line tool is `minis.py`; "minis" is the internal short name you will see in commands, folders and the data
+directory. The loop above is rendered offline by the app's own planner and renderer with DEMO numbers
+(`python packaging/launch_media.py`).</sub>
 
 ## What it does
 
-Every AI coding program running on your PC - Claude Code, Codex, Gemini, Cursor, Ollama, LM Studio, Copilot CLI and more - is
-detected automatically and gets a pixel fighter. At most two stand in the empty part of your taskbar. They spar while both
-programs are idle, clash while one is working, hand work over when a task finishes, get knocked out when a program hits its
-context limit, and fight best-of-3 matches with HP bars, banners and one anime-style ultimate each. Each fighter has a small HUD
-plate with the program's state and context fill, and a scoreboard keeps the record.
+Every AI coding program running on your computer - Claude Code, Codex, Gemini, Cursor, Ollama, LM Studio, Copilot CLI and more -
+is detected automatically and gets a pixel fighter. At most two stand in the empty part of your taskbar (on a Mac, on top of
+the Dock). They spar while both programs are idle, clash while one is working, hand work over when a task finishes, get knocked
+out when a program hits its context limit, and fight best-of-3 matches with HP bars, banners, cinematic set pieces and one
+signature ultimate each. Each fighter has a small HUD plate with the program's state and context fill, and a scoreboard keeps
+the record.
 
 It is all visual. It reads numbers from local files and the process table; it never touches your agents, your windows or the
 network.
 
-![A real bout captured on the live Windows 11 taskbar: HUD plates on the left, two fighters in the middle, the scoreboard on the right](docs/img/live-taskbar.png)
+![A real bout captured on the live Windows 11 taskbar: HUD plates on the left, two fighters in the middle, the scoreboard on the right](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/live-taskbar.png)
 
-![A live bout on the real taskbar](docs/img/live-bout.gif)
+![A live bout on the real taskbar](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/live-bout.gif)
 
-![The taskbar strip annotated: HUD plates on the left, two fighters in the middle, the scoreboard on the right](docs/img/hero-taskbar.png)
+![The taskbar strip annotated: HUD plates on the left, two 128 px fighters in the middle, the scoreboard on the right](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/hero-taskbar.png)
 
 ## Features
 
 - **Auto-detect.** Claude Code and Codex from their local session transcripts (numbers and enums only); a dozen other programs
   from the process table. No hooks, no config edits, nothing installed into your agents. `python minis.py detect` shows what is
   seen right now and how.
-- **Thirteen armed fighters (V6).** One per program (Claude, Codex, Gemini, Cursor, Ollama, LM Studio, and a generic Agent for
-  everything else) plus six selectable extras (Kunoichi, Knight, Barbarian, Monk, Nomad, Oni). Every frame is generated by a rig
-  from pose data.
+- **Thirteen armed fighters in HD.** One per program (Claude, Codex, Gemini, Cursor, Ollama, LM Studio, and a generic Agent for
+  everything else) plus six selectable extras (Kunoichi, Knight, Barbarian, Monk, Nomad, Oni). Fighters are 128 px tall by
+  default (real 128 px art); `size 96` or `size 64` makes them smaller. Every frame is generated by a rig from pose data.
+- **A deep move set.** 56 shared moves plus each fighter's signature strike, special, super and ultimate and 8-10 weapon-family
+  moves: 3-hit strings, air juggles, throws, chain pulls, dash-through cuts, guard breaks, ripostes, weapon locks and armoured
+  heavies, each with its own contact sparks.
+- **Cinematic set pieces.** Hand-directed exchanges for both fighters (blade lock, pull and launch, cross-cut freeze, vault
+  overhead, parry riposte, guard crush, reversal, aerial finish) play at a match's dramatic moments, mixed with the
+  procedural fight. Any pairing plays them.
 - **Battles from real usage.** Clash when either program is working, spar or ranged duel when neither is, a handoff when one
   finishes a task, a KO and a consoling visit when one hits its limit, timed best-of-3 matches.
 - **HUD plates.** Program name, state (`working idle done waiting? sleeping limit`), a 10-segment context meter and the context
@@ -51,58 +104,79 @@ network.
   Winners are weighted by a health score (`decided`) or a coin flip (`random`).
 - **Rival mode.** A sleeping partner (a program that went quiet, or the sparring bot) is woken now and then for a match, then
   goes back to sleep. The plate keeps saying `sleeping`.
-- **Fighter select.** Pick which program fights on each side, and which character any program wears, from a Smash-style select
+- **Fighter select.** Pick which program fights on each side, and which character any program wears, from an arcade-style select
   screen, the right-click menu or the CLI.
-- **Arena mode.** The fight breaks out onto a whole monitor: fighters jump between the top edges of your windows, crack and
-  "shatter" them, throw letters and explode. Visual only - nothing real happens to your windows.
+- **Arena mode.** The fight breaks out onto a whole monitor: window edges become walls and ledges, glass cracks and shatters,
+  beams clash, the camera punches in. Visual only - nothing real happens to your windows.
+- **Windows and macOS.** Windows 11 is the tested home. macOS (fighters on the Dock, a menu-bar icon) is experimental, and its
+  test suite runs in CI on every push.
 - **Tray icon and Start-menu shortcut.** Left-click the tray icon for fighter select, right-click for the menu (Restart, Quit);
   `python minis.py shortcut` adds Taskbar Fighters to Start so you can pin it.
 - **Controls.** Pause, hide plates, flash effects on/off (no white flashes or impact frames for anyone who dislikes strobing),
-  hide a fighter, drag, double-click for a victory pose, Shift-drag to throw.
+  fighter size, hide a fighter, drag, double-click for a victory pose, Shift-drag to throw.
 
 ## The roster
 
-![All 13 V6 fighters at 4x: the seven program characters with the programs they play and their weapons, and the six selectable extras](docs/img/roster.png)
+![All 13 fighters at 4x: the seven program characters with the programs they play and their weapons, and the six selectable extras](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/roster.png)
 
 | fighter | plays | weapon | strike / special / super / ultimate |
 | --- | --- | --- | --- |
-| Claude | Claude Code | katana | spin_kick / slash_wave / reverse / kamehameha |
-| Codex | Codex (CLI and desktop app) | twin kunai | ground_pound / deploy / sudo / rasengan |
-| Gemini | Gemini (app and CLI) | twin short blades | spin_kick / star_shot / twin_flash / getsuga |
-| Cursor | Cursor | spear | ground_pound / tab_bolt / autocomplete / odm_strike |
-| Ollama | Ollama | staff | ground_pound / pull_shot / serve / wind_scar |
-| LM Studio | LM Studio | energy katana | spin_kick / load_wave / hot_swap / bankai |
-| Agent | aider, opencode, Windsurf, Copilot CLI, Qwen Code, Perplexity, Grok, the sparring bot | bow and dagger | spin_kick / energy_bolt / overclock / spirit_bomb |
-| Kunoichi, Knight, Barbarian, Monk, Nomad, Oni | selectable extras: any program can wear them | fans, greatsword, axe, tonfa, chakrams, kanabo | see [MOVELIST.md](MOVELIST.md) |
+| Claude | Claude Code | katana | spin_kick / slash_wave / reverse / radiant_beam |
+| Codex | Codex (CLI and desktop app) | twin kunai and chain | ground_pound / deploy / sudo / spiral_orb |
+| Gemini | Gemini (app and CLI) | twin short blades | spin_kick / star_shot / twin_flash / crescent_fang |
+| Cursor | Cursor | spear | ground_pound / tab_bolt / autocomplete / grapple_strike |
+| Ollama | Ollama | staff | ground_pound / pull_shot / serve / gale_rend |
+| LM Studio | LM Studio | energy katana | spin_kick / load_wave / hot_swap / awakening |
+| Agent | aider, opencode, Windsurf, Copilot CLI, Qwen Code, Perplexity, Grok, the sparring bot | bow and dagger | spin_kick / energy_bolt / overclock / star_core |
+| Barbarian | selectable extra | axe | axe_spin / axe_toss / berserk / earthsplitter |
+| Knight | selectable extra | greatsword | crusher / sword_wave / valor / holy_crescent |
+| Kunoichi | selectable extra | twin fans | fan_whirl / petal_shot / vanish / petal_dance |
+| Monk | selectable extra | twin tonfa | palm_crash / chi_bolt / meditate / chi_sphere |
+| Nomad | selectable extra | twin chakrams | ring_spin / chakram_throw / mirage / ring_storm |
+| Oni | selectable extra | kanabo club | club_slam / oni_fire / rampage / oni_roar |
 
 ### Moves
 
-Every character has the full shared move set (locomotion, six strikes, defence, reactions, emotes, states) plus its own strike,
-special, super and ultimate. [MOVELIST.md](MOVELIST.md) lists every move, trigger and timing.
+Every character has the full shared move set (locomotion, strikes, defence, reactions, emotes, states), its signature strike,
+special, super and ultimate, and its weapon family's moves. [MOVELIST.md](https://github.com/mrktchris/taskbar-fighters/blob/master/MOVELIST.md) lists every move, input notation,
+trigger and timing for all 13 fighters.
 
-![Claude's signature strike, special, super and ultimate frame by frame with hold times, contact frames and smears](docs/img/moves-claude.png)
+![Claude's signature and weapon moves frame by frame with hold times, contact frames and smears](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/moves-claude.png)
 
-<details><summary>Codex and Knight</summary>
+<details><summary>Codex, Knight and Kunoichi</summary>
 
-![Codex's signature moves frame by frame](docs/img/moves-codex.png)
+![Codex's moves frame by frame](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/moves-codex.png)
 
-![Knight's signature moves frame by frame](docs/img/moves-knight.png)
+![Knight's moves frame by frame](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/moves-knight.png)
+
+![Kunoichi's moves frame by frame](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/moves-kunoichi.png)
 
 </details>
 
+All thirteen sheets are in `docs/img/moves-<character>.png`.
+
 ### Impact frames and the KO finisher
 
-![Six consecutive frames around a KO: one normal frame, then flat silhouettes and radial lines for about 130 ms](docs/img/impact-frames.png)
+![Six consecutive frames around a KO: one normal frame, then flat silhouettes and radial lines for about 130 ms](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/impact-frames.png)
 
-![The KO finisher in eight labelled frames: the deciding blow, the freeze, the slow-motion fall, the winner pose](docs/img/ko-finisher.png)
+![The KO finisher in eight labelled frames: the deciding blow, the freeze, the slow-motion fall, the winner on the highest window](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/ko-finisher.png)
+
+### Cinematic set pieces
+
+![Arena set pieces frame by frame: a flame-drawn stance and a frozen beat before the cut, a water-trail flurry, a petal-trail finisher](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-setpieces.png)
+
+A match plays one to three set pieces at its dramatic moments (a round's second exchange, the comeback, match point), on the
+taskbar and in the arena. They are data, written against weapon-family slots, so any two fighters can play any of them.
+Preview one with `python tools/setpiece_preview.py <piece> --a claude --b codex`. The list is in
+[MOVELIST.md](https://github.com/mrktchris/taskbar-fighters/blob/master/MOVELIST.md#set-pieces).
 
 ### V5 -> V6
 
-![Side by side, each program character in V5 and in V6: idle and the signature strike's contact frame](docs/img/before-after.png)
+![Side by side, each program character in V5 and in V6: idle and the signature strike's contact frame](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/before-after.png)
 
 ## HUD plates
 
-![The HUD plate annotated (program name, state word, context meter, numbers) and every state with an explanation](docs/img/plates.png)
+![The HUD plate annotated (program name, state word, context meter, numbers) and every state with an explanation](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/plates.png)
 
 Context = tokens of the newest assistant line over the model's context window. A tool call unanswered for 45 s shows `waiting?`
 (amber); 10 quiet minutes is `idle`; 30 minutes is `sleeping`. A plan figure appears only when its limit id, value and reset time
@@ -110,11 +184,11 @@ all check out. Process-detected programs have no numbers (`ctx -`).
 
 ## Scoreboard
 
-![The scoreboard in five states: plain, during a match, after a match, a fighter hidden, paused](docs/img/scoreboard.png)
+![The scoreboard in five states: plain, during a match, after a match, a fighter hidden, paused](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/scoreboard.png)
 
 ## Fighter select
 
-![The select screen: WHO row, LOOK grid and the VS card, with how to open it and the CLI equivalents](docs/img/select.png)
+![The select screen: WHO row, LOOK grid and the VS card, with how to open it and the CLI equivalents](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/select.png)
 
 - **Open it:** right-click a fighter > *Select fighters...*, or click a name on the scoreboard (opens that side only).
 - **Pick** a program for a side and it stays there: live when detected, asleep and dimmed when not. A side on `auto` follows the
@@ -124,20 +198,57 @@ all check out. Process-detected programs have no numbers (`ctx -`).
 
 ## Arena mode
 
-![Arena mode on a synthetic desktop: fighters on window ledges, a shattered window with flying letters, an ultimate exploding, the winner banner](docs/img/arena.png)
+![Arena mode on a synthetic desktop: a set piece's ink-wash cut, a beam clash, a crater on the taskbar line, the winner on the highest window](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena.png)
 
-![Arena mode animated, on a synthetic desktop](docs/img/arena.gif)
+![Arena mode animated, on a synthetic desktop](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena.gif)
 
-`python minis.py arena [--monitor N] [--seconds S]`, the scoreboard's Arena button, or the right-click menu. HD fighters (~170 px)
-jump, air-dash and hover between the top edges of your windows; a knock-back into a window cracks it, three cracks shatter it.
-**Visual only:** the arena is one click-through overlay that reads window rectangles (never titles) and draws on itself. No real
-window is moved, focused, closed or typed into. ESC, the EXIT button, `python minis.py arena stop` or the scoreboard end it. The
-images above are headless renders on a desktop drawn for the picture, not a screen capture.
+**Visual only - nothing real happens to your windows.** The arena is one click-through overlay that reads window rectangles
+(never titles or contents) and paints on itself. No real window is moved, resized, focused, closed or typed into; screen shake
+moves only the overlay. The images here are headless renders on a desktop drawn for the picture, not a screen capture.
+
+```
+python minis.py arena [--monitor N] [--rounds 1|3|5|endless] [--endless] [--intensity calm|normal|wild]
+                      [--seconds S] [--no-intro] [--no-outro] [--freeze]
+python minis.py arena stop
+```
+
+Or the scoreboard's Arena button, or the right-click menu. ESC, the on-screen EXIT button, `arena stop` or the scoreboard end
+it. Flags you leave out fall back to `"arena": {...}` in `minis.json`, then to the defaults (best of 3, `normal`).
+
+- **Intro and outro.** The fighters burst out of the taskbar and a VS card slides in; at the end the winner flies to the
+  highest window to pose and both dive back into the taskbar.
+- **The stage.** Window edges are walls and ledges: wall bounces, tech recoveries, ledge grabs and climbs, knock-throughs that
+  leave a cracked silhouette in the glass, skids with sparks, craters on the taskbar line, shard platforms.
+- **In the air.** Double jumps, air dashes, juggles, meteor spikes through every window top on the way down, recovery jumps.
+- **Camera.** Letterbox for big moments, a seamless zoom punch, speed lines, a slow-motion final KO. `flash off` removes every
+  full-screen frame.
+- **Beam clashes and set pieces.** Two beams meet and push back and forth; sword scenes with elemental trails play 2-4 times a
+  match.
+- **Intensity.** `calm` halves the effects and turns hazards off; `wild` adds more of everything.
+
+<details><summary>Stage, air, camera, clash, hazards, intro</summary>
+
+![Stage interaction](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-stage.png)
+
+![Aerial game](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-air.png)
+
+![Camera](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-camera.png)
+
+![Beam clash](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-clash.png)
+
+![Stage hazards](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-hazards.png)
+
+![Intro and outro](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-intro.png)
+
+</details>
+
+Every option, effect and number: [docs/ARENA.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/ARENA.md).
 
 ## Install and run
 
-**Requirements:** Windows 11 (tested; Windows 10 should work but is untested) with the taskbar at the bottom, Python 3.12 or newer (tested on 3.12 and 3.14), and Pillow.
-Nothing else: no services, no network, no startup entries unless you add one.
+**Requirements:** Windows 11 (tested; Windows 10 should work but is untested) with the taskbar at the bottom, Python 3.12 or
+newer (tested on 3.12 to 3.14), and Pillow. Nothing else: no services, no network, no startup entries unless you add one. The
+Windows zip needs no Python at all. On a Mac, see [macOS](#macos-experimental).
 
 ```
 git clone https://github.com/mrktchris/taskbar-fighters
@@ -147,6 +258,8 @@ python minis.py start
 python minis.py status
 ```
 
+Or `pip install taskbar-fighters` and `taskbar-fighters start`.
+
 `start` launches three windowless processes (a director and fighter slots `a` and `b`) and after about 3 s prints what is on
 screen, for example `a: Claude Code, b: Sparring bot asleep`.
 
@@ -154,12 +267,64 @@ screen, for example `a: Claude Code, b: Sparring bot asleep`.
 you can use; it also prints the command to remove the task again.
 
 **Stop and uninstall.** `python minis.py stop` ends only the processes it started (it checks each one's exact command line).
-`python minis.py shortcut remove` deletes the shortcuts it made. Delete the `taskbar-fighters` folder and `%LOCALAPPDATA%\minis`
-to remove everything; remove a startup task you added with the `schtasks /Delete` line `print-startup` shows.
+`python minis.py shortcut remove` deletes the shortcuts it made. Delete the `taskbar-fighters` folder (or run
+`pip uninstall taskbar-fighters`, or delete the unzipped folder) and `%LOCALAPPDATA%\minis` to remove everything; remove a
+startup task you added with the `schtasks /Delete` line `print-startup` shows.
+
+`python minis.py doctor` prints a report of this machine (versions, screen and taskbar geometry, detected programs, a test
+window) that ends with PASS or FAIL; paste it to your AI agent or into an issue when something is off.
+
+**Fighter size.** Fighters are 128 px tall by default (the HD art). `python minis.py size 96` or `size 64` makes them smaller
+(also in the right-click menu's *Fighter size*); running fighters restart to apply it. `"fighter_size"` in `minis.json` sets
+the default.
+
+## macOS (experimental)
+
+> **Experimental, but CI-verified.** The full test suite and `doctor --headless` run on macOS in GitHub Actions on every push,
+> and the fixes from the first runs on a real Mac are in this release. It has not been tried on many Macs yet: if it draws in
+> the wrong place, run `python minis.py doctor` and paste the report into an issue. The checklist:
+> [docs/MAC-TESTING.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/MAC-TESTING.md). Open Mac test items from the
+> PC side, and what was found on real Macs, are tracked in
+> [docs/MAC-HANDOFF.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/MAC-HANDOFF.md).
+
+**Requirements:** macOS 13 (Ventura) or newer, Apple silicon or Intel, Python 3.12 or newer (from python.org or
+`brew install python@3.12`; the `python3` that ships with macOS is too old), Pillow and PyObjC.
+
+```
+pip install "taskbar-fighters[mac]"
+taskbar-fighters doctor
+taskbar-fighters start
+```
+
+or from source:
+
+```
+git clone https://github.com/mrktchris/taskbar-fighters
+cd taskbar-fighters
+./scripts/setup_mac.sh
+```
+
+The script checks your macOS version and chip, finds Python 3.12+, creates `.venv` in the clone, runs
+`pip install --upgrade pip` and `pip install -r requirements-mac.txt`, then `python minis.py doctor` and `python minis.py start`.
+By hand: `python3.12 -m venv .venv`, `.venv/bin/python -m pip install --upgrade pip` (an old pip may try to compile PyObjC),
+`.venv/bin/python -m pip install -r requirements-mac.txt`, `.venv/bin/python minis.py start`.
+
+- **Where they stand:** on top of the Dock's top edge, with the scoreboard at the right end of the strip. A Dock on the left or
+  right, or one that auto-hides, falls back to a strip at the bottom of the screen. Plates and the scoreboard are drawn at the
+  screen's Retina scale and fade out of the way while the mouse is over them.
+- **Menu-bar icon** instead of the tray icon, with the same menu (left click: fighter select; right click or Control-click: the
+  menu). No Dock icon: it runs as a background (accessory) app. On a notched MacBook with a full menu bar, macOS may hide the
+  icon behind the notch; `status` says so, and the fighter's right-click menu has everything.
+- **No permissions needed:** no Accessibility, no Screen Recording, no Input Monitoring. The arena reads window *bounds* only.
+- **What differs:** no arena `--freeze` and no `arena capture` (both would need a screen capture); start at login is
+  `python minis.py autostart on` (one LaunchAgent plist; `autostart off` removes it; `print-startup` only shows it); no Start
+  menu, so `shortcut` only explains; `selftest-gui` shows two fighters (at your fighter size) for 5 s and reports their window
+  frames instead of comparing screenshots; data lives in `~/Library/Application Support/minis`.
+- **Stop:** `python minis.py stop` (SIGTERM, then SIGKILL only for a process still proven ours).
 
 ### Taskbar and tray icon
 
-![The app icon at every size on dark and light taskbars, and an illustration of the tray icon with its tooltip and right-click menu](docs/img/icon-tray.png)
+![The app icon at every size on dark and light taskbars, and an illustration of the tray icon with its tooltip and right-click menu](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/icon-tray.png)
 
 - `python minis.py shortcut` adds **Taskbar Fighters** to the Start menu (`--desktop` also puts one on the Desktop). Then
   right-click Taskbar Fighters in Start > **Pin to taskbar** (Windows only lets you pin a program; it never pins itself).
@@ -173,7 +338,7 @@ to remove everything; remove a startup task you added with the `schtasks /Delete
 
 ## Commands
 
-Every command below was checked against `python minis.py --help` and each subcommand's `--help`.
+Every command below was checked against `python minis.py --help` and each subcommand's `--help`. With pip the command is `taskbar-fighters`, in the Windows zip `TaskbarFighters-cli.exe`.
 
 | command | what it does |
 | --- | --- |
@@ -197,11 +362,14 @@ Every command below was checked against `python minis.py --help` and each subcom
 | `python minis.py show [a\|b]` | bring back a hidden fighter |
 | `python minis.py detect` | which known AI programs are seen right now, and how (names and numbers only) |
 | `python minis.py monitors` | list monitors for `arena --monitor N` |
-| `python minis.py arena [--monitor N] [--freeze] [--seconds S] [--seed K]` | arena mode; `arena stop` ends it |
+| `python minis.py arena [--monitor N] [--rounds 1\|3\|5\|endless] [--endless] [--intensity calm\|normal\|wild] [--seconds S] [--no-intro] [--no-outro] [--freeze] [--seed K]` | arena mode ([docs/ARENA.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/ARENA.md)); `arena stop` ends it |
 | `python minis.py arena capture <png>` | PrintWindow of the arena's own window only (refused with `--freeze`; writes only under `qa/` or the data folder) |
-| `python minis.py print-startup` | print (never run) the commands to start at logon |
+| `python minis.py print-startup` | print (never run) the commands to start at logon (macOS: the LaunchAgent plist) |
+| `python minis.py autostart on\|off\|status` | macOS only: start at login with a LaunchAgent (written only when you run `on`) |
+| `python minis.py size 64\|96\|128` | fighter height in px (default 128, HD art); running fighters restart to apply it |
+| `python minis.py doctor [--headless]` | a report to paste to your AI agent or an issue; `--headless` skips the test window (CI) |
 | `python minis.py director` / `run a\|b` | run the director or one slot in the foreground (debugging) |
-| `python minis.py selftest-gui [--keep]` | real-desktop check: both windows draw over the taskbar and survive a taskbar raise |
+| `python minis.py selftest-gui [--keep]` | real-desktop check: both windows draw over the taskbar and survive a taskbar raise (macOS: frames, no capture) |
 | `python -m unittest discover -s tests` | the test suite (the process-level tests are skipped unless `MINIS_INTEGRATION=1`) |
 
 ### Right-click menu
@@ -218,7 +386,8 @@ Right-click a fighter or its plate:
 
 ## Configuration
 
-Optional: a `minis.json` next to `minis.py` overrides any default in `minis_core/config.py`. Runtime toggles (pause, plates,
+Optional: a `minis.json` next to `minis.py` (in the Windows zip: next to `TaskbarFighters.exe`) overrides any default in
+`minis_core/config.py`; a pip install runs on the defaults plus the CLI toggles. Runtime toggles (pause, plates,
 flash, rival, winners, lineup) live in `%LOCALAPPDATA%\minis\control.json` and are set by the CLI and the menu.
 
 ```json
@@ -248,7 +417,9 @@ flash, rival, winners, lineup) live in `%LOCALAPPDATA%\minis\control.json` and a
 | `claude_window` | `1000000` | context window used for Claude's context % |
 | `tray_icon` | `true` | the notification-area icon (left click: select, right click: menu) |
 | `scoreboard` / `scoreboard_x` | `true` / `null` | show the widget; its screen x (default: just left of the icons) |
+| `fighter_size` | `128` | taskbar fighter height: 64, 96 or 128 px (`minis.py size N` overrides it at runtime) |
 | `arena_monitor` | `null` | monitor for the Arena button (default: the one non-primary monitor) |
+| `arena` | `{}` | arena options: `rounds`, `endless`, `intensity`, `seconds`, `intro`, `outro` ([docs/ARENA.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/ARENA.md)) |
 | `fps_active` / `fps_fight` / `fps_idle` | `10` / `30` / `4` | redraw rates |
 
 Fighters hide while a fullscreen app is up, while the taskbar is not at the bottom, and while it auto-hides.
@@ -266,12 +437,12 @@ Fighters hide while a fullscreen app is up, while the taskbar is not at the bott
   written to disk.
 - **Arena never touches real windows.** It reads window rectangles (`EnumWindows` / `GetWindowRect`), never titles, never sends
   input; cracks and shatters are paint on its own overlay.
-- **Files written:** `%LOCALAPPDATA%\minis\` (bus files, `assign.json`, `control.json`, `record.json`, `history.json`, `seen.json`,
-  pid files, small rotating logs).
+- **Files written:** `%LOCALAPPDATA%\minis\` on Windows, `~/Library/Application Support/minis/` on macOS (bus files,
+  `assign.json`, `control.json`, `record.json`, `history.json`, `seen.json`, pid and lock files, small rotating logs).
 
 ## How it works
 
-![Detection diagram: programs feed transcript and process sources plus a memory of recently seen programs; the director picks two and writes assign.json; slots a and b talk through bus files](docs/img/detection.png)
+![Detection diagram: programs feed transcript and process sources plus a memory of recently seen programs; the director picks two and writes assign.json; slots a and b talk through bus files](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/detection.png)
 
 - **Sources** (`minis_core/sources.py`) poll every 2 s: Claude Code and Codex from the newest local transcript (only appended bytes,
   numbers and enums), every other program from a table matched against the process list through ctypes, *working* above 15% of one
@@ -286,6 +457,8 @@ Fighters hide while a fullscreen app is up, while the taskbar is not at the bott
   the headless simulator used for tests and these images.
 - **Art** (`art/`) is generated: a 2-bone rig and pose data build `assets/` (64 px) and `assets_hd/` (128 px) with
   `python art/build_fighters.py --all`.
+- **Set pieces** (`minis_core/setpieces.py`, `arena_setpieces.py`) are hand-authored beat lists for both fighters, written
+  against weapon-family slots and played by the same round player as the procedural exchanges.
 
 ```
 minis.py          CLI, director loop, fighter loop        art/      rig, moves, roster, builder -> assets/, assets_hd/
@@ -293,22 +466,27 @@ minis_core/       sources, director, telemetry, brain,    tools/    previews, do
                   choreo, rounds, fx, arena, scoreboard,  tests/    unittest; synthetic, content-free fixtures
                   select, lineup, render, sim, config     docs/     notes, credits, work orders, docs/img/
 minis_win/        layered windows, arena window, process table (all ctypes)
+minis_mac/        macOS: NSPanel windows, menu-bar item, Dock geometry, ps process table, LaunchAgent (experimental)
+taskbar_fighters_assets/   where the wheel installs assets/ and assets_hd/ (minis_core/paths.py finds the art in every install)
+minis_platform/   picks minis_win or minis_mac at run time (nothing imports a desktop library at import time)
 ```
 
 ## Known limits and roadmap
 
-- **Windows only**, bottom taskbar only. Only 100% DPI on the primary display has been seen; integer scaling is unit-tested, not
-  observed at 150% or 200%.
+- **Windows tested; macOS experimental** (CI-tested, few real Macs so far: [docs/MAC-TESTING.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/MAC-TESTING.md)). Windows:
+  bottom taskbar only. Only 100% DPI on the primary display has been seen; integer scaling is unit-tested, not observed at 150%
+  or 200%.
 - The default `zone` was measured on one 2560x1440 display with centred icons; other layouts need a `zone` in `minis.json`.
-- Fighters stand about 11 px above the taskbar's top edge (the 64 px cell's top rows sit over the desktop), and long weapons tilt to
-  fit the cell.
+- At the default 128 px a fighter stands well above the 48 px taskbar, over the bottom of the desktop (its window is
+  click-through except the sprite); `size 64` keeps it to about 11 px above the taskbar's top edge. Long weapons tilt to fit
+  the cell.
 - The arena does not get the task-finished super boost the taskbar has; its 30 fps target is not met on the author's PC, so it drops
   itself to 20 fps; platforms are only the top edges of windows.
 - Process sources have no numbers, and "working" is a CPU heuristic (the 15% threshold is a first guess).
 - The art is generated by a rig, not hand-drawn; a hand-polish hook exists (`art/hand/<character>/<move>_<frame>.png`).
 - Ideas not built yet: importing Codex pet packs, achievements from `record.json`, landing on title bars in the arena.
 
-Build logs with what was verified and how: [RESULT.md](RESULT.md). Version history: [CHANGELOG.md](CHANGELOG.md).
+Build logs with what was verified and how: [RESULT.md](https://github.com/mrktchris/taskbar-fighters/blob/master/RESULT.md). Version history: [CHANGELOG.md](https://github.com/mrktchris/taskbar-fighters/blob/master/CHANGELOG.md).
 
 ## Make the images yourself
 
@@ -322,9 +500,9 @@ bout, and `python tools/doc_images.py --annotate-live <dir>` annotates it.
 All thirteen fighters, every frame, effect and projectile are original art generated by the rig in `art/`. Free packs by LuizMelo
 (Martial Hero), Mattz Art / xzany (Samurai) and GandalfHardcore (Archer), plus DullMesh's Cyber White Samurai and Game Academie's
 previews, were studied for timing, proportion and silhouette only; nothing was copied. Links and licence terms:
-[docs/CREDITS.md](docs/CREDITS.md). How it compares with other desktop pets and agent monitors:
-[docs/COMPARISON.md](docs/COMPARISON.md).
+[docs/CREDITS.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/CREDITS.md). How it compares with other desktop pets and agent monitors:
+[docs/COMPARISON.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/COMPARISON.md).
 
 ## License
 
-[MIT](LICENSE), copyright 2026 Christian Sierra.
+[MIT](https://github.com/mrktchris/taskbar-fighters/blob/master/LICENSE), copyright 2026 Christian Sierra.

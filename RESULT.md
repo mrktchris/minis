@@ -223,7 +223,7 @@ redesigns and the beam FX overhaul (`art/`, `assets*/`, `tests/test_art.py`) wer
 every frame count, `fx` list, `grow` and `flash` key from the JSON at run time.  The author's verdict on V4, watching live: "same moves over
 and over and that beam looks terrible".  Verified causes: `rounds.py` / `brain.py` drew every attack with `rng.choice` from the six strikes
 (the first spar exchanges from `pool[:4]`), nothing stopped repeats, and defence / locomotion / specials / supers / the ultimate almost never
-appeared; the kamehameha played as one static frame set with no extension or travel.
+appeared; Claude's beam ultimate played as one static frame set with no extension or travel.
 
 ### Built
 
@@ -259,10 +259,10 @@ appeared; the kamehameha played as one static frame set with no extension or tra
 | variety, taskbar | 20 seeded matches over 4 roster pairs: top attack share per character 16-19 % (Claude `reverse` 18 %, Cursor `tab_bolt` 19 %, all < 25 %); 23-26 distinct moves per character (>= 12); strikes 256 / supers 66 / specials 56 / ultimates 36 / counters 21 picks; 46 air exchanges; every category in the grammar seen (test `Variety`) |
 | variety, arena | 4 headless matches: 13 distinct attack moves, top share `cross` 11/71 = 15 %; every match has an air-to-air exchange, a beam, a flash, a parry or block, a reset, a whiff; knockdowns kip up within 3 s; the ultimate at most once per fighter per match; 10 seeds: 14 of 24 rounds end by KO, mean round 20.8 s, none over 26.5 s |
 | both sides agree | `make_match` twice on one plan is equal (incl. `to` / `hitstop` opts); two Brains on the bus play a V5 match with slides and stops inside the zone, one record; `MINIS_INTEGRATION=1`: two real processes + demo spar: 13 contact / reaction pairs matched on both sides; the three-process arena ran 2 rounds, recorded the winner, slots hid and returned, no file left (8/8 OK, 129 s) |
-| beams | growing beam keeps its anchor edge on the hand in both facings while the far end extends 16 -> 256 px, holds, retracts and fades; `reach` 256 at RES 2 / 128 on the taskbar; flash 0.6 on the hit frame and 0 after; real `kamehameha` (art: grow 56 -> 256 over 100 ms, 7 frames, flash) traced at 112 / 312 / 512 px in the arena player |
+| beams | growing beam keeps its anchor edge on the hand in both facings while the far end extends 16 -> 256 px, holds, retracts and fades; `reach` 256 at RES 2 / 128 on the taskbar; flash 0.6 on the hit frame and 0 after; real `radiant_beam` (art: grow 56 -> 256 over 100 ms, 7 frames, flash) traced at 112 / 312 / 512 px in the arena player |
 | arena beam contact | test: Claude's beam fired from range (>= REACH_PX, <= reach + 8), 40 damage, knockdown, knockback > 900 px/s along the beam, both bodies' clocks stand still for the hitstop, flash > 0, impact burst present, the compositor writes the flash as a full frame and clears it the next |
 | live taskbar | `stop`, `start`, `selftest-gui --keep`: PASS (2,932 px visible, 2,895 after the raise tick); fighters left RUNNING |
-| live arena, monitor 2, PrintWindow of its own window only | `python tools/arena_capture.py --monitor 2 --out <dir> --prefix v5` (the annotated copies `docs/img/v5-kamehameha.png`, `v5-flash.png`, `v5-air.png` were removed in the V6 docs refresh; they are in git history): `v5-kamehameha.png` (Claude's beam 13 ms after it fires: the head 56 px out of the hand, mid-extension, fired from range on the floor), `v5-rasengan_burst.png` (Codex's ultimate effect), `v5-flash.png` (the white frame: the whole overlay at 60 %), `v5-air.png` (both fighters airborne mid-strike), `v5-knockdown.png` (the defender going down under the impact burst), `v5-last.png`; `v5-match.gif` = the taskbar match through the real planner (484 frames) |
+| live arena, monitor 2, PrintWindow of its own window only | `python tools/arena_capture.py --monitor 2 --out <dir> --prefix v5` (the annotated copies `docs/img/v5-beam.png`, `v5-flash.png`, `v5-air.png` were removed in the V6 docs refresh; they are in git history): `v5-beam.png` (Claude's beam 13 ms after it fires: the head 56 px out of the hand, mid-extension, fired from range on the floor), `v5-orb-burst.png` (Codex's ultimate effect), `v5-flash.png` (the white frame: the whole overlay at 60 %), `v5-air.png` (both fighters airborne mid-strike), `v5-knockdown.png` (the defender going down under the impact burst), `v5-last.png`; `v5-match.gif` = the taskbar match through the real planner (484 frames) |
 | what the captures fixed | the first live run showed the fighters standing on a window top inside the HUD band, a beam knockback punting the defender off the top edge, the hover pinned under the HUD, a sprite-only flash and round-1 `ko_stars` looping into round 2: fixed (MIN_PLATFORM_Y, ceiling, flat beam knockback, floor-relative hover, full-window flash, fades) and re-captured |
 
 ### Not done / not verified
@@ -409,3 +409,48 @@ Summary of commit `744d818` (details in [CHANGELOG.md](CHANGELOG.md) and the com
 - (Resolved later the same day: `docs/img/live-taskbar.png` and `live-bout.gif` are real captures.) No live taskbar capture was first taken for the 2026-10-15 docs: Taskbar Fighters was not running then, and the docs work does not start
   or stop it. The hero images are offline renders and say so; `tools/taskbar_capture.py` + `tools/doc_images.py --annotate-live`
   make the live version.
+
+## V7 / v1.0.0 (2026-10-15): weapon move families, set pieces, arena V7, macOS port, packaging
+
+Four builders worked in parallel and left their work in the tree; one integration pass (Claude) merged it, wired the last
+pieces and committed it as v1.0.0. Details: [CHANGELOG.md](CHANGELOG.md), [docs/ANIMATION-NOTES.md](docs/ANIMATION-NOTES.md)
+section 8, [docs/ARENA.md](docs/ARENA.md), [docs/MAC-TESTING.md](docs/MAC-TESTING.md), [docs/PACKAGING.md](docs/PACKAGING.md).
+
+### Built
+
+- **Art and moves:** weapon families, 8-10 new attack moves per character, new reactions, contact sparks per hit kind,
+  128 px detail pass; choreography by move type (throws, juggles, chain pulls, dash-throughs, strings, armour).
+- **Set pieces:** `minis_core/setpieces.py` (taskbar, eight pieces) and `minis_core/arena_setpieces.py` (arena sword scenes).
+- **Arena V7:** options (rounds, endless, intensity, seconds, intro, outro), stage interaction, aerial game, camera, beam
+  clash, hazards; now also as CLI flags (`arena --rounds/--endless/--intensity/--seconds/--no-intro/--no-outro`), passed only
+  when set, through `start_arena` to the child `run arena` and into `Arena(options=...)`.
+- **macOS port:** `minis_platform`, `minis_mac`, merged with every commit on `mac-port` including the owner's Mac-session fixes
+  (`df05a4c` menu-bar icon hidden by macOS, `0d6813a` Retina-sharp HUD); `selftest-gui` on macOS now draws the configured
+  `fighter_size` art.
+- **Packaging:** art inside the wheel package `taskbar_fighters_assets` (mapped from the repo-root `assets/`, `assets_hd/`),
+  `paths.py` resolves checkout / PyInstaller / py2app / wheel, `mac` extra with the PyObjC pins, console script, help names
+  the program as started.
+- **Docs:** README merged with the launch top block, all doc images regenerated, `docs/MAC-HANDOFF.md` for the Mac session, no franchise
+  names in the tree (move names in the V4 work order and this log rewritten generically).
+
+### Verified
+
+| claim | evidence |
+| --- | --- |
+| unit suite | `python -m unittest discover -s tests` on Windows, Python 3.14: **560 tests OK, 14 skipped** (the opt-in process tests) |
+| CI | see the v1.0.0 commit's Actions run: Windows and macOS test jobs, `doctor --headless`, the wheel install check |
+| wheel | `python -m build` in a temp venv: 162 art files under `taskbar_fighters_assets/`, no top-level data. Installed into a fresh venv and run from another folder: `taskbar-fighters --help`, `doctor --headless` PASS 5/5, `fighters` lists all 13 characters from `site-packages/taskbar_fighters_assets` |
+| Windows bundle | PyInstaller onedir in that venv: `TaskbarFighters-cli.exe --help` (shows the new arena flags), `doctor --headless` PASS 5/5, `fighters` 13 characters, run from another folder |
+| arena flags | `ArenaCLI` tests: only set flags become options, the child argv round-trips, `run_arena` hands them to the arena |
+| paths | `tests/test_paths.py`: checkout, PyInstaller, py2app, wheel (a stray `site-packages/assets` is ignored), the package-dir mapping |
+| images | every `docs/img/*` regenerated by `tools/doc_images.py` (the taskbar strip now at 128 px; the KO finisher crop follows the V7 outro) and viewed. `packaging/launch_media.py` was run once against the 128 px strip and its output viewed (8 s gif and mp4), but the committed card and loop were left as they were: the owner wants them rebuilt after the next two features |
+
+### Not done / not verified
+
+- Not tagged: the owner holds v1.0.0 for desktop-pixel weapon forging in the arena and a jump-animation fix; the launch
+  media (`docs/social-preview.png`, `demo.gif`, `demo.mp4`) are redone after those.
+- `start` from the Windows bundle (the owner's live checkout was running; both share the data folder). LAUNCH.md has the
+  one manual check.
+- The top-level module is still `minis` in the wheel.
+- `PLATE_CLEAR_PX` (40) was sized for the 64 px art's reach (at most 33 px from the hip); at 128 px the reach is about twice
+  that. Not yet checked live whether a fighter at the right end of the zone can overlap the scoreboard.

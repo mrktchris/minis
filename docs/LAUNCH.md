@@ -2,23 +2,28 @@
 
 These are drafts. Nothing here has been posted, tagged or published. Each step is yours to do.
 
-## 0. Blockers before tagging v1.0.0
+## 0. Before tagging v1.0.0
 
-- [ ] **The Windows zip cannot `start` yet.** Its child processes still re-launch `python minis.py`. Apply item 1 of
-      [PACKAGING.md](PACKAGING.md) ("Child processes must re-launch the exe") after the mac port lands. Then build
-      locally (`pyinstaller --noconfirm --clean packaging/taskbar_fighters.spec`), double-click
-      `dist/TaskbarFighters/TaskbarFighters.exe`, and check that fighters appear and that `TaskbarFighters-cli.exe stop`
-      removes them. Stop your git-checkout copy first: both share `%LOCALAPPDATA%\minis`.
-- [ ] Apply PACKAGING.md items 2-6 (ROOT from `_MEIPASS`, `minis.json` beside the exe, `qa/`, shortcut commands, help
-      text).
-- [ ] After the 128 px art and the cinematic set pieces land, rebuild the card and the loop with
-      `python packaging/launch_media.py`. Check that the loop shows a set piece, then commit `docs/social-preview.png`,
-      `docs/demo.gif` and `docs/demo.mp4`. The card scales to a fixed height, so it follows any cell size.
-- [ ] Release notes, tweets and the README patch must use no franchise or IP names, only generic move and feature
-      words. Read them once more before tagging.
-- [ ] Merge `README_VIRAL_PATCH.md` into the top of `README.md`, then delete the patch file.
-- [ ] CI is green on master (the Windows jobs must pass; the macOS job is allowed to fail while the port is
-      experimental).
+**On hold (owner, 2026-10-15):** v1.0.0 is tagged only after two more features land: desktop-pixel weapon forging in the
+arena, and a jump-animation fix.
+
+Done on master (2026-10-15): the frozen-build path changes (PACKAGING.md items 1-6), the wheel ships the art inside the
+package `taskbar_fighters_assets`, the 128 px art and set pieces are in, the README patch is merged, and no franchise names
+remain (a `git grep` over the tree is clean). Left for you:
+
+- [ ] After the two features: `python packaging/launch_media.py` (it already renders the 128 px strip), view the card and
+      the loop, and commit `docs/social-preview.png`, `docs/demo.gif` and `docs/demo.mp4`. The committed ones still show
+      the V6 64 px art.
+- [ ] Bring `docs/release-notes/v1.0.0.md` and the CHANGELOG entry up to date with those features.
+- [ ] Check `docs/MAC-HANDOFF.md`: the Mac session's DONE items and anything under "Found on Mac".
+
+- [ ] **Double-click the Windows bundle once.** Stop your git-checkout copy first (`python minis.py stop`; both share
+      `%LOCALAPPDATA%\minis`), build (`pyinstaller --noconfirm --clean packaging/taskbar_fighters.spec`), double-click
+      `dist/TaskbarFighters/TaskbarFighters.exe`, check that fighters appear and that `TaskbarFighters-cli.exe stop`
+      removes them, then restart your checkout. `--help`, `doctor --headless` and `fighters` were verified from the bundle;
+      `start` from the bundle was not, because the live checkout was running.
+- [ ] Read `docs/release-notes/v1.0.0.md`, the tweets below and the README top once more.
+- [ ] CI is green on master, both the Windows and the macOS jobs.
 
 ## 1. Repo settings (the API cannot set these)
 
@@ -39,8 +44,9 @@ These are drafts. Nothing here has been posted, tagged or published. Each step i
 - [ ] Tag and push: `git tag v1.0.0 && git push origin v1.0.0`. The Release workflow tests, builds the Windows zip,
       wheel, sdist, source zip and mac zip, then publishes the release with those notes.
 - [ ] Download `TaskbarFighters-windows.zip` from the release on a clean Windows profile or VM and double-click it.
-- [ ] PyPI stays off until you add the pending publisher (see the comments at the bottom of
-      `.github/workflows/release.yml`). Move the art under a package before that (PACKAGING.md "Before PyPI").
+- [ ] PyPI publishes on the tag (trusted publishing, `pypi` environment). PyPI versions are immutable: if anything in the
+      wheel is wrong after upload, the fix is 1.0.1, never a re-upload. Check https://pypi.org/project/taskbar-fighters/
+      and `pip install taskbar-fighters` in a fresh venv afterwards.
 
 ## 3. Post (drafts, ≤280 characters each; X counts a link as 23)
 
@@ -62,7 +68,7 @@ Media in `docs/`: `demo.mp4` (8 s, 1280x720, best for X), `demo.gif` (the same l
 >
 > Claude Code is a ronin. Codex is a ninja. Gemini, Cursor, Ollama, LM Studio: each has its own.
 >
-> They live in your Windows taskbar and fight based on what your agents are actually doing.
+> They live in your taskbar and fight based on what your agents are actually doing.
 >
 > https://github.com/mrktchris/taskbar-fighters
 
@@ -73,6 +79,17 @@ Media in `docs/`: `demo.mp4` (8 s, 1280x720, best for X), `demo.gif` (the same l
 > "Install and run Taskbar Fighters from github.com/mrktchris/taskbar-fighters - follow AGENTS.md"
 >
 > Your agent sets it up. Then it has to fight.
+
+**Tweet D: the set pieces** (attach `img/arena-setpieces.png`)
+
+> Gave my AI agents' fighters hand-directed sword scenes.
+>
+> A frozen beat back to back, then the cut lands in slow motion. A blade lock that breaks into a riposte. Flame, water and
+> petal trails.
+>
+> It all plays in your taskbar while your agents work.
+>
+> https://github.com/mrktchris/taskbar-fighters
 
 **Thread (4 tweets)**
 
@@ -97,15 +114,15 @@ Media in `docs/`: `demo.mp4` (8 s, 1280x720, best for X), `demo.gif` (the same l
 4. (no media, or `social-preview.png`)
    > Privacy: it reads numbers only (token counts, states). No prompts, no file names, no network.
    >
-   > Windows .zip, pip, or let your agent install it.
+   > Windows .zip, pip install taskbar-fighters, or let your agent install it.
    >
    > https://github.com/mrktchris/taskbar-fighters
    >
    > Star it if your agents deserve a fight.
 
-Counted with X's rules (a link is 23 characters, an emoji is 2): A 204, B 265, C 205 or fewer, thread 1 210,
-2 231, 3 176, 4 209. Recount after any edit by pasting into the X composer. In the thread, the wrapped lines of
-tweets 2 and 3 are one paragraph each.
+Counted with X's rules (a link is 23 characters, an emoji is 2): A 204, B 257, C 205, D 270, thread 1 210, 2 231,
+3 176, 4 234. Recount after any edit by pasting into the X composer. In the thread, the wrapped lines of tweets 2 and 3 are
+one paragraph each.
 
 ## 4. After posting
 

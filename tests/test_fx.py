@@ -24,7 +24,7 @@ def sheet_fixture(tmp, res=2):
     meta = {'res': res, 'effects': {
         'hit_light': {'frames': [{'x': i * 32, 'y': 0, 'w': 32, 'h': 32, 'ms': 60} for i in range(3)], 'anchor': 'center', 'offset': [0, 0],
                       'loop': False, 'layer': 'front', 'hit_frame': 1, 'travel': None, 'shake': None},
-        'kamehameha': {'frames': [{'x': 0, 'y': 32, 'w': 32, 'h': 16, 'ms': 100}, {'x': 32, 'y': 32, 'w': 64, 'h': 16, 'ms': 300}], 'anchor': 'hand',
+        'beam_wave': {'frames': [{'x': 0, 'y': 32, 'w': 32, 'h': 16, 'ms': 100}, {'x': 32, 'y': 32, 'w': 64, 'h': 16, 'ms': 300}], 'anchor': 'hand',
                        'offset': [10, -2], 'loop': False, 'layer': 'front', 'hit_frame': 1, 'travel': {'speed': 200}, 'shake': {'frames': 6, 'amp': 4}},
         'broken': {'frames': [{'x': 90, 'y': 40, 'w': 32, 'h': 32, 'ms': 60}]},
     }}
@@ -40,7 +40,7 @@ class Loading(unittest.TestCase):
     def test_absent_sheet_gives_procedural_placeholders_for_everything(self):
         f = fxmod.Fx(paths=[self.tmp / 'nope.json'])
         self.assertEqual(f.loaded_from, [])
-        for name in fxmod.GENERIC + ('kamehameha', 'rasengan', 'anything'):
+        for name in fxmod.GENERIC + ('beam_wave', 'spiral_orb', 'anything'):
             e = f.get(name)
             self.assertTrue(e.frames and e.procedural, name)
             self.assertFalse(f.has_art(name))
@@ -55,8 +55,8 @@ class Loading(unittest.TestCase):
     def test_sheet_is_read_in_the_work_order_schema(self):
         f = fxmod.Fx(paths=[sheet_fixture(self.tmp)])
         self.assertEqual(f.res, 2)
-        self.assertTrue(f.has_art('hit_light') and f.has_art('kamehameha'))
-        e = f.get('kamehameha')
+        self.assertTrue(f.has_art('hit_light') and f.has_art('beam_wave'))
+        e = f.get('beam_wave')
         self.assertEqual((e.anchor, e.offset, e.layer, e.hit_frame, e.travel, e.shake), ('hand', (10, -2), 'front', 1, {'speed': 200.0}, {'frames': 6, 'amp': 4.0}))
         self.assertEqual([im.size for im, ms in e.frames], [(32, 16), (64, 16)])
         self.assertEqual(e.total_ms, 400)
@@ -91,13 +91,13 @@ class Playback(unittest.TestCase):
     def test_player_scales_hd_effects_down_for_the_taskbar_and_travels(self):
         f = fxmod.Fx(paths=[])
         p = EffectPlayer(f, res=1, fps=30)
-        i = p.spawn('kamehameha', 10.0, 100, 57, 1, owner='a')
+        i = p.spawn('beam_wave', 10.0, 100, 57, 1, owner='a')
         self.assertEqual(i.vx, 0)                                           # procedural beam: no travel -> stays put
         p.tick(10.0)
         pl = p.placements(10.05)
         self.assertEqual(len(pl), 1)
         im, lx, ty, layer, inst = pl[0]
-        self.assertEqual(im.size, (f.get('kamehameha').frames[0][0].width // 2, f.get('kamehameha').frames[0][0].height // 2))
+        self.assertEqual(im.size, (f.get('beam_wave').frames[0][0].width // 2, f.get('beam_wave').frames[0][0].height // 2))
         self.assertEqual(layer, 'front')
         p.tick(99.0)
         self.assertEqual(p.placements(99.0), [])                            # finished effects are dropped

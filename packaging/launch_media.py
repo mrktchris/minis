@@ -129,9 +129,10 @@ def social_preview(out=DOCS / 'social-preview.png'):
 
 
 # ------------------------------------------------------------------ demo loop (gif + mp4)
-# The same offline strip tools/doc_images.py renders for hero-bout.gif (real planner + renderer, DEMO numbers), at 20 fps
-# instead of 5 so the loop is smooth.  Stage = the fight zone (screen x 360..700) at 3x; scoreboard (x 746..940) at 2x below.
-FPS, STAGE_X, SB_X = 20, (360, 700), (746, 940)
+# The same offline strip tools/doc_images.py renders for hero-bout.gif (real planner + renderer, DEMO numbers, 128 px HD
+# fighters = the default fighter_size), at 20 fps instead of 5 so the loop is smooth.  Shown: screen x 300..940 (the fight
+# zone and the scoreboard) at 2x = 1280 px wide.
+FPS, STAGE_X = 20, (300, 940)
 
 
 def _strip_frames(seconds=34):
@@ -146,7 +147,7 @@ def _best_window(frames, meta, n):
     """Start index of the n-frame window with the most on-stage motion (frame-to-frame change in the fight zone), preferring
     windows inside a scripted bout so the loop is all fight."""
     import numpy as np
-    zone = [np.asarray(f.crop((STAGE_X[0], 0, STAGE_X[1], 64)).convert('L'), dtype=np.int16) for f in frames]
+    zone = [np.asarray(f.crop((STAGE_X[0], 0, STAGE_X[1] - 200, f.height)).convert('L'), dtype=np.int16) for f in frames]
     motion = [0] + [int(np.abs(zone[i] - zone[i - 1]).sum()) for i in range(1, len(zone))]
     best, best_i = -1, 0
     for i in range(0, len(frames) - n):
@@ -158,14 +159,10 @@ def _best_window(frames, meta, n):
     return best_i
 
 
-def _compose(strip, W, top=0, bg=(22, 23, 30)):
-    stage = up(strip.crop((STAGE_X[0], 0, STAGE_X[1], 64)), 3)                 # 1020 x 192
-    sb = up(strip.crop((SB_X[0], 17, SB_X[1], 64)), 2)                         # 388 x 94
-    H = top + stage.height + 12 + sb.height + 12
-    c = Image.new('RGBA', (W, H), bg + (255,))
+def _compose(strip, W=1280, top=0, bg=(22, 23, 30)):
+    stage = up(strip.crop((STAGE_X[0], 0, STAGE_X[1], strip.height)), 2)       # 1280 x 288 at fighter_size 128
+    c = Image.new('RGBA', (W, top + stage.height), bg + (255,))
     c.alpha_composite(stage, ((W - stage.width) // 2, top))
-    ImageDraw.Draw(c).rectangle([0, top + stage.height, W, H], fill=(32, 32, 32, 255))   # taskbar colour continues
-    c.alpha_composite(sb, ((W - sb.width) // 2, top + stage.height + 6))
     return c
 
 
@@ -176,8 +173,8 @@ def demo(gif_out=DOCS / 'demo.gif', mp4_out=DOCS / 'demo.mp4', seconds=8.0):
     clip = frames[a:a + n]
     print(f'demo: frames {a}..{a + n - 1} of {len(frames)} ({seconds:.0f} s at {FPS} fps)')
 
-    # GIF: 1020-wide stage, scoreboard under it; one shared palette, no dither (pixel art), 50 ms frames
-    gif = [_compose(f, 1020).convert('RGB') for f in clip]
+    # GIF: the 1280-wide strip; one shared palette, no dither (pixel art), 50 ms frames
+    gif = [_compose(f).convert('RGB') for f in clip]
     pal = Image.new('RGB', (gif[0].width, gif[0].height * 3))
     for k, i in enumerate((0, len(gif) // 2, len(gif) - 1)):
         pal.paste(gif[i], (0, k * gif[0].height))
@@ -206,11 +203,12 @@ def demo(gif_out=DOCS / 'demo.gif', mp4_out=DOCS / 'demo.mp4', seconds=8.0):
     d.text(((W - d.textlength(u, font=uf)) / 2, 600), u, font=uf, fill=DIM)
     with tempfile.TemporaryDirectory() as td:
         for i, f in enumerate(clip):
-            body = _compose(f, 1020)
+            body = _compose(f)
             fr = head.copy()
-            ImageDraw.Draw(fr).rounded_rectangle([(W - 1020) // 2 - 3, 222, (W + 1020) // 2 + 2, 222 + body.height + 5], 10,
-                                                 outline=(70, 74, 90, 255), width=3)
-            fr.alpha_composite(body, ((W - 1020) // 2, 225))
+            y0 = 236
+            ImageDraw.Draw(fr).line([(0, y0 - 2), (W, y0 - 2)], fill=(70, 74, 90, 255), width=2)
+            ImageDraw.Draw(fr).line([(0, y0 + body.height + 1), (W, y0 + body.height + 1)], fill=(70, 74, 90, 255), width=2)
+            fr.alpha_composite(body, (0, y0))
             fr.convert('RGB').save(Path(td) / f'f{i:04d}.png')
         cmd = [ff, '-y', '-loglevel', 'error', '-framerate', str(FPS), '-i', str(Path(td) / 'f%04d.png'),
                '-vf', 'fps=30', '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p',
