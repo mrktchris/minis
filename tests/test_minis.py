@@ -1,4 +1,4 @@
-import io, json, os, sys, unittest
+import io, json, ntpath, os, sys, unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
@@ -68,7 +68,7 @@ class Stop(Isolated):
         self.assertEqual(sorted(c[2] for c in self.killed), ['111', '222', '333'])
         for c in self.killed:
             self.assertEqual(c[0], minis.TASKKILL)
-            self.assertTrue(os.path.isabs(c[0]) and c[0].lower().endswith(r'system32\taskkill.exe'))
+            self.assertTrue(ntpath.isabs(c[0]) and ntpath.normcase(c[0]).endswith(r'system32\taskkill.exe'))   # a Windows path on any OS
         for role in ('a', 'b', 'director'):
             self.assertFalse((self.data / f'{role}.pid').exists())
         self.assertIsNone(bus.read('a', now=__import__('time').time()))          # a killed fighter reads as gone
@@ -494,7 +494,7 @@ class FighterLoop(Isolated):
         self.assertTrue(self.f.brain.view(self.t['mono'])['dim'])
 
     def test_arena_cli_requires_a_monitor_and_stop_asks_first(self):
-        from minis_win import shell
+        shell = minis.plat.shell()                                           # the backend minis.main uses on this OS
         one = [{'index': 1, 'rect': (0, 0, 1, 1), 'work': (0, 0, 1, 1), 'primary': True}]
         two = one + [{'index': 2, 'rect': (1, 0, 2, 1), 'work': (1, 0, 2, 1), 'primary': False}]
         with mock.patch.object(shell, 'monitors', lambda: one), redirect_stdout(io.StringIO()) as out:

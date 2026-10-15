@@ -183,8 +183,8 @@ class TrayLogic(unittest.TestCase):
         self.assertFalse(opts[T.RIVAL]['checked'])
         self.assertEqual(L.find_item(T.tray_menu({}), 'Start arena')[0], T.ARENA)
         self.assertTrue(T.tray_menu(dict(select_ok=False, arena_ok=False))[0][2]['disabled'])
-        from minis_win import shell                                            # the spec is what the real menu builder takes
-        self.assertEqual(sum(1 for e in shell.menu_entries(items) if e[0] == 'sep'), 2)
+        from minis_platform.menus import menu_entries                          # the spec is what the real menu builder takes
+        self.assertEqual(sum(1 for e in menu_entries(items) if e[0] == 'sep'), 2)
 
 
 class Tooltip(unittest.TestCase):
