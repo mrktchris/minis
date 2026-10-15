@@ -93,7 +93,7 @@ class Timeline(unittest.TestCase):
     def test_directives_and_texts(self):
         tl, t_end, s = rounds.make_match(plan(), ATL, fx.default())
         names = {n for w in tl for t, n, o in tl[w] if n.startswith('@')}
-        self.assertTrue({'@hp', '@fx', '@banner', '@record'} <= names <= {'@hp', '@fx', '@banner', '@record', '@shake', '@flash', '@whiff'}, names)
+        self.assertTrue({'@hp', '@fx', '@banner', '@record'} <= names <= {'@hp', '@fx', '@banner', '@record', '@shake', '@flash', '@whiff', '@impact'}, names)
         banners = [o['banner'] for t, n, o in tl['a'] if n == '@banner']
         self.assertEqual(banners[:2], ['round1', 'fight'])
         self.assertIn('ko', banners)
@@ -104,7 +104,7 @@ class Timeline(unittest.TestCase):
         self.assertEqual(rec['chars'], {'a': 'claude', 'b': 'codex'})
         ults = [o for w in tl for t, n, o in tl[w] if n == '@fx' and o.get('kind') == 'ultimate' and not o.get('impact')]   # the impact burst lands on the defender
         allowed = {n for a in (ATL['claude'], ATL['codex']) for _, n, _ in a.move_fx(a.ultimate())}
-        self.assertTrue(ults and all(o['fx'] in allowed for o in ults), (ults, allowed))
+        self.assertTrue(all(o['fx'] in allowed for o in ults), (ults, allowed))
 
     def test_every_roster_pair_can_play_a_match(self):
         from minis_core.atlas import available
@@ -206,6 +206,162 @@ class Record(Isolated):
             control.set_winners('coin')
         self.assertTrue(control.set_winners('decided'))
         self.assertEqual(control.winners(), 'decided')
+
+
+class FightFeelV6(unittest.TestCase):
+    """V6 fight feel: knockdowns stay down until the get-up, the finisher beat, time-outs, rare ultimates, comeback, boost,
+    braces during charge-ups, spacing and the hitstop floor."""
+
+    def matches(self, n=40):
+        from minis_core.atlas import available
+        chars = available()
+        out = []
+        for seed in range(n):
+            c1, c2 = chars[seed % len(chars)], chars[(seed * 3 + 1) % len(chars)]
+            p = plan(seed, chars=(c1, c2))
+            tl, t_end, s = rounds.make_match(p, {c1: LIB[c1], c2: LIB[c2]}, fx.default())
+            out.append((p, tl, t_end, s))
+        return out
+
+    def test_a_knockdown_that_is_not_a_ko_stays_down_and_gets_up_the_moment_it_lands(self):
+        seen = 0
+        for p, tl, t_end, s in self.matches(20):
+            for w in 'ab':
+                steps = [(t, n, o) for t, n, o in tl[w] if not n.startswith('@')]
+                for i, (t, n, o) in enumerate(steps):
+                    if n == 'knockdown' and o.get('hp', {}).get(w, 0) > 0:
+                        seen += 1
+                        a = LIB[p['chars'][w]]
+                        t_land = t + a.total_ms('knockdown') / 1000.0 + o['hitstop'] / 1000.0
+                        nxt = steps[i + 1]
+                        self.assertEqual(nxt[1], 'getup', (w, t, steps[i:i + 3]))          # never idle in between
+                        self.assertAlmostEqual(nxt[0], t_land, places=6)
+        self.assertGreater(seen, 3)
+
+    def test_nobody_is_hit_while_on_the_floor(self):
+        for p, tl, t_end, s in self.matches(20):
+            for w in 'ab':
+                o_w = 'b' if w == 'a' else 'a'
+                ups = [(t, t + LIB[p['chars'][w]].total_ms('getup') / 1000.0) for t, n, o in tl[w] if n == 'getup']
+                hits = [t for t, n, o in tl[w] if 'react_to' in o]
+                for t0, t1 in ups:
+                    self.assertFalse(any(t0 < h < t1 - 1e-6 for h in hits), (w, t0, t1, hits))
+
+    def test_the_final_ko_plays_a_finisher_beat_inside_three_and_a_half_seconds(self):
+        n = 0
+        for p, tl, t_end, s in self.matches(30):
+            if not s['rounds'][-1]['ko']:
+                continue
+            n += 1
+            ki = s['final_ko']
+            tc, loser, champ = ki['tc'], s['loser'], s['winner']
+            self.assertLessEqual(t_end - tc, rounds.POST_KO_MAX_S + 1e-6)
+            ko = [o for t, n2, o in tl[loser] if n2 == 'knockdown' and abs(t - tc) < 1e-6][0]
+            self.assertGreaterEqual(ko['hitstop'], rounds.KO_HITSTOP_MS)                    # freeze on the blow...
+            self.assertEqual(ko['slow'][2], rounds.SLOW_K)                                    # ...then slow motion
+            self.assertTrue(any(n2 == '@impact' and abs(t - tc) < 1e-6 for t, n2, o in tl[loser]))
+            self.assertTrue(any(n2 == '@fx' and o['fx'] == 'dust' and t > tc for t, n2, o in tl[loser]))
+            pose = [(t, n2) for t, n2, o in tl[champ] if n2 in ('victory', 'victory2') and t > tc]
+            self.assertTrue(pose and pose[0][0] < tc + 1.5, pose)
+            win = [o for t, n2, o in tl['a'] if n2 == '@banner' and o['banner'] == 'winner']
+            self.assertEqual(win[-1]['over'], champ)
+            self.assertTrue(win[-1]['name'])
+            ups = [(t, o) for t, n2, o in tl[loser] if n2 == 'getup' and t > tc]
+            self.assertEqual(len(ups), 1)                                                    # stays down, then slumps up
+            self.assertGreater(ups[0][0], ki['down'] + 0.5)
+            self.assertIn('slow', ups[0][1])
+            self.assertLessEqual(ups[0][0] + LIB[p['chars'][loser]].total_ms('getup') / 1000.0 / rounds.GETUP_SLOW_K, t_end)
+        self.assertGreater(n, 10)
+
+    def test_a_round_called_on_time_says_time_and_the_loser_slumps(self):
+        found = 0
+        for seed in range(60):
+            p = plan(seed)
+            tl, t_end, s = rounds.make_match(p, ATL, fx.default())
+            for r in s['rounds']:
+                if r['ko']:
+                    continue
+                found += 1
+                loser = 'b' if r['winner'] == 'a' else 'a'
+                self.assertTrue(any(n == '@banner' and o['banner'] == 'time' and r['t0'] < t <= r['t1'] + 0.01 for t, n, o in tl['a']))
+                slumps = [o for t, n, o in tl[loser] if n in rounds.SLUMP and r['t0'] < t <= r['t1'] + 0.5]
+                self.assertTrue(slumps and slumps[0].get('hold'), (seed, r))
+                falls = [t for t, n, o in tl[loser] if n == 'knockdown' and 'react_to' not in o]
+                self.assertEqual(falls, [])                                                  # nobody falls over unprovoked
+            if found >= 2:
+                break
+        self.assertGreaterEqual(found, 1)
+
+    def test_the_ultimate_is_rare_one_per_match_and_only_below_30_hp(self):
+        n_ult = 0
+        ms = self.matches(80)
+        for p, tl, t_end, s in ms:
+            ults = [(w, b) for w in 'ab' for b in s['beats'][w] if b['kind'] == 'ultimate']
+            self.assertLessEqual(len(ults), 1)
+            n_ult += len(ults)
+            for w in 'ab':
+                for t, n, o in tl[w]:
+                    if o.get('kind') == 'ultimate' and 'contact' in o:
+                        hp = [h for t2, h in rounds.hp_trace(tl) if t2 < t][-1]
+                        self.assertLess(hp[w], 30)
+        self.assertLess(n_ult / len(ms), 0.6)
+        self.assertGreater(n_ult, 0)
+        supers = sum(1 for p, tl, t_end, s in ms for w in 'ab' for b in s['beats'][w] if b['kind'] == 'super')
+        self.assertLess(supers / len(ms), 1.6)                                              # V5: ~3 per match
+
+    def test_a_round_loser_gets_a_comeback_exchange_and_kos_end_on_a_signature_move(self):
+        comebacks = sig = kos = 0
+        for p, tl, t_end, s in self.matches(30):
+            if len(s['rounds']) >= 2:
+                self.assertGreaterEqual(s['story']['comebacks'], 1)
+            comebacks += s['story']['comebacks']
+            if s['rounds'][-1]['ko']:
+                kos += 1
+                w = s['winner']
+                g = LIB[p['chars'][w]].signature()
+                ko = [o for t, n, o in tl[s['loser']] if n == 'knockdown' and abs(t - s['final_ko']['tc']) < 1e-6][0]
+                sig += ko['react_to'] in (g['strike'], g['super'], g['ultimate'], g['special'])
+        self.assertGreater(comebacks, 20)
+        self.assertGreater(sig / kos, 0.85)
+
+    def test_trailing_fighters_win_more_rounds_than_v5_two_nil_rate(self):
+        two_nil = sum(1 for p, tl, t_end, s in self.matches(80) if min(s['wins'].values()) == 0)
+        self.assertLess(two_nil / 80, 0.45)                                                 # V5: 53 %
+
+    def test_boost_opens_with_the_signature_super_in_a_match_and_a_spar(self):
+        p = dict(plan(7), boost=['b'])
+        tl, t_end, s = rounds.make_match(p, ATL, fx.default())
+        first = [b for b in s['beats']['b'] if b['kind'] in ('strike', 'super', 'special', 'ultimate', 'counter')][0]
+        self.assertEqual((first['kind'], first['anim'], first['outcome']), ('super', ATL['codex'].signature()['super'], 'hit'))
+        self.assertEqual(s['story']['boosts'], 1)
+        sp = dict(kind='spar', left=LEFT, right=RIGHT, pos={LEFT: 400, RIGHT: 432}, t0=50.0, seed=11, chars={LEFT: 'claude', RIGHT: 'codex'}, boost=['a'])
+        tl2, _, _ = make_timeline('spar', sp, LIB, fx.default())
+        kinds = [o.get('kind') for t, n, o in tl2[LEFT] if 'contact' in o]
+        self.assertEqual(kinds[0], 'super')
+
+    def test_the_defender_braces_during_a_long_wind_up(self):
+        braced = 0
+        for p, tl, t_end, s in self.matches(40):
+            for w in 'ab':
+                o_w = 'b' if w == 'a' else 'a'
+                for t, n, o in tl[w]:
+                    if o.get('kind') in ('super', 'ultimate') and 'contact' in o and o['contact'] - t >= rounds.BRACE_MIN_S and o['outcome'] == 'hit':
+                        guard = [(t2, n2) for t2, n2, o2 in tl[o_w] if t < t2 < o['contact'] and n2 in ('block', 'crouch_block') and o2.get('hold')]
+                        self.assertTrue(guard, (w, n, t, o['contact']))
+                        braced += 1
+        self.assertGreater(braced, 3)
+
+    def test_strikes_stand_at_their_reach_and_hitstop_has_a_floor(self):
+        for p, tl, t_end, s in self.matches(20):
+            pos = dict(p['pos'])
+            ev = sorted((t, w, n, o) for w in 'ab' for t, n, o in tl[w] if 'to' in o)
+            for t, w, n, o in ev:
+                pos[w] = o['to']
+                self.assertGreaterEqual(abs(pos['a'] - pos['b']), rounds.MIN_APART - 1e-6, (t, w, n, pos))
+            for w in 'ab':
+                for t, n, o in tl[w]:
+                    if 'contact' in o and o.get('outcome') == 'hit':
+                        self.assertGreaterEqual(o['hitstop'], 100, (n, o))
 
 
 if __name__ == '__main__':

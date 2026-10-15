@@ -28,7 +28,10 @@ Everything is visual. It reads numbers, it never touches your agents, your windo
   exchange every 3-6 min instead. The plate keeps saying `sleeping` throughout.
 - **Matches**: best-of-3 rounds with HP, `ROUND / FIGHT! / K.O. / WINNER` banners, hit, block, dust and KO effects,
   and one anime-homage ultimate per character. Winners are drawn by a health score (`decided`) or evenly (`random`).
-- **Scoreboard widget**: W-L per character, mode, a 7-day context sparkline, HP bars during a match, three buttons.
+- **Fighter select** (V6): pick which program fights on each side (or leave it on auto) and what each program looks
+  like (any character on disk), from the CLI, the right-click menu or a Smash-style select screen above the taskbar.
+- **Scoreboard widget**: short names and W-L per program, readable HP bars during a match, a plain result line after
+  it ("CLAUDE WINS 2-1"), a 7-day context sparkline, three 20 px buttons; click a name to pick that side's fighter.
 - **Arena mode**: a full-monitor click-through overlay where the HD fighters jump between the top edges of your
   windows, crack and shatter them, throw letters and shake the screen. All of it is drawn on the overlay; no real
   window is moved, focused or closed.
@@ -104,7 +107,9 @@ is not faked because it cannot be measured. Full rules: the *Telemetry* section 
   optional `--freeze` backdrop is a screenshot held only in that process's memory; it is never written to disk.
 - Files written: `%LOCALAPPDATA%\minis\` (bus files, `assign.json`, `control.json`, `record.json`, `history.json`,
   pid files, small rotating logs) and, for previews and the self-test, this folder.
-- `stop` only ends processes whose exact command line it can prove are its own.
+- `stop` only ends processes whose exact command line it can prove are its own (an absolute path to this `minis.py`).
+- The director restarts a fighter slot that died, only one it saw running, only after proving the relaunch command is
+  its own, at most three times in ten minutes.
 
 ## Install and run
 
@@ -119,24 +124,61 @@ python minis.py start
 ```
 
 ```
-python minis.py start            director + fighter slots a and b (three processes, no console windows)
+python minis.py start            director + fighter slots a and b (three processes, no console windows); after ~3 s it
+                                 prints what is on screen ("a: Claude Code, b: Sparring bot asleep") or why nothing is
 python minis.py stop             stops only the PIDs it recorded itself, after checking each one's command line
-python minis.py status           processes, which program each slot shows, pause state, bus freshness
+python minis.py status           one plain line first (running?, who is on which side, rival mode), then the details
 python minis.py pause | resume   freeze every fighter on one frame (plates keep updating) / animate again
 python minis.py plates on|off    show or hide both HUD plates
 python minis.py winners decided|random   how match winners are drawn (default: decided)
 python minis.py demo [spar|clash|ranged|match]   start one bout now
 python minis.py rival on|off     rival mode: wake a sleeping partner (or the sparring bot) for a match now and then
+python minis.py flash on|off     white flashes and impact frames on big hits (off: never a flash, for anyone who dislikes strobing)
+python minis.py fighters         programs seen and their state, every character, the current lineup
+python minis.py fighters set a|b <program|character>   a program: keep it on that side; a character: that side's look
+python minis.py fighters pin a|b <program>             keep a program on that side, asleep when it is not detected
+python minis.py fighters auto    both sides back to auto (looks kept);  `fighters reset` also forgets every look
+python minis.py pick a|b <program>|auto                alias of `fighters pin` (or auto for one side)
+python minis.py skin <program> <character>|default     draw a program as another character, e.g. `skin grok codex`
+python minis.py show [a|b]       bring back a hidden fighter (the scoreboard shows "B hidden 52m [show]" meanwhile)
 python minis.py detect           which known AI programs the sources see right now, and how (names and numbers only)
 python minis.py monitors         list monitors for the arena
-python minis.py arena --monitor N [--freeze] [--seconds S]   arena mode on monitor N; `arena stop` to leave
+python minis.py arena [--monitor N] [--freeze] [--seconds S]   arena mode (default: the Arena button's monitor); `arena stop`
 python minis.py selftest-gui     real-desktop check: both windows visible over the taskbar, survive a taskbar raise
-python -m unittest discover -s tests          314 tests (11 skipped unless MINIS_INTEGRATION=1)
+python -m unittest discover -s tests          384 tests (11 skipped unless MINIS_INTEGRATION=1)
 ```
 
-Right-click a fighter or its plate for *Quit this mini / Hide for 1 hour / Hide (Show) HUD plates / Pause all
-animations / Start a bout now / Start a match now / Winners: decided <-> random / Arena mode... / Rival mode: on <->
-off*.
+Right-click a fighter or its plate for a real Windows menu:
+
+- **Fighter (left/right side)** submenu: *Auto* (checked while the director chooses), then every program with its state
+  (`working`, `idle`, `asleep`, `stand-in` ...); never-seen programs are greyed.
+- **Look (program)** submenu: *Default (its own character)* and every character on disk, the current one checked.
+- *Select fighters...* opens the select screen.
+- Checkmarks: *Pause all animations*, *HUD plates*, *Flash effects*, *Rival mode*; *Who wins* submenu: *Healthier program
+  usually wins* / *Coin flip*.
+- *Start a bout now*, *Start a match now (best of 3)*, *Arena mode* (checked while it runs).
+- *Hide this fighter* (until `show` or the scoreboard's *show*), *Hide for 1 hour*, *Quit minis* (stops everything).
+
+## Fighter select (V6)
+
+The lineup lives in `control.json` (`lineup`: `{"a": "auto" | program id, "b": ..., "skins": {program id: character id}}`).
+
+- **Pick** a program for a side and it stays there: live when it is detected, asleep and dimmed when it is not, even
+  after the 24 h dormant window. A side on `auto` follows the director's rules and never takes a picked program. Picking
+  the program the other side holds moves it over and puts the other side back on auto.
+- **Look**: any program can wear any character (`skin grok codex`), so Grok, aider and the sparring bot no longer all
+  share the generic agent. The plate still names the program ("Grok"), never the costume. A look change waits until the
+  fighter is home, so a bout is never cut off.
+- **Select screen**: *Select fighters...* in the menu, or a click on a name on the scoreboard (that side only). A small
+  layered window above the taskbar: a WHO row (AUTO, then every detected or remembered program with its portrait and
+  state) and a LOOK grid of every character on disk (read each time it opens, so a bigger roster just grows the grid,
+  seven per row). P1 (red, left) chooses, then P2 (blue, right). Arrows + Enter, Backspace to go back, Esc or a click
+  elsewhere cancels; the mouse works too (click a tile; the wheel moves through looks). Confirming flashes a short VS
+  card and writes the lineup. It is the only minis window that takes the keyboard focus, and only while it is open.
+- **Records are per program** now (`record.json` `programs`). The V5 per-character table is migrated on first read for
+  characters that belong to one program; the shared `generic` line cannot be split and stays in `characters` untouched.
+
+`python tools/ui_previews.py` renders the select screen and the scoreboard states to PNGs offscreen.
 
 The roam zone defaults to screen x 40-900, the empty stretch left of centred taskbar icons measured on the author's
 2560x1440 display at 100% DPI. A different icon layout needs a different `zone` in `minis.json` next to `minis.py`
@@ -254,6 +296,8 @@ without the art. Two V5.1 keys, documented in the file's own `schema_notes` and 
   `arena stop`, the menu and the widget all end it. The process measures its own CPU and drops from 30 to 20 fps above
   10% of one core. `python tools/arena_capture.py --monitor N --out <dir>` runs one match and saves PrintWindow captures
   of the arena's own window at the beam, the flash, an air exchange and a knockdown (never a screenshot of the monitor).
+  `arena capture <png>` refuses while `--freeze` is on and writes only under `qa/` or the data folder. The menu and
+  scoreboard ask the arena to leave without waiting; the loop force-stops it after 4 s if it has not.
 
 See **[MOVELIST.md](MOVELIST.md)** for every move, trigger and timing, and **[docs/ANIMATION-NOTES.md](docs/ANIMATION-NOTES.md)**
 for the animation rules the rig follows.

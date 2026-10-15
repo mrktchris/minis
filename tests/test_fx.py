@@ -144,7 +144,8 @@ class HD(unittest.TestCase):
         self.assertEqual(h.ground_y, a.ground_y * 2)
         fr, fh = a.frame_image('jab', 2, 1), h.frame_image('jab', 2, 1)
         self.assertEqual(fh.size, (128, 128))
-        self.assertEqual(fh.getpixel((60, 60)), fr.getpixel((30, 30)))
+        if h.upscaled:                                                      # the fallback is the 64 px frame doubled; real HD has its own shading
+            self.assertEqual(fh.getpixel((60, 60)), fr.getpixel((30, 30)))
         self.assertEqual(h.meta['projectile']['speed'], a.meta['projectile']['speed'] * 2)
         self.assertEqual(h.total_ms('jab'), a.total_ms('jab'))
         if not h.upscaled:                                                  # the real HD build has landed
@@ -171,6 +172,26 @@ class HD(unittest.TestCase):
         self.assertEqual(h.ultimate(), 'reverse')
         with self.assertRaises(ValueError):
             Atlas('claude', tmp, hd=False)                                  # a RES 2 atlas cannot serve the 64 px taskbar
+
+
+class FightFeelV6(unittest.TestCase):
+    def test_time_banner_and_the_winner_name_banner(self):
+        f = fxmod.Fx(paths=[])
+        t = f.banner('time')
+        self.assertGreater(t.width, 10)
+        n = f.banner('winner', name='Codex')
+        self.assertGreater(n.width, f.banner('winner').width)                  # "CODEX WINS" is wider than "WINNER"
+        self.assertIs(n, f.banner('winner', name='Codex'))                      # cached
+        with self.assertRaises(ValueError):
+            f.banner('nope')
+
+    def test_flashes_last_at_least_100_ms(self):
+        from minis_core import effects
+        self.assertGreaterEqual(effects.FLASH_S, 0.1)
+        p = EffectPlayer(fxmod.Fx(paths=[]), res=1, fps=30)
+        p.flash_at(1.0)
+        self.assertGreater(p.flash(1.09), 0)                                    # still white three 30 fps redraws later
+        self.assertEqual(p.flash(1.11), 0)
 
 
 if __name__ == '__main__':

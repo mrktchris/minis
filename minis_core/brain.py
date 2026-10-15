@@ -34,6 +34,10 @@ NEEDS = {
     'match': rounds.NEEDS,
 }
 BOUT_KINDS = ('spar', 'clash', 'ranged', 'match')
+MIN_HOLD_MS = 50          # V6: a smear / hit frame shorter than this can fall between two taskbar redraws (30 fps = 33 ms)
+BOOST_WINDOW_S = 20.0     # V6: an agent that finished a task lands its signature super if a bout starts within this
+PULSE_S, PULSE_ON_S, PULSE_ALPHA = 1.0, 0.15, 0.35     # V6: near the context limit / low HP: a short white pulse every second
+LOW_HP = 25
 
 
 def other(slot):
@@ -146,9 +150,13 @@ def make_timeline(kind, plan, atlases, fx=None):
         t_end = t
 
     elif kind == 'ranged':
+        # V6: the first shot is blocked; the answer either lands (a hit, the shooter taunts) or is parried (the parrier
+        # taunts).  V5 always ended block, block, both taunt.
         t = t0 + 0.4
         spec = {w: A(w).signature()['special'] for w in (left, right)}
-        for att in (left, right):
+        ending = rng.choice(['hit', 'parry'])
+        winner = None
+        for n, att in enumerate((left, right)):
             dfn = right if att == left else left
             mv = spec[att]
             spawn = t + A(att).start_ms(mv, A(att).anim[mv]['proj_frame']) / 1000.0
@@ -159,13 +167,27 @@ def make_timeline(kind, plan, atlases, fx=None):
             tl[att].append((t, mv, {}))
             tl[att].append((t + tot(att, mv), 'idle', {}))
             projs.append(dict(owner=att, spawn=spawn, arrive=arrive, dir=direction, x0=plan['pos'][att], speed=speed, move=mv))
-            tl[dfn].append((max(t0, arrive - 0.6), 'block', {}))
-            tl[dfn].append((arrive, 'block_hit', {'react_to': mv}))
-            tl[dfn].append((arrive + tot(dfn, 'block_hit'), 'idle', {}))
+            last = n == 1
+            if last and ending == 'hit' and 'hit' in A(dfn).anim:
+                tl[dfn].append((arrive, 'hit', {'react_to': mv, 'outcome': 'hit'}))
+                tl[dfn].append((arrive + tot(dfn, 'hit'), 'idle', {}))
+                winner = att
+            elif last and ending == 'parry' and 'parry' in A(dfn).anim:
+                tp = max(t0, arrive - cont(dfn, 'parry'))         # the swat's own hit frame meets the projectile
+                tl[dfn].append((tp, 'parry', {'react_to': mv, 'outcome': 'parry'}))
+                tl[dfn].append((tp + tot(dfn, 'parry'), 'idle', {}))
+                winner = dfn
+            else:
+                tl[dfn].append((max(t0, arrive - 0.6), 'block', {}))
+                tl[dfn].append((arrive, 'block_hit', {'react_to': mv}))
+                tl[dfn].append((arrive + tot(dfn, 'block_hit'), 'idle', {}))
             t = arrive + 0.9
-        for w in (left, right):
+        for w in ((winner,) if winner else (left, right)):
             tl[w].append((t, 'taunt', {}))
-        t_end = t + tot(left, 'taunt') + 0.3
+        loser = None if winner is None else (right if winner == left else left)
+        if loser and 'shrug' in A(loser).anim:
+            tl[loser].append((t + 0.1, 'shrug', {}))
+        t_end = t + max(tot(w, 'taunt') for w in (left, right)) + 0.3
     else:
         raise ValueError(kind)
     for w in tl:
@@ -222,7 +244,7 @@ class Brain:
         self.next_wander = now + rng.uniform(10, 20)
         self.work_variant, self.work_switch = 'work', now + 10
         self.next_shrug = now + rng.uniform(10, 16)
-        self.next_shadow = now + rng.uniform(cfg.get('shadowbox_min_s', 3), cfg.get('shadowbox_max_s', 6))
+        self.next_shadow = now + rng.uniform(cfg.get('shadowbox_min_s', 8), cfg.get('shadowbox_max_s', 14))
         self.next_console = now + rng.uniform(cfg.get('console_min_s', 40), cfg.get('console_max_s', 80))
         self.next_match = now + rng.uniform(cfg.get('match_min_s', 180), cfg.get('match_max_s', 360))
         self.rival = True            # control.json `rival` (set by the owner each tick): a sleeping partner still fights (V5.1)
@@ -232,7 +254,14 @@ class Brain:
         self.demo = None            # {'kind', 'until'}: a bout asked for by the user, sent as soon as both are free
         self.ko_until = 0.0
         self.stop = None             # (t_start, t_end): hitstop freeze of the animation clock (V5)
-        self.slide = None            # (t0, t1, x0, x1): the fighter slides while a move plays (dash-in, knockback) (V5)
+        self.slow = None             # (t_start, t_end, k): slow motion of the animation clock (V6 finisher)
+        self.slide = None            # (t0, dur, x0, x1): the fighter slides while a move plays (dash-in, knockback) (V5;
+                                     # V6: on the frozen / slowed clock, so a knockback waits out the hitstop)
+        self.hold = False            # V6: the current one-shot keeps its last frame (brace, slump) instead of returning to idle
+        self.flashes = None          # V6: control.json `flashes` (the owner may set it; None = read it here, throttled)
+        self._flash_cache, self._flash_read = True, -1e9
+        self.finish_due = {}         # V6: slot -> deadline (monotonic) or 'after' (finished during a bout): boost super
+        self.shadow_pick = None      # V6: a no-repeat picker for shadowboxing
         self.stun_until = 0.0        # dizzy after a fast drag / a throw landing
         self.throw_state = None      # a Shift-drag throw in flight
         self.last_now = now
@@ -247,20 +276,63 @@ class Brain:
         self.next_rival_spar = now + self.rng.uniform(float(c.get('rival_spar_min', 3)), float(c.get('rival_spar_max', 6))) * 60.0
 
     # -------------------------------------------------------------- animation plumbing
-    def play(self, name, now, loop=None):
+    def play(self, name, now, loop=None, hold=False):
         if name not in self.atlas.anim:
             name, loop = 'idle', None
         if name == self.anim and self.anim_loop and (loop is None or loop):
             return
         self.anim, self.anim_t0 = name, now
         self.anim_loop = self.atlas.anim[name]['loop'] if loop is None else loop
+        self.hold = bool(hold)
+
+    def clock(self, since, now):
+        """Seconds of animation time between `since` and `now`: the hitstop window stands still, the slow-motion window
+        runs at its k (V6).  Frames and slides both run on this clock, so a knockback slide waits out the freeze."""
+        el = now - since
+        st = self.stop
+        if st is not None:
+            el -= max(0.0, min(now, st[1]) - max(st[0], since))
+        sl = self.slow
+        if sl is not None:
+            el -= max(0.0, min(now, sl[1]) - max(sl[0], since)) * (1.0 - sl[2])
+        return max(0.0, el)
+
+    def frozen(self, now):
+        st, sl = self.stop, self.slow
+        return bool((st and st[0] <= now < st[1]) or (sl and sl[0] <= now < sl[1]))
+
+    def held_ms(self, name):
+        """Frame durations of a one-shot with every smear / hit frame lasting at least MIN_HOLD_MS, the extra taken from
+        the frame before it, so the contact time and the total stay exactly as authored (the timeline relies on them).
+        None when nothing needs changing."""
+        cache = self.__dict__.setdefault('_held', {})
+        key = (id(self.atlas), name)
+        if key not in cache:
+            a = self.atlas.anim.get(name) or {}
+            ms = [f['ms'] for f in a.get('frames', [])]
+            keep = set(a.get('smear_frames') or []) | ({a['hit_frame']} if 'hit_frame' in a else set())
+            changed = False
+            for i in sorted(keep):
+                if 0 < i < len(ms) and ms[i] < MIN_HOLD_MS and (i - 1) not in keep:
+                    need = MIN_HOLD_MS - ms[i]
+                    if ms[i - 1] - need >= 30:
+                        ms[i - 1] -= need
+                        ms[i] += need
+                        changed = True
+            cache[key] = ms if changed else None
+        return cache[key]
 
     def frame(self, now):
-        el = now - self.anim_t0
-        st = self.stop
-        if st is not None:                                        # hitstop: the clock stands still for the overlap
-            el -= max(0.0, min(now, st[1]) - max(st[0], self.anim_t0))
-        return self.atlas.locate(self.anim, el * 1000.0, self.anim_loop)
+        el = self.clock(self.anim_t0, now) * 1000.0
+        held = None if self.anim_loop else self.held_ms(self.anim)
+        if held is None:
+            return self.atlas.locate(self.anim, el, self.anim_loop)
+        acc = 0.0
+        for i, m in enumerate(held):
+            acc += m
+            if el < acc:
+                return i, False
+        return len(held) - 1, True
 
     def _work_anims(self):
         ctx = (self.snap.ctx_pct or 0) if self.snap else 0
@@ -311,7 +383,7 @@ class Brain:
         else:
             self._tick_home(now, dt)
         idx, done = self.frame(now)
-        if done and not self.anim_loop:
+        if done and not self.anim_loop and not (self.hold and self.mode == 'script'):
             self.play(self.base_anim() if self.mode == 'home' else 'idle', now)
 
     def publish(self):
@@ -331,7 +403,7 @@ class Brain:
         banner = None
         if self.banner:
             try:
-                im = self.fx.banner(self.banner['kind'])
+                im = self.fx.banner(self.banner['kind'], name=self.banner.get('name'))
                 k = self.atlas.res / float(self.fx.res)
                 if k != 1.0:
                     from PIL import Image
@@ -340,9 +412,13 @@ class Brain:
             except (ValueError, OSError):
                 banner = None
         fxp = self.fxp.placements(now)
-        flash = self.fxp.flash(now)
+        flashes = self.flashes_enabled(now)
+        flash = self.fxp.flash(now) if flashes else 0.0
+        if flashes and self.pulse(now):                         # near the context limit / low HP: a short white pulse
+            flash = max(flash, PULSE_ALPHA)
+        shake = self.fxp.shake(now)
         v = dict(anim=self.anim, frame=idx, x=self.x, facing=self.facing, dim=dim, proj=None, fx=fxp, banner=banner,
-                 shake=self.fxp.shake(now), busy=bool(fxp or banner or flash or self.slide), flash=flash,
+                 shake=shake, busy=bool(fxp or banner or flash or self.slide or shake != (0, 0) or self.frozen(now)), flash=flash,
                  eye=(self.eye if self.anim == 'idle' and self.mode == 'home' else (0, 0)))
         if self.script and self.script['projs']:
             for p in self.script['projs']:
@@ -350,6 +426,26 @@ class Brain:
                     pos = p['x0'] + p['dir'] * p['speed'] * (now - p['spawn'])
                     v['proj'] = dict(x=pos, dir=p['dir'], frame=int((now - p['spawn']) * 8), kind=p['move'])
         return v
+
+    def flashes_enabled(self, now):
+        """control.json `flashes` (impact frames and white flashes); default on.  Read at most every 2 s."""
+        if self.flashes is not None:
+            return bool(self.flashes)
+        if now - self._flash_read >= 2.0 or now < self._flash_read:
+            self._flash_read = now
+            try:
+                from . import control
+                self._flash_cache = bool(control.flashes_on(default=self.cfg.get('flashes', True)))
+            except Exception:
+                self._flash_cache = True
+        return self._flash_cache
+
+    def pulse(self, now):
+        """True during the short white pulse of a fighter near its context limit (rage) or low on HP in a match."""
+        ctx = (self.snap.ctx_pct or 0) if self.snap else 0
+        near = self.state() != 'limit' and ctx >= 85 and not self.paused
+        low = self.hp is not None and self.hp <= LOW_HP and self.mode == 'script'
+        return (near or low) and (now % PULSE_S) < PULSE_ON_S
 
     def drag_to(self, x, now):
         """Mouse drag: place the fighter inside its own half (the two never overlap and never cover the plates),
@@ -397,7 +493,11 @@ class Brain:
 
     def _end_match_visuals(self):
         self.hp = self.round = self.banner = None
-        self.stop = self.slide = None
+        self.stop = self.slide = self.slow = None
+        self.hold = False
+        for s, d in list(self.finish_due.items()):              # finished during that bout: the boost window opens now
+            if d == 'after':
+                self.finish_due[s] = self.last_now + BOOST_WINDOW_S
         self.fxp.clear()
 
     # -------------------------------------------------------------- on-demand bout (minis.py demo / menu)
@@ -427,8 +527,18 @@ class Brain:
         self.seq += 1
         self.event = dict(seq=self.seq, type=typ, run=self.run, mt=round(now, 3), **kw)
 
+    def note_finish(self, slot, now):
+        """The agent behind `slot` finished a task (working -> done): its fighter opens the next bout with its signature
+        super if that bout starts within BOOST_WINDOW_S.  A bout already running is a shared, pre-computed timeline, so
+        the window then starts when that bout ends."""
+        self.finish_due[slot] = 'after' if (self.script is not None or self.bout) else now + BOOST_WINDOW_S
+
+    def boost_slots(self, now):
+        return sorted(s for s, d in self.finish_due.items() if isinstance(d, float) and now <= d)
+
     def _own_event(self, ev, now):
         if ev == 'finished':
+            self.note_finish(self.slot, now)
             self._emit('finished', now)
         elif ev == 'limit':
             cancels = self.bout
@@ -469,6 +579,7 @@ class Brain:
             return                                                # replayed after a restart, or simply too old
         t = ev.get('type')
         if t == 'finished':
+            self.note_finish(other(self.slot), now)
             if self.free_for('handoff') and self._partner_home():
                 self._send_invite('handoff', now, giver=other(self.slot), taker=self.slot)
         elif t == 'limit':
@@ -504,6 +615,12 @@ class Brain:
         left = LEFT if pos[LEFT] <= pos[RIGHT] else RIGHT
         right = other(left)
         gap = {'spar': self.cfg['gap_px'], 'clash': self.cfg['gap_px'], 'match': self.cfg['gap_px'], 'handoff': 24, 'console': 22, 'ranged': 150}[kind]
+        if kind in ('spar', 'clash', 'match'):        # V6: never closer than the two silhouettes allow (weapons included)
+            try:
+                pc = self.partner.get('character') or self.character
+                gap = max(gap, rounds.MIN_APART, rounds.body_front(self.atlas) + rounds.body_front(self.atlases[pc]) - rounds.STAND_OVERLAP)
+            except Exception:
+                pass
         z0, z1 = self.zone
         mid = (z0 + z1) / 2.0                         # bouts happen in the middle of the fighting zone, never near the plates
         target = {left: mid - gap / 2.0, right: mid + gap / 2.0}
@@ -518,6 +635,9 @@ class Brain:
             kw = dict(kw, wake=you)
         plan = dict(kind=kind, left=left, right=right, pos=target, t0=now + walk + 1.0 + wake, seed=self.seq + 1 + int(now) % 997,
                     chars=chars, id=f'{self.run}:{self.seq + 1}', deadline=now + self.cfg.get('invite_window_s', 3.0), **kw)
+        boost = self.boost_slots(now) if kind in ('match', 'clash', 'spar') else []
+        if boost:
+            plan['boost'] = boost
         if kind == 'match':                                     # both sides derive HP, attackers and the winner from these
             plan['mode'] = self.winners if self.winners in rounds.MODES else 'decided'
             plan['scores'] = {me: round(rounds.score_of_snapshot(self.snap), 1), you: round(rounds.score_of_bus(self.partner), 1)}
@@ -566,6 +686,8 @@ class Brain:
             return 0.0
 
     def _commit(self, kind, plan, now):
+        for s in plan.get('boost') or ():
+            self.finish_due.pop(s, None)                           # consumed by this bout (both sides drop it)
         tl, t_end, projs = make_timeline(kind, plan, self.atlases, self.fx)
         self.script = dict(kind=kind, plan=plan, tl=tl.get(self.slot, []), t_end=t_end, projs=projs)
         if kind == 'match':
@@ -611,7 +733,7 @@ class Brain:
         step = min(abs(d), self.cfg['walk_px_s'] * dt)
         self.x += math.copysign(step, d)
         mv = 1 if d > 0 else -1
-        if self.walk_then == 'home' and not self.partner:
+        if self.walk_then == 'home':                              # V6: turn and walk home (no moonwalk); _tick_home turns back
             self.facing = mv
             self.play('walk', now)
         else:
@@ -636,18 +758,21 @@ class Brain:
             if name.startswith('@'):
                 self._directive(name, t_abs, opts, now)
                 continue
-            self.play(name, t_abs, loop=None)
+            self.play(name, t_abs, loop=None, hold=bool(opts.get('hold')))
             if 'hp' in opts and isinstance(opts['hp'], dict):
                 self.hp = opts['hp'].get(self.slot)
-            if 'to' in opts:                                      # slide while the move plays (dash-in, backdash, knockback)
-                z0, z1 = self.zone
-                x1 = max(z0, min(z1, float(opts['to'])))
-                ms = float(opts.get('slide_ms') or self.atlas.total_ms(name) if name in self.atlas.anim else 300)
-                self.slide = (t_abs, t_abs + max(0.05, ms / 1000.0), self.x, x1)
             hs = opts.get('hitstop')
             if hs:
                 t_stop = float(opts.get('contact', t_abs))
                 self.stop = (t_stop, t_stop + float(hs) / 1000.0)
+            sl = opts.get('slow')
+            if isinstance(sl, (list, tuple)) and len(sl) == 3:
+                self.slow = (float(sl[0]), float(sl[1]), max(0.05, float(sl[2])))
+            if 'to' in opts:                                      # slide while the move plays (dash-in, backdash, knockback)
+                z0, z1 = self.zone
+                x1 = max(z0, min(z1, float(opts['to'])))
+                ms = float(opts.get('slide_ms') or self.atlas.total_ms(name) if name in self.atlas.anim else 300)
+                self.slide = (t_abs, max(0.05, ms / 1000.0), self.x, x1)
             if 'contact' in opts:
                 self.contact_log.append((opts['contact'], name))
                 self._bout_note('contact', opts['contact'], name)
@@ -655,11 +780,12 @@ class Brain:
                 self.hit_log.append((t_abs, name))
                 self._bout_note('hit', t_abs, name)
         if self.slide is not None:
-            t0, t1, x0, x1 = self.slide
-            if now >= t1:
+            t0, dur, x0, x1 = self.slide
+            el = self.clock(t0, now) if now > t0 else 0.0         # frozen during hitstop, slowed in slow motion
+            if el >= dur:
                 self.x, self.slide = x1, None
-            elif now > t0:
-                k = (now - t0) / (t1 - t0)
+            elif el > 0:
+                k = el / dur
                 self.x = x0 + (x1 - x0) * (1 - (1 - k) ** 2)      # ease-out: fast start, soft stop
         if now >= sc['t_end']:
             self.script, self.bout = None, None
@@ -685,19 +811,40 @@ class Brain:
             if now - t_abs <= 0.5:
                 self.fxp.add_shake(t_abs, opts.get('frames', 0), float(opts.get('amp', 0)))
         elif name == '@flash':
-            if now - t_abs <= 0.5:
-                self.fxp.flash_at(t_abs, float(opts.get('alpha', 0.6)))
+            if now - t_abs <= 0.5 and self.flashes_enabled(now):
+                self.fxp.flash_at(t_abs, float(opts.get('alpha', 0.6)), max(0.1, float(opts.get('ms', 120)) / 1000.0))
+        elif name == '@impact':
+            # V6 impact frames: the fx `impact` (silhouette on white, radial lines, inverse, blank) on the struck fighter for
+            # 100-160 ms; without that art a strong white flash on both.  Off with control.json `flashes` off.
+            if now - t_abs <= 0.5 and self.flashes_enabled(now):
+                ms = max(100.0, min(160.0, float(opts.get('ms', 130))))
+                art = False
+                try:
+                    art = bool(self.fx.has_art('impact'))
+                except Exception:
+                    art = False
+                if art:
+                    if opts.get('on', self.slot) == self.slot:
+                        self.fxp.spawn('impact', t_abs, self.x, self.atlas.ground_y, self.facing, owner=self.slot, anchor='center')   # its own 100-160 ms
+                else:
+                    self.fxp.flash_at(t_abs, 0.85, ms / 1000.0)
         elif name == '@whiff':
             self.hit_log.append((t_abs, 'whiff'))
             self._bout_note('hit', t_abs, 'whiff')
         elif name == '@banner':
             plan = (self.script or {}).get('plan') or {}
             over = opts.get('over')
-            if over is None:
+            if over is None and self.partner and isinstance(self.partner.get('x'), (int, float)):
+                x = (self.x + float(self.partner['x'])) / 2.0      # between where the two really stand now
+            elif over is None:
                 x = (float(plan['pos'][LEFT]) + float(plan['pos'][RIGHT])) / 2.0
+            elif over == self.slot:
+                x = self.x
+            elif self.partner and isinstance(self.partner.get('x'), (int, float)):
+                x = float(self.partner['x'])                     # centred over where the winner really stands now
             else:
-                x = self.x if over == self.slot else float(plan['pos'].get(over, self.x))
-            self.banner = dict(kind=opts['banner'], until=opts['until'], x=x)
+                x = float(plan['pos'].get(over, self.x))
+            self.banner = dict(kind=opts['banner'], until=opts['until'], x=x, name=opts.get('name'))
         elif name == '@record':
             chars = opts.get('chars') or {}
             try:
@@ -782,10 +929,14 @@ class Brain:
             self.next_shrug = now + self.rng.uniform(10, 16)
             self.play('shrug', now, loop=False)
         if st == 'working' and self.anim == self.work_variant and now >= self.next_shadow:
-            self.next_shadow = now + self.rng.uniform(self.cfg.get('shadowbox_min_s', 3), self.cfg.get('shadowbox_max_s', 6))
-            pool = strike_pool(self.atlas)
-            if pool:                                              # shadowboxing: a strike in the air, then back to work
-                self.play(self.rng.choice(pool), now, loop=False)
+            self.next_shadow = now + self.rng.uniform(self.cfg.get('shadowbox_min_s', 8), self.cfg.get('shadowbox_max_s', 14))
+            if self.shadow_pick is None or self.shadow_pick.atlas is not self.atlas:
+                self.shadow_pick = choreo.Picker(self.rng, self.atlas)
+            if self.shadow_pick.used and sum(self.shadow_pick.used.values()) >= 2 * len(strike_pool(self.atlas)):
+                self.shadow_pick.new_round()
+            mv = self.shadow_pick.pick(self.shadow_pick.strikes())   # shadowboxing: never the same strike twice in a row
+            if mv:
+                self.play(mv, now, loop=False)
         if st in ('idle', 'done', 'waiting', 'working') and self.partner:
             self._face_partner()
         lo, hi = self.home
@@ -835,8 +986,7 @@ class Brain:
             if self.anim != want:
                 self.play(want, now)
             if now >= self.next_flourish and self.anim == 'idle':
-                sup = self.sig['super']
-                self.play(sup if (sup and self.rng.random() < 0.25) else 'idle_flourish', now, loop=False)
+                self.play('idle_flourish', now, loop=False)       # V6: never the super (it belongs to fights only)
                 self.next_flourish = now + self.rng.uniform(6, 10)
             elif now >= self.next_wander:
                 self.next_wander = now + self.rng.uniform(12, 25)

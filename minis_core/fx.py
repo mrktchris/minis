@@ -16,7 +16,8 @@ Nothing here is required to exist: every generic effect (hit_light, hit_heavy, b
 crack_big, shatter, explosion, letters, ko_text, round_text) has a simple procedural stand-in, and an unknown ultimate
 name gets a generic burst, so the engine renders the same choreography with or without the art.
 
-Text banners: `banner(kind)` for kind in round1 | round2 | round3 | fight | ko | winner.  From the sheet it reads
+Text banners: `banner(kind)` for kind in round1 | round2 | round3 | fight | ko | winner | time (V6; `banner('winner', name=...)`
+is the winner's name banner).  From the sheet it reads
 `round_text` frames in that order (ROUND 1, ROUND 2, ROUND 3, FIGHT!, WINNER) and `ko_text` for K.O.; individually
 named effects (`round_1`, `round_2`, `round_3`, `fight`, `winner`, `ko`) win over that convention when present.
 """
@@ -30,9 +31,9 @@ from .render import font
 ROOT = Path(__file__).resolve().parent.parent
 CANDIDATES = (ROOT / 'assets_hd' / 'fx' / 'fx.json', ROOT / 'assets_hd' / 'fx.json', ROOT / 'assets' / 'fx' / 'fx.json', ROOT / 'assets' / 'fx.json')
 GENERIC = ('hit_light', 'hit_heavy', 'block_spark', 'dust', 'ko_stars', 'crack_small', 'crack_big', 'shatter', 'explosion', 'letters', 'ko_text', 'round_text')
-BANNERS = ('round1', 'round2', 'round3', 'fight', 'ko', 'winner')
-BANNER_TEXT = {'round1': 'ROUND 1', 'round2': 'ROUND 2', 'round3': 'ROUND 3', 'fight': 'FIGHT!', 'ko': 'K.O.', 'winner': 'WINNER'}
-BANNER_NAMES = {'round1': 'round_1', 'round2': 'round_2', 'round3': 'round_3', 'fight': 'fight', 'ko': 'ko', 'winner': 'winner'}
+BANNERS = ('round1', 'round2', 'round3', 'fight', 'ko', 'winner', 'time')
+BANNER_TEXT = {'round1': 'ROUND 1', 'round2': 'ROUND 2', 'round3': 'ROUND 3', 'fight': 'FIGHT!', 'ko': 'K.O.', 'winner': 'WINNER', 'time': 'TIME'}
+BANNER_NAMES = {'round1': 'round_1', 'round2': 'round_2', 'round3': 'round_3', 'fight': 'fight', 'ko': 'ko', 'winner': 'winner', 'time': 'time'}
 ROUND_TEXT_ORDER = ('round1', 'round2', 'round3', 'fight', 'winner')
 LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -375,9 +376,17 @@ class Fx:
         return sorted(set(self.effects) | set(GENERIC))
 
     # ---- text + letters
-    def banner(self, kind) -> Image.Image:
+    def banner(self, kind, name=None) -> Image.Image:
+        """The banner image.  V6: `winner` with a `name` is the name banner '<NAME> WINS' (drawn centred over the winner);
+        `time` (a round called on time) is a named `time` effect when the sheet has one, else drawn text."""
         if kind not in BANNERS:
             raise ValueError(kind)
+        if (kind == 'winner' and name) or (kind == 'time' and BANNER_NAMES[kind] not in self.effects):
+            txt = f'{str(name).upper()[:16]} WINS' if kind == 'winner' else BANNER_TEXT[kind]
+            cache = self.__dict__.setdefault('_text_banners', {})
+            if txt not in cache:
+                cache[txt] = text_image(txt, 14 * self.res, (255, 236, 120, 255) if kind == 'winner' else (255, 255, 255, 255))
+            return cache[txt]
         e = self.effects.get(BANNER_NAMES[kind])
         if e is not None:
             return e.frames[0][0]

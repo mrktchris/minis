@@ -33,83 +33,88 @@ def M(frames, loop=False, cat='', desc='', **meta):
 # ---------------------------------------------------------------------- signature templates
 # A character's strike / special / super are built from these, so any roster entry can reuse them with its own
 # name, description and effect (the planner reads the names from `signature`, never from the character's name).
+# V6 keying (docs/ANIMATION-NOTES.md section 6): a long, held wind-up (two keys, the second a tension hold), ONE smear
+# frame where the weapon sweeps its crescent, the contact hold, then a held follow-through on the heavy ones.  `wa` puts
+# the weapon where the swing needs it (back over the shoulder on the wind-up, through the target on contact).
 def sig_spin(desc, **_):
-    """Spinning kick: wind up facing away, the kick is one smear, the contact holds, the body overshoots past it."""
+    """Spinning kick: turn the back to the target, the kick is one smear, the blade trails round with it, a long hold."""
     return M([
-        (p(dy=3, lean=12, sq=0.94, hf=(5, 2), hb=(3, 2)), 100),
-        (p(dy=2, lean=0, turn=0.6, face='back', hf=(3, -2), hb=(-3, -2), ff=(3, 0), fb=(-3, 0)), 70),
-        (p(dy=0, lean=-10, turn=0.35, face='back', hf=(-6, -4), hb=(-8, -4), ff=(2, 2), fb=(-2, 0)), 50),
-        (p(dy=-1, lean=-18, turn=0.5, face='n', sq=1.04, hf=(-6, -6), hb=(-8, -3), ff=(14, 14), fb=(-1, 0), ang_f=-10, dx=2, smear_ff=(2, 2)), 40),
-        (p(dy=-1, lean=-18, turn=0.8, face='n', hf=(-6, -6), hb=(-8, -3), ff=(15, 14), fb=(-1, 0), ang_f=-10, fx=(('spark', 'ff', 4, -1),)), 150),
-        (p(dy=-1, lean=-20, turn=0.9, face='n', hf=(-7, -6), hb=(-8, -3), ff=(16, 13), fb=(-1, 0), ang_f=-12), 60),
-        (p(dy=0, lean=-8, turn=0.8, ff=(10, 8), fb=(-3, 0)), 90),
-        (p(dy=2, lean=6, ff=(8, 1)), 100)],
+        (p(dy=3, lean=12, sq=0.94, hf=(5, 3), wa=-120, turn=0.85), 140),
+        (p(dy=2, lean=0, turn=0.6, face='back', hf=(3, -2), hb=(-3, -2), ff=(3, 0), fb=(-3, 0), wa=-150), 80),
+        (p(dy=0, lean=-10, turn=0.35, face='back', hf=(-6, -4), hb=(-8, -4), ff=(2, 2), fb=(-2, 0), wa=-170), 50),
+        (p(dy=-1, lean=-18, turn=0.5, face='n', sq=1.04, hf=(-6, -6), hb=(-8, -3), ff=(14, 14), fb=(-1, 0), ang_f=-10, dx=4, wa=-160,
+           smear_ff=(2, 2)), 40),
+        (p(dy=-1, lean=-18, turn=0.8, face='n', hf=(-6, -6), hb=(-8, -3), ff=(15, 14), fb=(-1, 0), ang_f=-10, wa=-155,
+           fx=(('spark', 'ff', 4, -1),)), 160),
+        (p(dy=-1, lean=-20, turn=0.9, face='n', hf=(-7, -6), hb=(-8, -3), ff=(16, 13), fb=(-1, 0), ang_f=-12, wa=-150), 260),
+        (p(dy=0, lean=-8, turn=0.8, ff=(10, 8), fb=(-3, 0)), 100),
+        (p(dy=2, lean=6, ff=(8, 1)), 90)],
         cat='strike', desc=desc, hit_frame=4, power=3)
 
 
 def sig_pound(desc, **_):
-    """Leaping slam: squash, stretch into the air, hang, a smear down, the landing squashes and shakes."""
+    """Leaping slam: squash, leap with the weapon overhead, hang, smash it down in one smear, shake, hold the landing."""
     return M([
-        (p(dy=4, lean=14, sq=0.90, hf=(5, 3), hb=(3, 3)), 120),
-        (p(dy=-8, lean=0, sq=1.10, hf=(7, -9), hb=(4, -10), ff=(4, 6), fb=(-3, 5)), 60),
-        (p(dy=-12, lean=-4, sq=1.0, hf=(8, -11), hb=(5, -12), ff=(5, 7), fb=(-4, 6)), 150),
-        (p(dy=6, lean=40, sq=0.96, head=(2, 2), hf=(7, 9), hb=(4, 10), fist_f=4, fist_b=4, ff=(9, 2), fb=(-6, 2), smear_f=(8, -11), smear_b=(5, -12)), 40),
-        (p(dy=10, lean=45, sq=0.88, head=(2, 2), hf=(7, 8), hb=(4, 10), fist_f=4, fist_b=4, ff=(9, 0), fb=(-6, 0),
+        (p(dy=4, lean=14, sq=0.90, hf=(5, 4), wa=-130), 150),
+        (p(dy=-8, lean=0, sq=1.10, hf=(6, -9), eb_f='up', wa=-140, ff=(4, 6), fb=(-3, 5)), 60),
+        (p(dy=-12, lean=-6, sq=1.0, hf=(5, -11), eb_f='up', wa=-150, ff=(5, 7), fb=(-4, 6)), 180),
+        (p(dy=6, lean=40, sq=0.96, head=(2, 2), hf=(9, 7), wa=55, fist_f=4, ff=(9, 2), fb=(-6, 2), dx=4, smear_f=(5, -11)), 40),
+        (p(dy=10, lean=45, sq=0.88, head=(2, 2), hf=(9, 7), wa=62, fist_f=4, ff=(9, 0), fb=(-6, 0),
            fx=(('shock', 'abs', 38, 56), ('dust', 'ff', 4, -1), ('dust', 'fb', -5, -1))), 160),
-        (p(dy=9, lean=42, sq=0.92, head=(2, 2), hf=(7, 8), hb=(4, 10), fist_f=4, fist_b=4, ff=(9, 0), fb=(-6, 0),
-           fx=(('dust', 'ff', 6, -2), ('dust', 'fb', -7, -2))), 60),
-        (p(dy=5, lean=20, hf=(6, 4), hb=(3, 5)), 100), (p(dy=2, lean=12), 110)],
+        (p(dy=9, lean=42, sq=0.92, head=(2, 2), hf=(9, 7), wa=64, fist_f=4, ff=(9, 0), fb=(-6, 0),
+           fx=(('dust', 'ff', 6, -2), ('dust', 'fb', -7, -2))), 280),
+        (p(dy=5, lean=20, hf=(7, 5)), 110), (p(dy=2, lean=12), 130)],
         cat='strike', desc=desc, hit_frame=4, power=3, shake=dict(frames=4, amp=2))
 
 
 def sig_throw(desc, **_):
-    """Two-handed push; the projectile leaves on proj_frame (the contact hold after the smear)."""
+    """Slash wave: coil with the weapon back over the shoulder, one smear forward, the wave leaves on proj_frame."""
     return M([
-        (p(dy=2, lean=6, hf=(2, 3), hb=(1, 3), fx=(('charge', 'hf', 2, -1),)), 110),
-        (p(dy=3, lean=2, sq=0.97, chest=1.04, hf=(-1, 4), hb=(-2, 4), fx=(('charge', 'hf', 0, -2), ('charge', 'hb', -1, -3))), 90),
-        (p(dy=3, lean=16, hf=(12, -2), hb=(11, -1), ff=(10, 0), fb=(-8, 0), fist_f=4, fist_b=4, dx=2, smear_f=(-1, 4), smear_b=(-2, 4)), 40),
-        (p(dy=2, lean=22, hf=(12, -2), hb=(11, -1), ff=(11, 0), fb=(-9, 0), fist_f=4, fist_b=4, fx=(('spark', 'hf', 4, 0),)), 180),
-        (p(dy=2, lean=24, hf=(13, -2), hb=(12, -1), ff=(11, 0), fb=(-9, 0), fist_f=4, fist_b=4), 60),
-        (p(lean=12, hf=(9, -1), hb=(6, 0)), 90), (S0, 100)],
+        (p(dy=2, lean=-4, hf=(-1, -6), eb_f='up', wa=-150, fx=(('charge', 'hf', 2, -1),)), 140),
+        (p(dy=4, lean=-10, sq=0.95, chest=1.04, hf=(-3, -8), eb_f='up', wa=-165, fx=(('charge', 'hf', 0, -2), ('charge', 'hb', -1, -3))), 110),
+        (p(dy=3, lean=20, hf=(12, 1), ff=(11, 0), fb=(-9, 0), wa=22, dx=4, smear_f=(-3, -8)), 40),
+        (p(dy=3, lean=24, hf=(12, 2), ff=(12, 0), fb=(-9, 0), wa=28, fx=(('spark', 'hf', 4, 0),)), 180),
+        (p(dy=3, lean=26, hf=(12, 3), ff=(12, 0), fb=(-9, 0), wa=40), 230),
+        (p(lean=12, hf=(9, 3)), 90), (S0, 110)],
         cat='special', desc=desc, proj_frame=3, power=2)
 
 
 def sig_cast(desc, **_):
-    """Type, hit ENTER, punch the projectile out on proj_frame."""
+    """Thrust release: draw the weapon back level, hold, one smear thrust, the bolt leaves on proj_frame."""
     return M([
-        (p(dy=2, lean=6, hf=(6, 0), hb=(5, 1), fx=(('charge', 'hf', 4, -3),)), 110),
-        (p(dy=3, lean=4, hf=(7, -1), hb=(6, 0), fx=(('charge', 'hf', 3, -4), ('charge', 'hb', -2, -3))), 80),
-        (p(dy=2, lean=10, sq=0.97, hf=(9, 3), hb=(8, 2)), 60),
-        (p(dy=3, lean=20, hf=(12, -1), hb=(6, 3), fist_f=4, dx=1, smear_f=(9, 3)), 40),
-        (p(dy=3, lean=22, hf=(12, -1), hb=(6, 3), fist_f=4, fx=(('spark', 'hf', 4, -1),)), 180),
-        (p(dy=2, lean=24, hf=(13, -1), hb=(6, 2)), 60), (p(lean=12), 90), (S0, 100)],
+        (p(dy=2, lean=6, hf=(5, 1), wa=-20, fx=(('charge', 'hf', 4, -3),)), 120),
+        (p(dy=3, lean=4, hf=(4, 0), wa=-15, fx=(('charge', 'hf', 3, -4), ('charge', 'hb', -2, -3))), 90),
+        (p(dy=4, lean=-2, sq=0.96, hf=(0, 2), wa=-8), 150),
+        (p(dy=3, lean=22, hf=(13, -1), ff=(12, 0), fb=(-9, 0), wa=-6, dx=4, smear_f=(0, 2)), 40),
+        (p(dy=3, lean=24, hf=(13, -1), ff=(12, 0), fb=(-9, 0), wa=-5, fx=(('spark', 'hf', 4, -1),)), 180),
+        (p(dy=2, lean=26, hf=(13, 0), ff=(12, 0), fb=(-9, 0), wa=4), 230), (p(lean=12, hf=(9, 2)), 90), (S0, 110)],
         cat='special', desc=desc, proj_frame=4, power=2)
 
 
 def sig_rewind(desc, glyph='rewind', **_):
     """Super: snap back a second in time with an afterimage trail.  glyph: 'rewind' (<<) or 'bigglyph' (2x cap sigil)."""
-    gfx = ('rewind', 'head', -4, -14) if glyph == 'rewind' else ('bigglyph', 'head', -1, -19)
+    gfx = ('rewind', 'head', 7, -10) if glyph == 'rewind' else ('bigglyph', 'head', 8, -12)
     return M([
-        (p(dy=3, lean=6, sq=0.95, hf=(4, 2), hb=(2, 2), fx=(gfx,)), 140),
+        (p(dy=3, lean=6, sq=0.95, hf=(4, 3), fx=(gfx,)), 160),
         (p(dy=2, lean=-6, flash=True), 50),
-        (p(dx=-10, dy=-1, lean=-18, sq=1.06, ff=(8, 3), fb=(-8, 2), hf=(3, -3), hb=(0, -3), ghost=(6, 12, 18), fx=(gfx,)), 60),
-        (p(dx=-10, dy=-2, lean=-20, sq=1.04, ff=(9, 3), fb=(-9, 3), hf=(2, -4), hb=(-1, -4), ghost=(7, 14, 21)), 70),
-        (p(dx=-10, dy=-1, lean=-14, ff=(8, 2), fb=(-8, 2), hf=(3, -3), hb=(0, -3), ghost=(7, 14)), 60),
-        (p(dx=-4, dy=3, lean=4, sq=0.92, fx=(('dust', 'ff', 4, 1),)), 90),
-        (p(dy=1, face='g', hf=(9, -2), hb=(4, 1), fx=(gfx,)), 200)],
+        (p(dx=-12, dy=-1, lean=-18, sq=1.06, ff=(8, 3), fb=(-8, 2), hf=(3, -2), ghost=(6, 12, 18), fx=(gfx,)), 60),
+        (p(dx=-12, dy=-2, lean=-20, sq=1.04, ff=(9, 3), fb=(-9, 3), hf=(2, -3), ghost=(7, 14, 21)), 70),
+        (p(dx=-10, dy=-1, lean=-14, ff=(8, 2), fb=(-8, 2), hf=(3, -2), ghost=(7, 14)), 60),
+        (p(dx=-4, dy=3, lean=4, sq=0.92, fx=(('dust', 'ff', 4, 1),)), 100),
+        (p(dy=1, face='g', hf=(9, 0), fx=(gfx,)), 260)],
         cat='super', desc=desc)
 
 
 def sig_raise(desc, glyph='bigsigil', **_):
-    """Super: raise a giant sigil and power up.  glyph: 'bigsigil' (Codex's hand-drawn $) or 'bigglyph'."""
-    gfx = ('bigsigil', 'head', -1, -19) if glyph == 'bigsigil' else ('bigglyph', 'head', -1, -21)
+    """Super: raise the weapon and a giant sigil and power up."""
+    gfx = ('bigsigil', 'head', 9, -11) if glyph == 'bigsigil' else ('bigglyph', 'head', 9, -12)
     return M([
-        (p(dy=3, lean=6, sq=0.95, hf=(5, 3), hb=(3, 3), fist_f=4, fist_b=4), 120),
-        (p(dy=4, lean=4, sq=0.93, chest=1.04, hf=(5, 4), hb=(3, 4), aura=1, fx=(('charge', 'hf', 3, -3),)), 100),
-        (p(dy=1, lean=0, sq=1.06, hf=(7, -10), hb=(5, -11), aura=2, face='g', fx=(gfx,)), 110),
-        (p(dy=2, lean=0, sq=1.02, chest=1.08, hf=(7, -11), hb=(5, -12), aura=3, face='g', fx=(gfx, ('spark_s', 'hf', 0, -3))), 150),
-        (p(dy=3, lean=8, chest=1.10, hf=(7, -9), hb=(5, -10), aura=4, face='g', fx=(gfx,)), 140),
-        (p(dy=2, lean=4, aura=1), 90), (S0, 100)],
+        (p(dy=3, lean=6, sq=0.95, hf=(5, 4), fist_f=4), 140),
+        (p(dy=4, lean=4, sq=0.93, chest=1.04, hf=(5, 5), aura=1, fx=(('charge', 'hf', 3, -3),)), 110),
+        (p(dy=1, lean=0, sq=1.06, hf=(6, -8), eb_f='up', wa=-70, aura=2, face='g', fx=(gfx,)), 120),
+        (p(dy=2, lean=0, sq=1.02, chest=1.08, hf=(6, -9), eb_f='up', wa=-72, aura=3, face='g', fx=(gfx, ('spark_s', 'hf', 0, -3))), 170),
+        (p(dy=3, lean=8, chest=1.10, hf=(6, -7), eb_f='up', wa=-68, aura=4, face='g', fx=(gfx,)), 150),
+        (p(dy=2, lean=4, aura=1), 90), (S0, 110)],
         cat='super', desc=desc)
 
 
@@ -117,112 +122,81 @@ TEMPLATES = {'spin': sig_spin, 'pound': sig_pound, 'throw': sig_throw, 'cast': s
              'rewind': sig_rewind, 'raise': sig_raise}
 
 
-# ---------------------------------------------------------------------- signature idles (V5.1)
-# Every idle is a weight shift (the breathing-chest / head-bob base) plus one personal tic in the back half of the
-# loop, so a fighter standing still still tells you who it is.  The loop closes on the rest pose.
-def _idle(keys, desc):
-    return M([(p(**kw), ms) for kw, ms in keys], loop=True, cat='locomotion', desc=desc)
+# ---------------------------------------------------------------------- signature idles (V6)
+# Every idle is a weight shift (breathing chest, head bob) in the character's own weapon stance, plus one personal tic
+# with its weapon in the back half of the loop.  The loop closes on the stance pose.
+def make_idle(stance, tic, desc):
+    def k(**over):
+        kw = dict(stance)
+        kw.update(over)
+        return kw
+    hf, hb = stance.get('hf', (7, 3)), stance.get('hb', (3, 4))
+    dy = stance.get('dy', 2)
+    frames = [(k(), 170), (k(chest=1.03), 130),
+              (k(dy=dy + 1, chest=1.06, head=(1, 1), hf=(hf[0], hf[1] + 1), hb=(hb[0], hb[1] + 1)), 150),
+              (k(dy=dy + 1, chest=1.05, head=(1, 1), hf=(hf[0], hf[1] + 1), hb=(hb[0], hb[1] + 1)), 180)]
+    frames += [(k(**over), ms) for over, ms in tic]
+    frames.append((k(chest=0.98), 140))
+    return M([(p(**kw), ms) for kw, ms in frames], loop=True, cat='locomotion', desc=desc)
 
 
-def idle_guard():
-    keys = [  # dy, chest, head_y, lean, hand lift, ms
-        (1, 1.00, 0, 10, 0, 150), (1, 1.03, 0, 11, 0, 130), (2, 1.06, 1, 12, 1, 120), (2, 1.06, 1, 12, 1, 170),
-        (2, 1.03, 1, 11, 1, 130), (1, 1.00, 0, 10, 0, 130), (1, 0.98, 0, 9, 0, 150), (1, 0.98, 0, 9, 0, 170)]
-    return _idle([(dict(dy=dy, chest=ch_, head=(1, hy), lean=ln, hf=(8, -1 + lift), hb=(4, 1 + lift)), ms)
-                  for dy, ch_, hy, ln, lift, ms in keys], 'Guard stance: breathing chest, head bob, drifting guard.')
+IDLE_DATA = {
+    'guard': (dict(dy=2, lean=10, hf=(7, 3), hb=(3, 4), ff=(8, 0), fb=(-7, 0)),
+              [(dict(face='g'), 100), (dict(face='g', head=(2, 0)), 120), (dict(), 220)], 'Guard stance: breathing, weight shift.'),
+    'ronin': (dict(dy=2, lean=8, hf=(7, 4), ff=(8, 0), fb=(-8, 0)),
+              [(dict(wa=-20, head=(2, 0), face='g'), 100), (dict(wa=-96, face='g', tilt=-4), 80), (dict(face='g'), 240)],
+              'Ronin stance: two hands on the katana, tip at the throat; flicks the blade up.'),
+    'shadow': (dict(dy=4, lean=18, hf=(8, 2), hb=(1, 5), ff=(9, 0), fb=(-7, 0)),
+               [(dict(wa=-30, face='g'), 70), (dict(wa=70, face='g'), 60), (dict(face='g', head=(2, 1)), 220)],
+               'Ninja crouch: low, kunai reversed; spins the lead kunai.'),
+    'dancer': (dict(dy=1, lean=4, hf=(8, 0), hb=(-4, 3), eb_b='back', ff=(6, 0), fb=(-7, 0)),
+               [(dict(hf=(5, -3), hb=(6, -3), eb_b='down', wa=-62, wb=-118, face='g'), 90), (dict(hf=(5, -3), hb=(6, -3), eb_b='down', wa=-60,
+                wb=-120, face='g', tilt=-5), 120), (dict(hf=(9, 0), hb=(-5, 2), face='g'), 200)],
+               'Dancer stance: one blade forward, one back; crosses them and opens.'),
+    'lancer': (dict(dy=3, lean=12, hf=(8, 3), wa=-28, ff=(9, 0), fb=(-7, 0)),
+               [(dict(wa=-62, face='g'), 70), (dict(wa=-4, face='g', head=(3, 0), tilt=6), 80), (dict(face='g'), 230)],
+               'Lancer stance: spear low and level; twirls the tip and snaps its head.'),
+    'mountain': (dict(dy=2, lean=6, hf=(8, 3), wa=-92, ff=(8, 0), fb=(-8, 0)),
+                 [(dict(hf=(8, 0), dy=1, sq=1.02), 110), (dict(hf=(8, 5), dy=3, sq=0.95, face='g', fx=(('dust', 'hip', 12, 6),)), 80),
+                  (dict(face='g'), 250)], 'Mountain stance: staff planted upright; lifts it and thumps the ground.'),
+    'samurai': (dict(dy=2, lean=10, hf=(5, 5), wa=150, ff=(8, 0), fb=(-8, 0)),
+                [(dict(wa=166, face='g'), 90), (dict(wa=138, face='g', head=(2, 0)), 80), (dict(face='g'), 230)],
+                'Samurai stance: energy blade low and back; the blade hums and flicks.'),
+    'ranger': (dict(dy=1, lean=6, hf=(9, 4), wa=4, hb=(1, 6), wb=100, ff=(7, 0), fb=(-7, 0)),
+               [(dict(hf=(10, 1), wa=-4, head=(2, 0), face='g'), 120), (dict(hf=(10, 1), wa=-4, head=(2, 0), face='g', tilt=4), 260), (dict(), 110)],
+               'Ranger stance: bow forward, dagger low; raises the bow to sight.'),
+    'fans': (dict(dy=4, lean=16, hf=(6, -6), eb_f='up', wa=-70, hb=(-4, 4), eb_b='back', ff=(9, 0), fb=(-8, 0)),
+             [(dict(wa=-30, hf=(8, -4), face='g'), 90), (dict(wa=-100, hf=(6, -7), face='g', tilt=-4), 110), (dict(face='g'), 210)],
+             'Kunoichi stance: one fan forward, one back; flicks the lead fan open.'),
+    'knight': (dict(dy=2, lean=6, hf=(8, 5), wa=-64, ff=(8, 0), fb=(-8, 0)),
+               [(dict(wa=-56, dy=3, sq=0.97), 110), (dict(wa=-74, head=(2, 0)), 90), (dict(), 240)],
+               'Knight stance: greatsword held high in front, both hands low on the grip; shifts its weight.'),
+    'berserk': (dict(dy=3, lean=14, hf=(8, -1), wa=-105, hb=(4, 3), fist_b=4, ff=(9, 0), fb=(-8, 0)),
+                [(dict(face='o', chest=1.10, head=(2, -1)), 120), (dict(face='o', chest=1.12, head=(3, -1), wa=-90), 220), (dict(face='g'), 100)],
+                'Berserker stance: axe raised, hunched; roars.'),
+    'tonfa': (dict(dy=3, lean=10, hf=(7, 0), hb=(4, -1), ff=(8, 0), fb=(-7, 0)),
+              [(dict(wa=-30, face='g'), 70), (dict(wa=80, face='g'), 60), (dict(face='g'), 230)],
+              'Monk stance: tonfa along both forearms; spins the lead tonfa.'),
+    'nomad': (dict(dy=2, lean=8, hf=(8, 1), hb=(-3, 4), eb_b='back', ff=(7, 0), fb=(-7, 0)),
+              [(dict(wa=120), 70), (dict(wa=240), 80), (dict(face='g'), 230)],
+              'Nomad stance: chakrams wide; spins the lead ring.'),
+    'oni': (dict(dy=3, lean=16, hf=(9, 2), wa=35, ff=(9, 0), fb=(-9, 0)),
+            [(dict(wa=10, hf=(9, 0), dy=2), 120), (dict(wa=48, hf=(9, 4), dy=4, sq=0.95, face='o'), 80), (dict(face='g'), 250)],
+            'Oni stance: hunched, the kanabo dragged low; taps the ground.'),
+}
 
 
-def idle_monk():
-    """Claude: loose, weight on the back foot, hands low; the tic is a two-finger tug on the cap brim."""
-    return _idle([
-        (dict(dy=1, lean=6, hf=(7, 0), hb=(3, 2), ff=(7, 0), fb=(-7, 0)), 160),
-        (dict(dy=1, chest=1.03, lean=7, hf=(7, 0), hb=(3, 2), ff=(7, 0), fb=(-7, 0)), 130),
-        (dict(dy=2, chest=1.06, head=(1, 1), lean=8, hf=(7, 1), hb=(3, 3), ff=(7, 0), fb=(-7, 0)), 140),
-        (dict(dy=2, chest=1.05, head=(1, 1), lean=8, hf=(6, 1), hb=(3, 3), ff=(7, 0), fb=(-7, 0)), 170),
-        (dict(dy=2, lean=6, hf=(1, -6), hb=(3, 3), ff=(7, 0), fb=(-7, 0), face='g'), 110),
-        (dict(dy=1, lean=5, tilt=-5, head=(0, 0), hf=(0, -8), hb=(3, 3), ff=(7, 0), fb=(-7, 0), face='g', open_f=True), 260),
-        (dict(dy=1, lean=6, hf=(4, -3), hb=(3, 2), ff=(7, 0), fb=(-7, 0)), 120),
-        (dict(dy=1, chest=0.98, lean=6, hf=(7, 0), hb=(3, 2), ff=(7, 0), fb=(-7, 0)), 150)],
-        'Street-monk stance: weight back, hands low; tugs the cap brim.')
+def _idle_fn(name):
+    st, tic, desc = IDLE_DATA[name]
+    return lambda: make_idle(st, tic, desc)
 
 
-def idle_hacker():
-    """Codex: hunched under the hood, hands low and close; the tic is cracking its knuckles, fist into palm."""
-    return _idle([
-        (dict(dy=2, lean=14, hf=(6, 2), hb=(4, 3), ff=(7, 0), fb=(-6, 0)), 160),
-        (dict(dy=2, chest=1.03, lean=15, hf=(6, 2), hb=(4, 3), ff=(7, 0), fb=(-6, 0)), 130),
-        (dict(dy=3, chest=1.06, head=(1, 1), lean=16, hf=(6, 3), hb=(4, 4), ff=(7, 0), fb=(-6, 0)), 150),
-        (dict(dy=3, chest=1.06, head=(1, 1), lean=16, hf=(6, 3), hb=(4, 4), ff=(7, 0), fb=(-6, 0)), 170),
-        (dict(dy=2, lean=14, hf=(6, 0), hb=(6, 0), fist_f=4, fist_b=3, open_f=False, ff=(7, 0), fb=(-6, 0), face='g'), 120),
-        (dict(dy=2, lean=13, hf=(7, -1), hb=(6, 0), fist_f=4, ff=(7, 0), fb=(-6, 0), face='g', head=(0, 0), fx=(('spark_s', 'hf', 1, -1),)), 90),
-        (dict(dy=2, lean=14, hf=(6, 0), hb=(6, 0), fist_f=4, ff=(7, 0), fb=(-6, 0), face='g'), 200),
-        (dict(dy=2, chest=0.98, lean=14, hf=(6, 2), hb=(4, 3), ff=(7, 0), fb=(-6, 0)), 140)],
-        'Hooded hacker stance: hunched, hands close; cracks its knuckles.')
-
-
-def idle_ronin():
-    """Gemini: upright, rear hand on the hip; the tic is a head flick that whips the ponytails."""
-    return _idle([
-        (dict(dy=1, lean=4, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0)), 170),
-        (dict(dy=1, chest=1.03, lean=5, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0)), 130),
-        (dict(dy=2, chest=1.06, head=(1, 1), lean=6, hf=(8, 1), hb=(-2, 5), eb_b='back', ff=(6, 0), fb=(-7, 0)), 150),
-        (dict(dy=2, chest=1.05, head=(1, 1), lean=6, hf=(8, 1), hb=(-2, 5), eb_b='back', ff=(6, 0), fb=(-7, 0)), 160),
-        (dict(dy=1, lean=2, head=(-1, 0), tilt=-9, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0), face='g'), 90),
-        (dict(dy=1, lean=3, head=(2, 0), tilt=6, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0), face='g'), 110),
-        (dict(dy=1, lean=4, head=(1, 0), tilt=2, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0), face='g'), 180),
-        (dict(dy=1, chest=0.98, lean=4, hf=(8, 0), hb=(-2, 4), eb_b='back', ff=(6, 0), fb=(-7, 0)), 150)],
-        'Ronin stance: upright, hand on hip; flicks the ponytails.')
-
-
-def idle_pointer():
-    """Cursor: low, narrow, coiled; the tic is a sharp head snap toward the target and a twitch of the lead hand."""
-    return _idle([
-        (dict(dy=3, lean=14, sq=0.97, hf=(9, 0), hb=(2, 2), ff=(8, 0), fb=(-6, 0)), 180),
-        (dict(dy=3, chest=1.03, lean=15, sq=0.97, hf=(9, 0), hb=(2, 2), ff=(8, 0), fb=(-6, 0)), 130),
-        (dict(dy=4, chest=1.05, head=(1, 1), lean=16, sq=0.96, hf=(9, 1), hb=(2, 3), ff=(8, 0), fb=(-6, 0)), 150),
-        (dict(dy=4, chest=1.05, head=(1, 1), lean=16, sq=0.96, hf=(9, 1), hb=(2, 3), ff=(8, 0), fb=(-6, 0)), 160),
-        (dict(dy=3, lean=14, sq=0.97, head=(3, 0), tilt=7, hf=(11, -2), hb=(2, 2), ff=(8, 0), fb=(-6, 0), face='g', open_f=True), 60),
-        (dict(dy=3, lean=14, sq=0.97, head=(3, 0), tilt=7, hf=(11, -2), hb=(2, 2), ff=(8, 0), fb=(-6, 0), face='g', open_f=True), 220),
-        (dict(dy=3, lean=14, sq=0.97, head=(2, 0), tilt=3, hf=(10, -1), hb=(2, 2), ff=(8, 0), fb=(-6, 0), face='g'), 110),
-        (dict(dy=3, chest=0.98, lean=14, sq=0.97, hf=(9, 0), hb=(2, 2), ff=(8, 0), fb=(-6, 0)), 140)],
-        'Pointer stance: low and coiled; snaps its head and points.')
-
-
-def idle_brawler():
-    """Ollama: bouncing on its toes with both fists up; the tic is bumping its fists together."""
-    return _idle([
-        (dict(dy=1, lean=8, sq=1.0, hf=(6, -4), hb=(3, -3), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 140),
-        (dict(dy=2, lean=9, sq=0.97, chest=1.04, hf=(6, -3), hb=(3, -2), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 120),
-        (dict(dy=0, lean=8, sq=1.03, head=(1, -1), hf=(6, -5), hb=(3, -4), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 110),
-        (dict(dy=2, lean=9, sq=0.97, chest=1.04, hf=(6, -3), hb=(3, -2), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 130),
-        (dict(dy=1, lean=8, hf=(5, -2), hb=(5, -2), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0), face='g'), 90),
-        (dict(dy=1, lean=8, chest=1.06, hf=(5, -2), hb=(5, -2), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0), face='g', fx=(('spark_s', 'hf', 0, -2),)), 170),
-        (dict(dy=0, lean=8, sq=1.03, head=(1, -1), hf=(6, -5), hb=(3, -4), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 120),
-        (dict(dy=1, lean=8, chest=0.98, hf=(6, -4), hb=(3, -3), fist_f=4, fist_b=4, ff=(7, 0), fb=(-7, 0)), 150)],
-        'Brawler stance: bouncing, fists up; bumps its fists together.')
-
-
-def idle_agent():
-    """Generic: at ease, hands at the sides; the tic is checking the wrist and a short nod."""
-    return _idle([
-        (dict(dy=1, lean=2, hf=(2, 6), hb=(0, 6), ff=(5, 0), fb=(-6, 0)), 170),
-        (dict(dy=1, chest=1.03, lean=3, hf=(2, 6), hb=(0, 6), ff=(5, 0), fb=(-6, 0)), 130),
-        (dict(dy=2, chest=1.06, head=(1, 1), lean=4, hf=(2, 7), hb=(0, 7), ff=(5, 0), fb=(-6, 0)), 150),
-        (dict(dy=2, chest=1.05, head=(1, 1), lean=4, hf=(2, 7), hb=(0, 7), ff=(5, 0), fb=(-6, 0)), 160),
-        (dict(dy=1, lean=6, head=(2, 2), hf=(5, -1), hb=(0, 6), ff=(5, 0), fb=(-6, 0), face='n'), 120),
-        (dict(dy=1, lean=6, head=(2, 3), hf=(5, -1), hb=(0, 6), ff=(5, 0), fb=(-6, 0), face='n'), 240),
-        (dict(dy=1, lean=3, head=(1, 0), hf=(3, 3), hb=(0, 6), ff=(5, 0), fb=(-6, 0), face='f'), 110),
-        (dict(dy=1, chest=0.98, lean=2, hf=(2, 6), hb=(0, 6), ff=(5, 0), fb=(-6, 0)), 150)],
-        'Field-agent stance: at ease; checks the wrist, nods.')
-
-
-IDLES = {'guard': idle_guard, 'monk': idle_monk, 'hacker': idle_hacker, 'ronin': idle_ronin, 'pointer': idle_pointer,
-         'brawler': idle_brawler, 'agent': idle_agent}
+IDLES = {name: _idle_fn(name) for name in IDLE_DATA}
 
 
 # ---------------------------------------------------------------------- signature victories (V5.1)
 def _vic(keys, desc):
-    return M([(p(**kw), ms) for kw, ms in keys], cat='emote', desc=desc)
+    return M([(p(free_b=True, **kw), ms) for kw, ms in keys], cat='emote', desc=desc)
 
 
 def vic_fistpump():
@@ -349,26 +323,26 @@ def build_moves(character):
     wsq = [1.0, 0.97, 1.03, 1.0, 0.97, 1.03]
     whead = [0, 1, -1, 0, 1, -1]
     wlean = [12, 14, 11, 12, 14, 11]
-    warm = [((9, -1), (3, 1)), ((8, 0), (4, 1)), ((6, 1), (5, 0)), ((5, 1), (6, 0)), ((6, 0), (5, 1)), ((8, -1), (4, 1))]
+    warm = [((8, 2), (2, 4)), ((7, 3), (3, 4)), ((6, 4), (4, 3)), ((5, 4), (5, 3)), ((6, 3), (4, 4)), ((7, 2), (3, 4))]
     walk = []
     for i in range(6):
         a, b = fa[i], fa[(i + 3) % 6]
-        walk.append((p(dx=4, dy=wdy[i], sq=wsq[i], head=(1, whead[i]), lean=wlean[i], hf=warm[i][0], hb=warm[i][1], ff=a, fb=b, face='f'), 100))
+        walk.append((p(dx=4, dy=wdy[i], sq=wsq[i], head=(1, whead[i]), lean=wlean[i], hf=warm[i][0], hb=warm[i][1], ff=a, fb=b, face='f', fk=1.0), 100))
     mv['walk'] = M(walk, loop=True, cat='locomotion', desc='Stride-locked walk: contact, down, passing; planted foot does not slide.', stride=24)
     mv['walk_back'] = M([(replace(f, dx=-4), 110) for f, _ in reversed(walk)], loop=True, cat='locomotion',
                         desc='Retreat while facing the opponent.', stride=24)
     mv['dash'] = M([
         (p(dy=3, lean=8, sq=0.90, hf=(4, 3), hb=(0, 2), ff=(6, 0), fb=(-4, 0)), 60),
-        (p(dx=10, dy=-2, lean=28, sq=1.10, hf=(10, 0), hb=(2, 1), ff=(9, 4), fb=(-6, 2), ghost=(6,)), 60),
-        (p(dx=10, dy=-3, lean=26, sq=1.04, hf=(9, 0), hb=(2, 1), ff=(8, 3), fb=(-7, 3), ghost=(7, 14), fx=(('dust', 'fb', -5, 3),)), 60),
-        (p(dx=6, dy=2, lean=16, sq=0.92, hf=(8, -1), hb=(3, 1), ff=(10, 0), fb=(-2, 0), fx=(('dust', 'fb', -3, 1),)), 80),
-        (p(dx=2, sq=1.02), 90)], cat='locomotion', desc='Hop-step forward to close distance.')
+        (p(dx=14, dy=-2, lean=30, sq=1.10, hf=(10, 2), wa=-10, ff=(9, 4), fb=(-6, 2), ghost=(6,)), 50),
+        (p(dx=14, dy=-3, lean=28, sq=1.04, hf=(9, 2), wa=-10, ff=(8, 3), fb=(-7, 3), ghost=(7, 14), fx=(('dust', 'fb', -5, 3), ('speedlines', 'hip', -10, -6))), 60),
+        (p(dx=8, dy=3, lean=18, sq=0.90, hf=(8, 2), ff=(11, 0), fb=(-2, 0), fx=(('dust', 'fb', -3, 1),)), 80),
+        (p(dx=2, sq=1.02), 110)], cat='locomotion', desc='Low dash forward that covers real ground, with dust and speed lines.')
     mv['backdash'] = M([
         (p(dy=3, lean=4, sq=0.92, hf=(4, 2), hb=(1, 2)), 50),
-        (p(dx=-9, dy=-2, lean=-16, sq=1.08, hf=(3, -3), hb=(0, -3), ff=(8, 3), fb=(-8, 2), ghost=(7, 14, 21)), 60),
-        (p(dx=-9, dy=-3, lean=-20, sq=1.03, hf=(2, -4), hb=(-1, -4), ff=(9, 3), fb=(-9, 3), ghost=(8, 16)), 60),
-        (p(dx=-5, dy=2, lean=-8, sq=0.92, hf=(4, 0), hb=(2, 1), ff=(10, 0), fb=(-4, 0), fx=(('dust', 'ff', 4, 1),)), 70),
-        (p(dx=-1, sq=1.02), 100)], cat='defense', desc='Evasive hop back with an afterimage trail.')
+        (p(dx=-12, dy=-2, lean=-16, sq=1.08, hf=(4, 0), ff=(8, 3), fb=(-8, 2), ghost=(7, 14, 21)), 60),
+        (p(dx=-12, dy=-3, lean=-20, sq=1.03, hf=(3, -1), ff=(9, 3), fb=(-9, 3), ghost=(8, 16)), 50),
+        (p(dx=-6, dy=3, lean=-8, sq=0.90, hf=(5, 2), ff=(10, 0), fb=(-4, 0), fx=(('dust', 'ff', 4, 1),)), 80),
+        (p(dx=-1, sq=1.02), 110)], cat='defense', desc='Evasive hop back with an afterimage trail.')
     mv['turn'] = M([(p(lean=0, hf=(5, 2), hb=(5, 2), ff=(2, 0), fb=(-2, 0), turn=0.7, face='back'), 60), (S0, 60)],
                    cat='locomotion', desc='Pivot to face the other way.')
     mv['crouch'] = M([(p(dy=3, lean=14, sq=0.96, hf=(7, 1), hb=(3, 2), ff=(8, 0), fb=(-7, 0)), 60),
@@ -385,71 +359,72 @@ def build_moves(character):
         (p(dy=2, lean=10, sq=1.02), 90)],
         cat='locomotion', desc='Neutral jump: squash, stretch, hang, squash on landing.')
 
-    # ------------------------------------------------------------------ strikes
+    # ------------------------------------------------------------------ strikes (V6: weapon swings, section-6 timing)
+    # wind-up held over two keys -> one smear (the crescent) -> contact hold (hitstop) -> held follow-through -> settle
     mv['jab'] = M([
-        (p(dy=2, lean=4, hf=(3, 2), hb=(7, -2), ff=(6, 0), fb=(-7, 0)), 70),
-        (p(dy=2, lean=2, sq=0.97, hf=(2, 3), hb=(7, -2), ff=(6, 0), fb=(-7, 0)), 50),
-        (p(dy=2, lean=20, hf=(12, -2), hb=(4, -1), ff=(10, 0), fb=(-8, 0), fist_f=4, dx=3, smear_f=(2, 3)), 40),
-        (p(dy=2, lean=22, hf=(13, -2), hb=(4, -1), ff=(10, 0), fb=(-8, 0), fist_f=4, fx=(('spark', 'hf', 3, 0),)), 140),
-        (p(dy=2, lean=24, hf=(12, -1), hb=(4, -1), ff=(10, 0), fb=(-8, 0), fist_f=4), 60),
-        (p(dy=1, lean=14, hf=(9, -1), hb=(4, 1), ff=(8, 0), fb=(-6, 0)), 70),
-        (S0, 100)],
-        cat='strike', desc='Fast lead-hand strike. Light hit, small hit-stop.', hit_frame=3, power=1)
+        (p(dy=3, lean=2, sq=0.96, turn=0.9, hf=(2, 4), wa=-12, ff=(6, 0), fb=(-8, 0)), 110),
+        (p(dy=4, lean=0, sq=0.95, turn=0.9, hf=(1, 4), wa=-10, ff=(6, 0), fb=(-8, 0)), 70),
+        (p(dy=2, lean=24, hf=(8, 1), wa=-4, ff=(12, 0), fb=(-9, 0), fist_f=4, dx=5, smear_f=(1, 4)), 40),
+        (p(dy=2, lean=26, hf=(8, 1), wa=-3, ff=(12, 0), fb=(-9, 0), fist_f=4, fx=(('spark', 'hf', 3, 0),)), 140),
+        (p(dy=2, lean=28, hf=(8, 2), wa=6, ff=(12, 0), fb=(-9, 0), fist_f=4), 70),
+        (p(dy=1, lean=14, hf=(9, 2), ff=(9, 0), fb=(-7, 0)), 120),
+        (S0, 90)],
+        cat='strike', desc='Fast lead-hand thrust. Light hit, small hit-stop.', hit_frame=3, power=1)
     mv['cross'] = M([
-        (p(dy=2, lean=-4, chest=1.05, hf=(7, -2), hb=(-2, 3), fb=(-8, 0)), 90),
-        (p(dy=3, lean=-6, sq=0.97, hf=(7, -2), hb=(-3, 3), ff=(8, 0), fb=(-9, 0)), 60),
-        (p(dy=3, lean=24, hf=(8, -3), hb=(12, -3), ff=(11, 0), fb=(-9, 0), fist_b=4, dx=4, smear_b=(-3, 3)), 40),
-        (p(dy=3, lean=28, hf=(8, -3), hb=(13, -3), ff=(11, 0), fb=(-9, 0), fist_b=4, fx=(('spark', 'hb', 3, 0),)), 160),
-        (p(dy=3, lean=30, hf=(8, -3), hb=(13, -2), ff=(11, 0), fb=(-9, 0), fist_b=4), 60),
-        (p(dy=2, lean=16, hf=(8, -2), hb=(8, -1), ff=(10, 0), fb=(-8, 0)), 80),
-        (S0, 100)], cat='strike', desc='Rear-hand power punch. Medium hit, forces a block-stagger.', hit_frame=3, power=2)
+        (p(dy=2, lean=-6, chest=1.05, turn=0.85, hf=(-2, -8), eb_f='up', wa=-150, ff=(7, 0), fb=(-8, 0)), 130),
+        (p(dy=3, lean=-10, sq=0.96, turn=0.85, hf=(-4, -9), eb_f='up', wa=-160, ff=(7, 0), fb=(-9, 0)), 90),
+        (p(dy=3, lean=24, hf=(12, 3), wa=38, ff=(12, 0), fb=(-9, 0), fist_f=4, dx=5, smear_f=(-4, -9)), 40),
+        (p(dy=3, lean=28, hf=(12, 4), wa=42, ff=(12, 0), fb=(-9, 0), fist_f=4, fx=(('spark', 'hf', 3, 0),)), 160),
+        (p(dy=3, lean=30, hf=(11, 6), wa=58, ff=(12, 0), fb=(-9, 0), fist_f=4), 230),
+        (p(dy=2, lean=14, hf=(8, 4), ff=(9, 0), fb=(-8, 0)), 100),
+        (S0, 80)], cat='strike', desc='Big diagonal power slash. Medium hit, forces a block-stagger.', hit_frame=3, power=2)
     mv['uppercut'] = M([
-        (p(dy=4, lean=12, hf=(4, 4), hb=(5, 0), ff=(8, 0), fb=(-7, 0)), 90),
-        (p(dy=7, lean=16, sq=0.90, hf=(5, 8), hb=(5, -1), ff=(9, 0), fb=(-8, 0)), 70),
-        (p(dy=-2, lean=2, sq=1.08, hf=(9, -12), hb=(5, -2), ff=(8, 1), fb=(-6, 0), fist_f=4, dx=2, smear_f=(5, 8)), 40),
-        (p(dy=-3, lean=2, sq=1.06, hf=(9, -13), hb=(5, -2), ff=(7, 3), fb=(-5, 2), fist_f=4, fx=(('spark', 'hf', 0, -4),)), 150),
-        (p(dy=-1, lean=-2, sq=1.03, hf=(8, -14), hb=(5, -2), ff=(7, 2), fb=(-5, 1), fist_f=4), 60),
-        (p(dy=2, lean=8, hf=(8, -6), hb=(4, 0)), 90),
-        (S0, 100)], cat='strike', desc='Rising launcher. Pops the opponent up.', hit_frame=3, power=2)
+        (p(dy=4, lean=14, hf=(3, 8), wa=130, ff=(8, 0), fb=(-7, 0)), 120),
+        (p(dy=7, lean=18, sq=0.90, hf=(4, 9), wa=140, ff=(9, 0), fb=(-8, 0)), 80),
+        (p(dy=-2, lean=0, sq=1.08, hf=(6, -12), wa=-92, ff=(8, 1), fb=(-6, 0), fist_f=4, dx=2, smear_f=(4, 9)), 40),
+        (p(dy=-3, lean=0, sq=1.06, hf=(6, -13), wa=-94, ff=(7, 3), fb=(-5, 2), fist_f=4, fx=(('spark', 'hf', 0, -4),)), 150),
+        (p(dy=-1, lean=-4, sq=1.03, hf=(5, -14), wa=-104, ff=(7, 2), fb=(-5, 1), fist_f=4), 220),
+        (p(dy=2, lean=8, hf=(7, -2)), 100),
+        (S0, 90)], cat='strike', desc='Rising launcher slash. Pops the opponent up.', hit_frame=3, power=2)
     mv['low_kick'] = M([
-        (p(dy=3, lean=6, hf=(2, 3), hb=(0, 2)), 80),
-        (p(dy=6, lean=-4, sq=0.95, hf=(-2, 5), hb=(-5, 3), ff=(3, 1), fb=(-9, 0)), 60),
-        (p(dy=7, lean=-8, hf=(-3, 6), hb=(-7, 4), ff=(14, 0), fb=(-8, 0), dx=3, smear_ff=(3, 1)), 40),
-        (p(dy=7, lean=-8, hf=(-3, 6), hb=(-7, 4), ff=(14, 0), fb=(-8, 0), fx=(('spark', 'ff', 4, -1),)), 140),
-        (p(dy=7, lean=-10, hf=(-4, 6), hb=(-7, 4), ff=(15, 0), fb=(-8, 0)), 60),
-        (p(dy=4, lean=0, hf=(2, 4), hb=(0, 3), ff=(10, 0), fb=(-8, 0)), 90),
-        (S0, 100)], cat='strike', desc='Sweep along the ground. Trips guard-high opponents.', hit_frame=3, power=1)
+        (p(dy=3, lean=6, hf=(2, 3), wa=-120), 110),
+        (p(dy=7, lean=-6, sq=0.94, turn=0.7, hf=(-3, 4), wa=-140, ff=(3, 1), fb=(-9, 0)), 70),
+        (p(dy=8, lean=-10, turn=0.6, hf=(-4, 5), wa=-150, ff=(15, 0), fb=(-8, 0), dx=4, smear_ff=(3, 1)), 40),
+        (p(dy=8, lean=-10, turn=0.7, hf=(-4, 5), wa=-150, ff=(15, 0), fb=(-8, 0), fx=(('spark', 'ff', 4, -1),)), 140),
+        (p(dy=8, lean=-12, turn=0.75, hf=(-5, 5), wa=-150, ff=(16, 0), fb=(-8, 0)), 180),
+        (p(dy=4, lean=0, hf=(2, 4), ff=(10, 0), fb=(-8, 0)), 90),
+        (S0, 100)], cat='strike', desc='Sweep along the ground with a hip turn. Trips guard-high opponents.', hit_frame=3, power=1)
     mv['roundhouse'] = M([
-        (p(dy=1, lean=-2, hf=(5, 2), hb=(2, 2), ff=(6, 8), fb=(-4, 0)), 100),
-        (p(dy=0, lean=-10, sq=0.96, hf=(-2, -5), hb=(-6, 0), ff=(4, 11), fb=(-3, 0)), 70),
-        (p(dy=0, lean=-14, sq=1.03, hf=(-4, -6), hb=(-8, -1), ff=(15, 14), fb=(-3, 0), dx=2, ang_f=-15, smear_ff=(4, 11)), 40),
-        (p(dy=0, lean=-14, hf=(-4, -6), hb=(-8, -1), ff=(15, 14), fb=(-3, 0), ang_f=-15, fx=(('spark', 'ff', 4, -1),)), 160),
-        (p(dy=0, lean=-16, hf=(-5, -6), hb=(-8, -1), ff=(16, 13), fb=(-3, 0), ang_f=-18), 60),
-        (p(dy=1, lean=-8, hf=(0, -2), hb=(-4, 1), ff=(12, 10), fb=(-4, 0)), 80),
-        (p(dy=1, lean=4, ff=(8, 2)), 90),
-        (S0, 100)], cat='strike', desc='High kick. Heavy hit, big hit-stop.', hit_frame=3, power=3)
+        (p(dy=1, lean=-2, turn=0.8, hf=(4, 2), wa=-110, ff=(6, 9), fb=(-4, 0)), 140),
+        (p(dy=0, lean=-14, sq=0.96, turn=0.55, hf=(-3, -4), wa=-150, ff=(3, 12), fb=(-3, 0)), 90),
+        (p(dy=0, lean=-18, sq=1.03, turn=0.7, hf=(-5, -5), wa=-160, ff=(16, 14), fb=(-3, 0), dx=4, ang_f=-15, smear_ff=(3, 12)), 40),
+        (p(dy=0, lean=-18, turn=0.8, hf=(-5, -5), wa=-160, ff=(16, 14), fb=(-3, 0), ang_f=-15, fx=(('spark', 'ff', 4, -1),)), 160),
+        (p(dy=0, lean=-20, turn=0.9, hf=(-6, -5), wa=-158, ff=(17, 13), fb=(-3, 0), ang_f=-18), 260),
+        (p(dy=1, lean=-8, hf=(0, 0), ff=(11, 8), fb=(-4, 0)), 110),
+        (p(dy=1, lean=4, ff=(8, 1)), 90),
+        (S0, 120)], cat='strike', desc='High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through.', hit_frame=3, power=3)
     for role in ('strike', 'special'):                 # same row order as before: strike, special after the shared strikes
         name = ch.signature[role]
         tpl, desc, opts = ch.sig_moves[name]
         mv[name] = TEMPLATES[tpl](desc, **opts)
 
     # ------------------------------------------------------------------ defense
-    mv['block'] = M([(p(dy=2, lean=4, hf=(4, -6), hb=(3, -5)), 60),
-                     (p(dy=3, lean=2, chest=1.03, hf=(6, -7), hb=(4, -7), ff=(8, 0), fb=(-7, 0), fist_f=4), 120),
-                     (p(dy=3, lean=1, chest=1.0, hf=(6, -8), hb=(4, -7), ff=(8, 0), fb=(-7, 0), fist_f=4), 120),
-                     (p(dy=2, lean=6, hf=(5, -5), hb=(3, -3)), 80)],
+    mv['block'] = M([(p(dy=2, lean=4, hf=(5, -2), hb=(3, -1), wa=-96, wb=-100), 60),
+                     (p(dy=3, lean=2, chest=1.03, hf=(7, -3), hb=(5, -3), wa=-100, wb=-104, ff=(8, 0), fb=(-7, 0), fist_f=4), 120),
+                     (p(dy=3, lean=1, chest=1.0, hf=(7, -4), hb=(5, -3), wa=-100, wb=-104, ff=(8, 0), fb=(-7, 0), fist_f=4), 110),
+                     (p(dy=2, lean=6, hf=(6, -1), hb=(3, 1), wa=-80), 80)],
                     loop=True, loop_range=(1, 2), cat='defense', desc='High guard.')
-    mv['block_hit'] = M([(p(dy=3, lean=-4, sq=0.96, hf=(6, -7), hb=(4, -7), fist_f=4, fx=(('block', 'hf', 4, -3),), dx=-2), 50),
-                         (p(dy=3, lean=-2, sq=0.98, hf=(5, -7), hb=(3, -7), fist_f=4, dx=-1), 80),
-                         (p(dy=3, lean=3, hf=(6, -7), hb=(4, -7), fist_f=4), 90)],
+    mv['block_hit'] = M([(p(dy=3, lean=-6, sq=0.96, hf=(6, -3), hb=(4, -3), wa=-108, wb=-110, fist_f=4, fx=(('block', 'hf', 4, -3),), dx=-3), 50),
+                         (p(dy=3, lean=-3, sq=0.98, hf=(5, -3), hb=(3, -3), wa=-104, wb=-106, fist_f=4, dx=-1), 80),
+                         (p(dy=3, lean=3, hf=(7, -3), hb=(5, -3), wa=-100, wb=-104, fist_f=4), 100)],
                         cat='defense', desc='Guard absorbs a hit with a flash.')
-    mv['crouch_block'] = M([(p(dy=7, lean=14, sq=0.92, hf=(8, -1), hb=(6, 0), ff=(9, 0), fb=(-8, 0), fist_f=4), 80),
-                            (p(dy=8, lean=14, sq=0.91, hf=(8, -1), hb=(6, 0), ff=(9, 0), fb=(-8, 0), fist_f=4), 120)],
+    mv['crouch_block'] = M([(p(dy=7, lean=14, sq=0.92, hf=(8, 1), hb=(6, 2), wa=-60, wb=-70, ff=(9, 0), fb=(-8, 0), fist_f=4), 80),
+                            (p(dy=8, lean=14, sq=0.91, hf=(8, 1), hb=(6, 2), wa=-60, wb=-70, ff=(9, 0), fb=(-8, 0), fist_f=4), 120)],
                            loop=True, loop_range=(0, 1), cat='defense', desc='Low guard.')
-    mv['parry'] = M([(p(dy=2, lean=4, hf=(4, -6), hb=(3, 1)), 50),
-                     (p(dy=2, lean=12, hf=(12, -3), hb=(4, 1), face='g', smear_f=(4, -6), fx=(('block', 'hf', 3, -1),)), 90),
-                     (p(dy=2, lean=14, hf=(13, -2), hb=(4, 1), face='g'), 60),
-                     (p(dy=1, lean=10, hf=(9, -2), face='g'), 100)],
+    mv['parry'] = M([(p(dy=2, lean=4, hf=(4, -4), wa=-110), 70),
+                     (p(dy=2, lean=12, hf=(12, 0), wa=10, face='g', smear_f=(4, -4), fx=(('block', 'hf', 3, -1),)), 90),
+                     (p(dy=2, lean=14, hf=(13, 1), wa=18, face='g'), 160),
+                     (p(dy=1, lean=10, hf=(9, 2), face='g'), 100)],
                     cat='defense', desc='Swat the strike aside with a flash. Counter window.', hit_frame=1)
 
     # ------------------------------------------------------------------ reactions (the head leads, the arms follow)

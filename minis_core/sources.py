@@ -48,6 +48,24 @@ for _r in RULES:
     PROGRAM.setdefault(_r['source'], _r.get('program', _r['source']))
 CHARACTER = {r['source']: r.get('character', r['source']) for r in RULES}
 CHARACTER[SPARRING] = 'generic'
+# V6: the short name the scoreboard, the select screen and a skinned plate use ("Claude Code" -> "Claude"); never truncated
+LABEL = {'claude': 'Claude', 'codex': 'Codex', SPARRING: 'Bot', 'lmstudio': 'LM Studio', 'copilot': 'Copilot', 'qwen': 'Qwen'}
+
+
+def short_label(source_id, program=None) -> str:
+    """Short display label of a program: the LABEL table, else the program's name, else the id."""
+    if source_id in LABEL:
+        return LABEL[source_id]
+    return str(PROGRAM.get(source_id) or program or source_id or '-')
+
+
+def known_programs() -> list:
+    """Every source id a fighter can be picked for, in table order: the two transcript programs, the process table, the bot."""
+    out = list(TRANSCRIPT_SOURCES)
+    for r in RULES:
+        if r['source'] not in out:
+            out.append(r['source'])
+    return out + [SPARRING]
 
 
 @dataclass

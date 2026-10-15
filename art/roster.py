@@ -1,11 +1,12 @@
 """The fighter roster: one entry per character the director can assign to a slot.
 
-Every character is a rig.Body variant (proportions, hood / scarf / ponytail, palette, cap sigil) plus plate identity
+Every character is a rig.Body variant (proportions, headgear, armour, weapon(s), short hanging bits, palette) plus plate identity
 (`display`, `tag`, `accent`) and a `signature` naming its strike / special / super.  Every character gets the full shared
 move set from moves.py; its three signature moves are built from parameterised templates in moves.py (`spin`, `pound`,
 `throw`, `cast`, `rewind`, `raise`), so the planner can treat all characters the same way and never branch on a name.
 
-claude and codex keep their original signature moves; every body (costume flags + palette) is defined here.
+V6: thirteen characters.  The seven program ids keep their names and signature moves with new bodies; the six extras
+(kunoichi, knight, barbarian, monk, nomad, oni) reuse the templates under their own move names.  Every body is defined here.
 `style` names the signature idle / victory template (moves.py IDLES / VICTORIES).
 """
 from __future__ import annotations
@@ -34,144 +35,171 @@ def _fx(a, b, w, c):
     return dict(a=hexrgb(a), b=hexrgb(b), w=hexrgb(w), c=hexrgb(c))
 
 
-# ---------------------------------------------------------------- bodies (V5.1 redesign)
-# Every costume is original pixel art from the rig's costume flags.  The LM Studio cyber-samurai (white plates, teal
-# edge light, magenta soles, holographic trail) is the bar; each of the others gets the same three things: one strong
-# silhouette feature, one saturated accent against a restrained base, and an HD rim tint (`hi2`) that reads as light.
-def _g5(base, hi, sh, ol, hi2):
-    g = _g(base, hi, sh, ol)
-    g['hi2'] = hexrgb(hi2)
-    return g
+# ---------------------------------------------------------------- bodies (V6 roster)
+# Every costume is original pixel art built by the rig from these flags (docs/CREDITS.md lists the packs that were
+# studied for proportion and keying; nothing is copied).  ~4.5 heads tall, a weapon in hand, one silhouette feature each.
+def pal(skin, hair, cloth, trim, pants, helm, metal, hilt, fx, shoe=None, paper=None, ink='1A1620'):
+    """A character palette.  Each material is a hex base (ramped) or a ramp dict; a string naming another material
+    reuses it (fewer colours at 64 px)."""
+    raw = dict(skin=skin, hair=hair, cloth=cloth, trim=trim, pants=pants, helm=helm, metal=metal, hilt=hilt,
+               shoe=shoe or 'pants')
+    out = {}
+    for k, v in raw.items():                       # materials first, then aliases (which may chain)
+        if isinstance(v, dict):
+            out[k] = v
+        elif v not in raw:
+            out[k] = rig.ramp(v)
+    while len(out) < len(raw):
+        for k, v in raw.items():
+            if k not in out and isinstance(v, str) and v in out:
+                out[k] = out[v]
+    inkc = hexrgb(ink)
+    out['ink'] = dict(base=inkc, hi=inkc, sh=inkc, ol=inkc)
+    out['sole'] = dict(base=inkc, hi=out['pants']['sh'], sh=inkc, ol=inkc)
+    out['paper'] = out[paper] if paper else dict(base=hexrgb('FFFFFF'), hi=hexrgb('FFFFFF'), sh=out['metal']['sh'], ol=inkc)
+    out['fx'] = _fx(*fx)
+    out['flash'] = FLASH
+    return out
 
 
-# Claude: terracotta street-monk.  Hood down, no scarf (owner: the trailing scarf read as a cape), wrapped forearms,
-# hoodie drawstrings, the reversed cap with '/'.  Warm rim light.
-CLAUDE = Body('claude', thigh=8, shin=8, torso=12, torso_w=10, upper=6, fore=6, limb=3, head_w=13, head_h=13,
-              foot_len=6, sigil='/', scarf=False, hood=True, ghost_group='cloth', tail_seg=(5, 2.6), scarf_group='paper',
-              wraps=True, drawstring=True, palette={
-    'skin': _g5('E9B88F', 'F6D6B6', 'C48A66', '7A4A34', 'FFEBD6'),
-    'hair': _g('2B2420', '4A3E36', '1A1512', '100C0A'),
-    'cloth': _g5('D97757', 'F0A184', 'A8553C', '5E2C1E', 'FFD2B8'),
-    'trim': _g5('F0EEE6', 'FFFFFF', 'C7C2B3', '7D7766', 'FFFFFF'),
-    'pants': _g5('2E2B38', '45414F', '1E1C26', '121118', 'F0A184'),
-    'shoe': _g5('F0EEE6', 'FFFFFF', 'C7C2B3', '7D7766', 'FFFFFF'),
-    'sole': _g('1F1E1D', '45414F', '1F1E1D', '121118'),
-    'ink': _g('1F1E1D', '1F1E1D', '1F1E1D', '1F1E1D'),
-    'paper': PAPER,
-    'fx': _fx('FF9C2C', 'FFE27A', 'FFFFFF', 'F0A184'),
-    'flash': FLASH,
-})
+R = rig.ramp
+W_ = rig.Weapon
+B_ = rig.Bit
 
-# Codex: black-and-violet hooded hacker-ninja.  Hood UP with a violet visor glow, loose sleeves, split-toe tabi,
-# circuit traces, '$' on the hood.  Violet holographic afterimages.
-CODEX = Body('codex', thigh=7, shin=7, torso=12, torso_w=13, upper=5.5, fore=5.5, limb=4, head_w=13, head_h=13,
-             foot_len=7, sigil='$', scarf=False, hood=True, hood_up=True, visor_glow=True, sleeves='loose', tabi=True,
-             circuit=True, ghost_group='trim', ghost_style='holo', palette={
-    'skin': _g5('BB7A50', 'D79E74', '8F5736', '4C2A1B', 'F0C8A8'),
-    'hair': _g('17130F', '2E2620', '0D0A08', '070504'),
-    'cloth': _g5('1E1E28', '33334A', '111118', '07070B', 'A99DFF'),
-    'trim': _g5('7C6CFF', 'A99DFF', '5648D6', '2A2270', 'E4E0FF'),
-    'pants': _g5('2C2C3A', '44445A', '1C1C26', '0E0E14', '7C6CFF'),
-    'shoe': _g5('15151C', '33334A', '0B0B10', '07070B', 'A99DFF'),
-    'sole': _g('5648D6', '7C6CFF', '5648D6', '2A2270'),
-    'ink': _g('0B0B10', '0B0B10', '0B0B10', '0B0B10'),
-    'paper': PAPER,
-    'fx': _fx('9B6BFF', 'FFE27A', 'FFFFFF', 'A99DFF'),
-    'flash': FLASH,
-})
+# Claude: ronin swordswoman.  Wide straw kasa, a short tied topknot tail, terracotta kimono, dark hakama, katana.
+CLAUDE = Body('claude', sigil='/', torso_w=10.5, waist=0.70, hair='topknot', headgear='kasa', chest='robe', skirt='hakama', sash=True,
+              sleeves='loose', weapon=W_('katana', 17, 3.5, rel=-62, width=1.8, grip2=2.4), ghost_group='cloth',
+              bits=(B_('head', (-5.4, -1.0), n=3, seg=1.9, width=1.6, part='bitH', rest=108),
+                    B_('hip', (-4.6, 1.6), n=2, seg=2.4, width=2.0, part='bitT', rest=112)),
+              groups={'helm2': 'pants', 'hilt': 'pants'},
+              palette=pal(skin='F6D2B0', hair='2A2230', cloth=R('BF5A3C', hi='D97757', sh='93412E'), trim=R('F2E6D8'), pants='hair', helm=R('FFB86B'),
+                          metal=R('DDE0E8', hi2='FFFFFF'), hilt='hair', fx=('FFB86B', 'FFE27A', 'FFFFFF', 'F2E6D8'), paper='trim'))
 
-# Gemini: blue-and-gold twin-tail ronin.  Two ponytails that whip, a haori jacket with gold lapels, '*' sigil,
-# a pale-gold star-sparkle rim and sparkle afterimages.
-GEMINI = Body('gemini', thigh=8, shin=8, torso=11, torso_w=10, upper=6, fore=6, limb=3, head_w=13, head_h=13,
-              foot_len=6, sigil='*', scarf=False, hood=False, ponytail=True, twin_tail=True, lapel=True,
-              tail_anchor=(-6.5, 0.5), tail_seg=(4, 2.4), ghost_group='cloth', ghost_style='spark', palette={
-    'skin': _g5('9A6444', 'B98260', '73472E', '3E2418', 'E0B898'),
-    'hair': _g5('1E1A2A', '3A3450', '120F1A', '08070C', '7FA8F2'),
-    'cloth': _g5('3F7BE0', '7FA8F2', '2A55A8', '142A5C', 'FFF4C2'),
-    'trim': _g5('E8C55A', 'FFF4C2', 'B08E2E', '5A4710', 'FFFFFF'),
-    'pants': _g5('2A2F45', '3F4560', '1B1F30', '0E1018', '7FA8F2'),
-    'shoe': _g5('F4F4F2', 'FFFFFF', 'A9A9B4', '4A4A55', 'FFFFFF'),
-    'sole': _g('2A55A8', '3F7BE0', '2A55A8', '142A5C'),
-    'ink': _g('141420', '141420', '141420', '141420'),
-    'paper': PAPER,
-    'fx': _fx('E8718C', 'FFE27A', 'FFFFFF', 'FFF4C2'),
-    'flash': FLASH,
-})
+# Codex: shadow ninja.  Pointed cowl, cloth mask, glowing violet eyes, violet arm wraps, twin reverse-grip kunai and a
+# short chain hanging from the rear one.
+CODEX = Body('codex', sigil='$', thigh=10.5, shin=10.5, torso=14, torso_w=10, waist=0.70, headgear='cowl', face='mask', chest='wrap',
+             gauntlet=True, boots=True, weapon=W_('kunai', 8, 2.4, rel=148, width=2.0), weapon_b=W_('kunai', 8, 2.4, rel=148, width=2.0),
+             bits=(B_('head', (-5.8, 0.6), n=2, seg=2.4, width=1.4, part='bitT', rest=122),
+                   B_('hb', (0, 0), n=3, seg=1.7, width=1.0, part='bitM', rest=96)),
+             groups={'helm': 'cloth', 'mask': 'pants', 'helm2': 'trim'}, flats={'lens': ('trim', 'hi')},
+             ghost_group='trim', ghost_style='holo',
+             palette=pal(skin='C68A5E', hair='cloth', cloth=R('1C1B26', hi='3A3550'), trim=R('7C6CFF', hi='E4E0FF'), pants=R('3A3550'),
+                         helm='cloth', metal=R('C9C6E0', hi='E4E0FF'), hilt='pants', fx=('9B6BFF', 'FFE27A', 'FFFFFF', 'E4E0FF')))
 
-# Cursor: sleek cyan-on-black "pointer" assassin.  An angular cursor-arrow brim, sharp thin limbs, '>' sigil,
-# cyan edge light on the black suit (the rim tone IS the accent) and speed-line afterimages.
-CURSOR = Body('cursor', thigh=8, shin=7, torso=12, torso_w=10, upper=6, fore=6, limb=3, head_w=13, head_h=13,
-              foot_len=6, sigil='>', scarf=False, hood=False, brim='pointer', arm_taper=0.8,
-              ghost_group='trim', ghost_style='streak', palette={
-    'skin': _g5('F0CDB0', 'FBE5D2', 'CFA587', '7E5640', 'FFF4EA'),
-    'hair': _g('3A2A20', '5A4434', '241A13', '120D0A'),
-    'cloth': _g5('1C1C22', '2E2E36', '0E0E12', '060608', '5FD3F3'),
-    'trim': _g5('5FD3F3', 'B8F1FF', '2A95B5', '0E3F50', 'FFFFFF'),
-    'pants': _g5('26262E', '3A3A44', '16161A', '0A0A0C', '5FD3F3'),
-    'shoe': _g5('1C1C22', '2E2E36', '0E0E12', '060608', '5FD3F3'),
-    'sole': _g('5FD3F3', 'B8F1FF', '2A95B5', '0E3F50'),
-    'ink': _g('0A0A0E', '0A0A0E', '0A0A0E', '0A0A0E'),
-    'paper': PAPER,
-    'fx': _fx('5FD3F3', 'FFE27A', 'FFFFFF', 'B8F1FF'),
-    'flash': FLASH,
-})
+# Gemini: twin-blade dancer.  Hair bun with gold tassels, a gold headband with a star crest, blue top, gold sash with
+# short ends, two short swords.
+GEMINI = Body('gemini', sigil='*', torso_w=9.6, waist=0.64, hip_w=0.80, limb=3, hair='bun', headgear='crest', chest='wrap', sash=True,
+              boots=True, weapon=W_('short', 12, 3.0, rel=-38, width=1.7), weapon_b=W_('short', 12, 3.0, rel=-30, width=1.7),
+              bits=(B_('head', (-5.4, -4.0), n=2, seg=2.0, width=1.2, part='bitT', rest=100),
+                    B_('hip', (-4.4, 1.6), n=2, seg=2.4, width=2.0, part='bitT', rest=110)),
+              flats={'glow': ('trim', 'hi')}, ghost_group='cloth', ghost_style='spark',
+              palette=pal(skin='A86E4C', hair='pants', cloth=R('3F7BE0'), trim=R('E8C55A'), pants=R('1B1F30'), helm='trim',
+                          metal=R('F4F4F2', sh='A9B0C4'), hilt='pants', fx=('E8718C', 'FFE27A', 'FFFFFF', 'F4F4F2')))
 
-# Ollama: cream-and-brown llama-hood brawler.  Hood up with little llama ears, chunky build, 'o' sigil, an earthy
-# palette with one bright orange accent (soles, ear lining, energy).
-OLLAMA = Body('ollama', thigh=7, shin=7, torso=11, torso_w=14, upper=5.5, fore=5.5, limb=4, head_w=14, head_h=13,
-              foot_len=7, sigil='o', scarf=False, hood=True, hood_up=True, ears='llama', ear_inner='sole',
-              ghost_group='cloth', palette={
-    'skin': _g5('E2B48C', 'F2D0B0', 'BE8A64', '6E4630', 'FFEEDC'),
-    'hair': _g('2E2622', '4A3E36', '1E1814', '0F0C0A'),
-    'cloth': _g5('EEE6D4', 'FBF7EE', 'C4B89E', '6E6250', 'FFFFFF'),
-    'trim': _g5('8A5A38', 'B57C50', '5E3A22', '301C0E', 'FFD27A'),
-    'pants': _g5('5A4A3C', '75634F', '413529', '221B14', 'FFB347'),
-    'shoe': _g5('3A2A20', '5E3A22', '221B14', '0F0C0A', 'FFB347'),
-    'sole': _g('FFB347', 'FFD27A', 'FFB347', '8A5A38'),
-    'ink': _g('141414', '141414', '141414', '141414'),
-    'paper': PAPER,
-    'fx': _fx('FFB347', 'FFE27A', 'FFFFFF', 'FBF7EE'),
-    'flash': FLASH,
-})
+# Cursor: cyber lancer.  Black helmet with a cyan visor and a pink fin, angled pink shoulder plates, a long spear with an
+# arrowhead tip held high.
+CURSOR = Body('cursor', sigil='>', thigh=11.5, shin=11.5, torso_w=10.4, waist=0.68, headgear='visor', pads='angled', boots=True,
+              gauntlet=True, weapon=W_('spear', 30, 13, rel=-30, slide=True, grip2=6),
+              groups={'helm': 'cloth', 'helm2': 'helm', 'cuff_f': 'trim', 'cuff_b': 'trim'}, flats={'lens': ('trim', 'hi')},
+              ghost_group='trim', ghost_style='streak',
+              palette=pal(skin='F0C8A8', hair='cloth', cloth=R('16161C', hi='2C2C38'), trim=R('5FD3F3', hi='B8F1FF'), pants=R('26262F'),
+                          helm=R('FF4FA3'), metal=R('B8F1FF'), hilt=R('3A3A48'), fx=('5FD3F3', 'FFE27A', 'FFFFFF', 'B8F1FF')))
 
-# LM Studio: the cyber-samurai direction (white armour plates, neon teal edge light, magenta soles) - an original
-# pixel costume inspired by DullMesh's "Cyber White Samurai" look (docs/CREDITS.md, visual inspiration only).
-LMSTUDIO = Body('lmstudio', thigh=9, shin=8, torso=12, torso_w=9, upper=6.5, fore=6, limb=3, head_w=12, head_h=13,
-                foot_len=6, sigil='L', scarf=False, hood=False, ghost_group='trim', ghost_style='holo', palette={
-    'skin': _g('C68B63', 'DFAA84', 'A0694A', '5A3626'),
-    'hair': _g('6B3A22', '8E5434', '4A2716', '26130A'),
-    'cloth': _g('E4ECF4', 'FFFFFF', 'A9B8C8', '3E5064'),
-    'trim': _g('1FD6C4', '7CF8EA', '0F8F84', '064844'),
-    'pants': _g('242A3C', '384058', '161A26', '0B0D14'),
-    'shoe': _g('E4ECF4', 'FFFFFF', 'A9B8C8', '3E5064'),
-    'sole': _g('D9488F', 'F59AC4', 'D9488F', '501433'),
-    'ink': _g('12121A', '12121A', '12121A', '12121A'),
-    'paper': PAPER,
-    'fx': _fx('F59AC4', 'FFE27A', 'FFFFFF', '7CF8EA'),
-    'flash': FLASH,
-})
+# Ollama: mountain monk-brute.  Wide and heavy, a brown dome helmet with tall cream llama-ear horns, cream wool torso,
+# brown robe skirt, a heavy staff with orange caps.
+OLLAMA = Body('ollama', sigil='o', thigh=10, shin=10, torso=15, torso_w=16, waist=0.94, hip_w=0.96, limb=4, leg_add=2, upper=7.5, fore=7.5,
+              head_w=11, head_h=11, foot_len=8, headgear='horned', skirt='robe', beads=True, boots=True, stance=1.35,
+              weapon=W_('staff', 27, 12, rel=-82, width=2.3, slide=True, grip2=6),
+              groups={'horn': 'cloth', 'helm2': 'metal', 'skirt': 'trim'}, flats={'glow': ('metal', 'base')}, ghost_group='cloth',
+              palette=pal(skin='E2B48C', hair='pants', cloth=R('EEE6D4'), trim=R('8A5A38'), pants=R('3A2A20'), helm='trim',
+                          metal=R('FFB347'), hilt=R('6A4428'), fx=('FFB347', 'FFE27A', 'FFFFFF', 'EEE6D4')))
 
-# Agent: olive '+' field agent.  Tactical vest with pouches, gold headband with a knot tail, dark boots, '+' sigil.
-GENERIC = Body('generic', thigh=8, shin=7, torso=12, torso_w=12, upper=6, fore=6, limb=4, head_w=13, head_h=13,
-               foot_len=6, sigil='+', scarf=False, hood=False, vest=True, headband=True, ghost_group='trim', palette={
-    'skin': _g5('E0B090', 'F0CEB2', 'BC8C6C', '6E4A36', 'FFEBD8'),
-    'hair': _g('2B2420', '4A3E36', '1A1512', '100C0A'),
-    'cloth': _g5('5B6B4A', '8A9B72', '3E4A31', '1E2418', 'C9D9A8'),
-    'trim': _g5('E0C46C', 'FFE9A8', 'B0963E', '5A4A1C', 'FFFFFF'),
-    'pants': _g5('3A3A40', '50505A', '28282C', '141416', '8A9B72'),
-    'shoe': _g5('28282C', '50505A', '141416', '0A0A0C', '8A9B72'),
-    'sole': _g('141416', '28282C', '141416', '0A0A0C'),
-    'ink': _g('18181A', '18181A', '18181A', '18181A'),
-    'paper': PAPER,
-    'fx': _fx('FF9C2C', 'FFE27A', 'FFFFFF', 'FFE9A8'),
-    'flash': FLASH,
-})
+# LM Studio: white cyber samurai (inspired by DullMesh's Cyber White Samurai look, nothing copied).  White kabuto with a
+# glowing teal V crest, white sode / chest plate / tassets over a dark suit, an energy katana with a magenta hilt.
+LMSTUDIO = Body('lmstudio', sigil='L', torso_w=10.6, headgear='kabuto', face='glow', chest='plate', pads='sode', skirt='tassets', boots=True,
+                gauntlet=True, weapon=W_('energy', 18, 3.5, rel=-56, width=2.0, grip2=2.4),
+                bits=(B_('hip', (-4.8, 2.2), n=2, seg=2.0, width=1.6, part='bitT', rest=112),),
+                groups={'helm2': 'hilt', 'cuff_f': 'helm', 'cuff_b': 'helm', 'shoe_f': 'helm', 'shoe_b': 'helm', 'boot_f': 'helm', 'boot_b': 'helm'},
+                flats={'glow': ('trim', 'hi'), 'lens': ('trim', 'hi')}, ghost_group='trim', ghost_style='holo',
+                palette=pal(skin='C68B63', hair='pants', cloth='pants', trim=R('1FD6C4', hi='7CF8EA'), pants=R('262C40'),
+                            helm=R('E4ECF4', sh='A9B8C8'), metal=R('7CF8EA', hi2='FFFFFF'), hilt=R('D9488F'), fx=('F59AC4', 'FFE27A', 'FFFFFF', '7CF8EA')))
+
+# Agent: archer-ranger.  Olive hood with a gold edge, a quiver of orange-fletched arrows over the back, a leather vest, a
+# bow in the lead hand (it also bashes) and a dagger in the rear hand for close range.
+GENERIC = Body('generic', sigil='+', torso_w=10.4, waist=0.70, headgear='hood', chest='vest', quiver=True, boots=True,
+               weapon=W_('bow', 17, 0, rel=0), weapon_b=W_('dagger', 8, 2.4, rel=-24, width=1.6),
+               groups={'helm': 'cloth', 'vest': 'hilt', 'band': 'trim'}, flats={'arrow': ('fx', 'a')}, ghost_group='trim',
+               palette=pal(skin='E0B090', hair='pants', cloth=R('5B6B4A'), trim=R('E0C46C'), pants=R('3A3A40'), helm='cloth',
+                           metal=R('D8DCE4'), hilt=R('7A5234'), fx=('FF9C2C', 'FFE27A', 'FFFFFF', 'E0C46C')))
+
+# ---------------------------------------------------------------- the six selectable extras (V6)
+# Kunoichi: crimson kunoichi with twin tessen fans, a high ponytail and headband ribbons.
+KUNOICHI = Body('kunoichi', thigh=10.5, shin=10.5, torso=14, torso_w=9.4, waist=0.62, hip_w=0.82, sigil='x', hair='pony',
+                headgear='band', chest='wrap', sash=True, boots=True, skirt='loin',
+                weapon=W_('fan', 7, 0, rel=-15), weapon_b=W_('fan', 7, 0, rel=-25),
+                bits=(B_('head', (-5.0, -4.6), n=3, seg=2.0, width=1.8, part='bitH', rest=118),
+                      B_('head', (-5.8, -2.2), n=2, seg=2.2, width=1.2, part='bitT', rest=128)),
+                groups={'skirt': 'cloth'}, ghost_group='cloth', ghost_style='spark',
+                palette=pal(skin='F3D0B5', hair='pants', cloth=R('C8324A'), trim=R('F0C060'), pants=R('241A22', hi='3E2C38'),
+                            helm='metal', metal=R('F6E8E0', sh='D8B8A8'), hilt='pants', fx=('FF5A7A', 'FFE27A', 'FFFFFF', 'F6E8E0')))
+
+# Knight: steel great helm with a blue plume, round pauldrons, tassets, a two-handed greatsword resting on the shoulder.
+KNIGHT = Body('knight', torso_w=12.5, waist=0.86, hip_w=0.90, limb=4, sigil='T', headgear='greathelm', face='slit', chest='plate',
+              pads='round', skirt='tassets', boots=True, gauntlet=True, stance=1.3,
+              weapon=W_('greatsword', 22, 4.0, rel=-50, width=3.4, grip2=3.0),
+              bits=(B_('head', (-1.2, -7.8), n=3, seg=2.0, width=2.4, part='bitC', rest=165, lag=0.4),),
+              groups={'cuff_f': 'helm', 'cuff_b': 'helm', 'shoe_f': 'helm', 'shoe_b': 'helm', 'boot_f': 'helm', 'boot_b': 'helm',
+                      'skirt': 'helm', 'helm2': 'trim'},
+              ghost_group='cloth',
+              palette=pal(skin='helm', hair='pants', cloth=R('2E4C8C'), trim=R('D8B040'), pants=R('3A3F4C'), helm=R('8E98A8'),
+                          metal=R('E8EEF6', sh='9CB4D4', hi2='FFFFFF'), hilt='pants', fx=('7FA8FF', 'FFE27A', 'FFFFFF', 'D0D6E0')))
+
+# Barbarian: bare-chested, ginger spiky hair and beard, a red rag headband, fur pauldron and kilt, a one-handed axe.
+BARBARIAN = Body('barbarian', thigh=10.5, shin=10.5, torso_w=13.5, waist=0.82, hip_w=0.86, limb=4, leg_add=2, upper=7.5, fore=7.5,
+                 sigil='V', hair='spiky', headgear='rag', beard=True, chest='bare', pads='fur', skirt='kilt', boots=True, stance=1.35,
+                 weapon=W_('axe', 17, 4.0, rel=-70),
+                 groups={'torso': 'skin', 'arm_f_up': 'skin', 'arm_f_fo': 'skin', 'arm_b_up': 'skin', 'arm_b_fo': 'skin',
+                         'pad_f': 'trim', 'pad_b': 'trim', 'skirt': 'trim', 'helm2': 'cloth', 'boot_f': 'trim', 'boot_b': 'trim'},
+                 flats={'seam': ('skin', 'sh')}, ghost_group='cloth',
+                 palette=pal(skin='D9A07A', hair=R('B0502A'), cloth=R('2E2A30'), trim=R('6B4A30'), pants='cloth', helm='cloth',
+                             metal=R('A8B0BA', hi2='EEF2F6'), hilt='trim', fx=('FF6A3A', 'FFE27A', 'FFFFFF', 'FFC08A')))
+
+# Monk: bald warrior monk in an orange robe with a gold sash and prayer beads, wrapped forearms, twin tonfa.
+MONK = Body('monk', thigh=10.5, shin=10.5, torso=14.5, torso_w=11, waist=0.78, sigil='O', hair='bald', chest='gi', beads=True,
+            sash=True, skirt='loin', sleeves='loose', gauntlet=True,
+            weapon=W_('tonfa', 9, 2.5, rel=180, width=1.8), weapon_b=W_('tonfa', 9, 2.5, rel=180, width=1.8),
+            groups={'cuff_f': 'paper', 'cuff_b': 'paper', 'skirt': 'cloth'}, ghost_group='trim',
+            palette=pal(skin='C88A60', hair='skin', cloth=R('E07A1F'), trim=R('F2C14E'), pants=R('8C2A1C'), helm='trim',
+                        metal=R('C0C4CC'), hilt=R('5A3A24'), shoe='hilt', paper='trim', fx=('FF8A2A', 'FFE27A', 'FFFFFF', 'F2C14E')))
+
+# Nomad: desert wanderer in a sand turban and veil with a short turban tail, teal coat, twin chakrams.
+NOMAD = Body('nomad', torso=14.5, torso_w=10, waist=0.70, sigil='Y', headgear='turban', face='mask', chest='wrap', sash=True,
+             skirt='loin', boots=True, sleeves='loose',
+             weapon=W_('chakram', 8, 0, rel=0), weapon_b=W_('chakram', 8, 0, rel=0),
+             bits=(B_('head', (-5.8, -1.8), n=3, seg=2.0, width=1.6, part='bitC', rest=118),),
+             groups={'mask': 'helm', 'bitC': 'helm', 'skirt': 'cloth'}, ghost_group='trim', ghost_style='streak',
+             palette=pal(skin='B07850', hair='pants', cloth=R('2A9D8F'), trim=R('E9C46A'), pants=R('264653'), helm=R('F0D9A0'),
+                         metal=R('E76F51'), hilt='pants', fx=('E76F51', 'FFE27A', 'FFFFFF', 'F0D9A0')))
+
+# Oni: red-skinned brute with a white mane, ivory horns, glowing eyes, a tiger-stripe loincloth and an iron kanabo.
+ONI = Body('oni', thigh=10, shin=10, torso=16, torso_w=16, waist=0.90, hip_w=0.94, limb=5, leg_add=2, upper=8, fore=8, head_w=12,
+           head_h=11, foot_len=8, sigil='H', hair='wild', headgear='oni', face='glow', chest='bare', skirt='loin', gauntlet=True,
+           stance=1.35, weapon=W_('kanabo', 22, 4.0, rel=-75, width=5.0, grip2=3.0),
+           groups={'torso': 'skin', 'arm_f_up': 'skin', 'arm_f_fo': 'skin', 'arm_b_up': 'skin', 'arm_b_fo': 'skin', 'horn': 'hilt',
+                   'skirt': 'trim', 'cuff_f': 'metal', 'cuff_b': 'metal'},
+           flats={'lens': ('trim', 'hi'), 'seam': ('pants', 'base')}, ghost_group='trim',
+           palette=pal(skin=R('C83C32'), hair=R('F0ECE4', sh='B8B0A8'), cloth='pants', trim=R('F2C230'), pants=R('3A2A26'), helm='trim',
+                       metal=R('4A4A56', hi='7A7A88'), hilt=R('E8DCC0'), fx=('FF5030', 'FFE27A', 'FFFFFF', 'F2C230')))
+
 
 # signature idle / victory per character (templates in moves.py)
-STYLE = {'claude': dict(idle='monk', victory='monk'), 'codex': dict(idle='hacker', victory='hacker'),
-         'gemini': dict(idle='ronin', victory='ronin'), 'cursor': dict(idle='pointer', victory='pointer'),
-         'ollama': dict(idle='brawler', victory='brawler'), 'lmstudio': dict(idle='guard', victory='fistpump'),
-         'generic': dict(idle='agent', victory='agent')}
+STYLE = {'claude': dict(idle='ronin', victory='monk'), 'codex': dict(idle='shadow', victory='hacker'),
+         'gemini': dict(idle='dancer', victory='ronin'), 'cursor': dict(idle='lancer', victory='pointer'),
+         'ollama': dict(idle='mountain', victory='brawler'), 'lmstudio': dict(idle='samurai', victory='fistpump'),
+         'generic': dict(idle='ranger', victory='agent'), 'kunoichi': dict(idle='fans', victory='ronin'),
+         'knight': dict(idle='knight', victory='agent'), 'barbarian': dict(idle='berserk', victory='brawler'),
+         'monk': dict(idle='tonfa', victory='monk'), 'nomad': dict(idle='nomad', victory='pointer'),
+         'oni': dict(idle='oni', victory='brawler')}
 
 
 def _c(name, display, tag, accent, body, strike, special, sup, projectile, ult=None, support=None):
@@ -204,7 +232,7 @@ ROSTER = {c.name: c for c in [
        ult=('rasengan', 'rasengan', 'Spins a sphere of energy in one hand, dashes in with afterimages and drives it home in a spiral burst.', {}),
        support=('shadow_clones', 'shadow_clones', 'Cross-finger hand sign: three dithered clones rush the opponent.')),
     _c('gemini', 'Gemini', '*gemini', '#7FA8F2', GEMINI,
-       ('spin_kick', 'spin', "Gemini's spinning kick, ponytail whipping round.", {}),
+       ('spin_kick', 'spin', "Gemini's spinning kick, both blades whipping round.", {}),
        ('star_shot', 'throw', 'Two-handed push that fires a "*" sparkle along the taskbar.', {}),
        ('twin_flash', 'rewind', 'Flash-steps back a second in time, leaving a sparkle and an afterimage trail.', {'glyph': 'bigglyph'}),
        dict(style='star', kind='star_shot', cols=('trim.hi', 'cloth.hi', 'cloth.base'), spark='fx.a'),
@@ -222,7 +250,7 @@ ROSTER = {c.name: c for c in [
        dict(style='orb', kind='pull_shot', cols=('cloth.ol', 'cloth.base', 'cloth.hi'), trail='fx.a'),
        ult=('wind_scar', 'wind_scar', 'Raises both arms, then slams down and rips three claws of energy along the ground.', {})),
     _c('lmstudio', 'LM Studio', 'lmstudio', '#7CF8EA', LMSTUDIO,
-       ('spin_kick', 'spin', "LM Studio's spinning kick, scarf trailing.", {}),
+       ('spin_kick', 'spin', "LM Studio's spinning kick, the energy blade trailing.", {}),
        ('load_wave', 'throw', 'Loads a model and throws it as a teal-and-magenta wave across the taskbar.', {}),
        ('hot_swap', 'rewind', 'Hot-swaps back to where it stood a second ago, afterimage trail and a giant "L".', {'glyph': 'bigglyph'}),
        dict(style='arc', kind='load_wave', cols=('cloth.base', 'cloth.hi', 'trim.hi'), spark='trim.base'),
@@ -233,6 +261,42 @@ ROSTER = {c.name: c for c in [
        ('overclock', 'raise', 'Raises a giant "+" and powers up: everything runs faster.', {'glyph': 'bigglyph'}),
        dict(style='orb', kind='energy_bolt', cols=('trim.ol', 'trim.base', 'trim.hi'), trail='fx.a'),
        ult=('spirit_bomb', 'spirit_bomb', 'Raises both hands, gathers a huge slow ball of energy overhead and hurls it.', {})),
+    _c('kunoichi', 'Kunoichi', 'kunoichi', '#FF5A7A', KUNOICHI,
+       ('fan_whirl', 'spin', 'A spinning kick with both fans snapping open.', {}),
+       ('petal_shot', 'throw', 'Sweeps a fan and sends a spinning blade-petal across the taskbar.', {}),
+       ('vanish', 'rewind', 'Vanishes back a second in a swirl of petals, a giant "x" where she stood.', {'glyph': 'bigglyph'}),
+       dict(style='star', kind='petal_shot', cols=('metal.hi', 'cloth.hi', 'cloth.base'), spark='trim.base'),
+       ult=('petal_dance', 'bankai', 'A burst of crimson aura, then three flash-step fan cuts faster than the eye.', {})),
+    _c('knight', 'Knight', 'knight', '#7FA8FF', KNIGHT,
+       ('crusher', 'pound', 'Leaps and brings the greatsword down with a ground-shaking crash.', {}),
+       ('sword_wave', 'throw', 'A two-handed sweep that sends a steel wave across the taskbar.', {}),
+       ('valor', 'raise', 'Raises the greatsword under a giant "T" and steels itself.', {'glyph': 'bigglyph'}),
+       dict(style='arc', kind='sword_wave', cols=('metal.sh', 'metal.base', 'metal.hi'), spark='trim.hi'),
+       ult=('holy_crescent', 'getsuga', 'Raises the greatsword, gathers light and cleaves a giant crescent down the taskbar.', {})),
+    _c('barbarian', 'Barbarian', 'barbarian', '#FF8A4A', BARBARIAN,
+       ('axe_spin', 'spin', 'A wild spinning kick, axe swinging round with it.', {}),
+       ('axe_toss', 'cast', 'Hurls a spinning hand-axe across the taskbar.', {}),
+       ('berserk', 'raise', 'Roars under a giant "V" and goes berserk.', {'glyph': 'bigglyph'}),
+       dict(style='orb', kind='axe_toss', cols=('metal.ol', 'metal.base', 'metal.hi'), trail='fx.a'),
+       ult=('earthsplitter', 'wind_scar', 'Raises the axe, then splits the ground with three tearing shock claws.', {})),
+    _c('monk', 'Monk', 'monk', '#F2C14E', MONK,
+       ('palm_crash', 'pound', 'Leaps and drives both tonfa into the ground.', {}),
+       ('chi_bolt', 'cast', 'Thrusts a tonfa and fires a ball of chi across the taskbar.', {}),
+       ('meditate', 'raise', 'Centres itself under a giant "O"; the aura flares.', {'glyph': 'bigglyph'}),
+       dict(style='orb', kind='chi_bolt', cols=('trim.ol', 'trim.base', 'trim.hi'), trail='fx.a'),
+       ult=('chi_sphere', 'spirit_bomb', 'Raises both tonfa, gathers a huge sphere of chi overhead and hurls it.', {})),
+    _c('nomad', 'Nomad', 'nomad', '#2A9D8F', NOMAD,
+       ('ring_spin', 'spin', 'A spinning kick, both chakrams whirling.', {}),
+       ('chakram_throw', 'throw', 'Whips a chakram across the taskbar.', {}),
+       ('mirage', 'rewind', 'Slips back a second like a heat mirage, a giant "Y" left behind.', {'glyph': 'bigglyph'}),
+       dict(style='arc', kind='chakram_throw', cols=('metal.sh', 'metal.base', 'metal.hi'), spark='trim.hi'),
+       ult=('ring_storm', 'odm_strike', 'Throws two chakrams on lines, zips after them and finishes with a spinning cross cut.', {})),
+    _c('oni', 'Oni', 'oni', '#E04A3A', ONI,
+       ('club_slam', 'pound', 'Leaps and smashes the kanabo into the ground.', {}),
+       ('oni_fire', 'cast', 'Spits a ball of oni-fire across the taskbar.', {}),
+       ('rampage', 'raise', 'Swells under a giant "H", eyes blazing.', {'glyph': 'bigglyph'}),
+       dict(style='orb', kind='oni_fire', cols=('skin.ol', 'fx.a', 'fx.b'), trail='fx.a'),
+       ult=('oni_roar', 'kamehameha', 'Plants the kanabo, draws a breath for a full second and roars a beam of fire across the taskbar.', {})),
 ]}
 
 NAMES = tuple(ROSTER)

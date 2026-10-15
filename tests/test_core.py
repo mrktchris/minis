@@ -182,7 +182,7 @@ class Planner(unittest.TestCase):
 
     def test_same_character_in_both_slots_still_spars(self):
         brains, _, _ = sim.run(60, idle_tele(), seed=3, cfg_over={'bout_min_s': 5, 'bout_max_s': 6}, place=PLACE, chars={LEFT: 'codex', RIGHT: 'codex'})
-        self.assertGreaterEqual(len(brains[LEFT].contact_log), 3)
+        self.assertGreaterEqual(len(brains[LEFT].contact_log) + len(brains[RIGHT].contact_log), 3)     # either side's strikes count
 
 
 # ====================================================================== brain regressions (audit findings)

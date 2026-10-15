@@ -214,10 +214,46 @@ def ghost(im, offsets, body, mirrored, pose=None, prev=None):
     return out
 
 
-STRIKE_PARTS = {'hf': ('hand_f', 'cuff_f', 'arm_f_fo'), 'hb': ('hand_b', 'cuff_b', 'arm_b_fo'),
-                'ff': ('shoe_f', 'sole_f', 'leg_f_sh'), 'fb': ('shoe_b', 'sole_b', 'leg_b_sh')}
+STRIKE_PARTS = {'hf': ('hand_f', 'cuff_f', 'arm_f_fo', 'wpn_f', 'hilt_f', 'blade_hl'), 'hb': ('hand_b', 'cuff_b', 'arm_b_fo', 'wpn_b', 'hilt_b'),
+                'ff': ('shoe_f', 'sole_f', 'leg_f_sh', 'boot_f'), 'fb': ('shoe_b', 'sole_b', 'leg_b_sh', 'boot_b')}
 IMPACT_FX = ('spark', 'spark_s', 'block')
-BODY_IDS = {PID[n] for n in rig.PART_ORDER if not n.startswith('fx_') and n not in ('doc', 'doc_line')}
+BODY_IDS = {PID[n] for n in rig.PART_ORDER if n not in rig.NOLINE and n not in ('doc', 'doc_line')}
+
+
+def frame_history(poses, i, loop):
+    """(previous pose, pose two back) for frame i: a loop wraps round, a one-shot starts from its own first pose."""
+    n = len(poses)
+    if loop:
+        return poses[(i - 1) % n], poses[(i - 2) % n]
+    return (poses[i - 1] if i >= 1 else poses[0]), (poses[i - 2] if i >= 2 else poses[0])
+
+
+def ghost_prev(im, body, prev, mirrored, pose):
+    """The smear frame's ghosted previous pose: a checker of the ghost tone wherever the striking limb (and its weapon)
+    was on the previous frame and this frame is not - one copy, not a trail."""
+    S = rig.RES
+    buf, meta = rig.render_parts(body, prev, None)
+    if mirrored:
+        buf = rig.mirror_parts(buf, meta, body)
+    out = im.copy()
+    op, bp = out.load(), buf.load()
+    col = body.palette[body.ghost_group]['hi'] + (255,)
+    cw = rig.cell_px()
+    sides = [s_ for s_, k in (('f', 'smear_f'), ('b', 'smear_b')) if getattr(pose, k)]
+    legs = [s_ for s_, k in (('f', 'smear_ff'), ('b', 'smear_fb')) if getattr(pose, k)]
+    ids = set()
+    for s_ in sides:
+        ids |= {rig.PID[n] for n in (f'arm_{s_}_fo', f'cuff_{s_}', f'hand_{s_}', f'wpn_{s_}', f'hilt_{s_}')}
+    for s_ in legs:
+        ids |= {rig.PID[n] for n in (f'leg_{s_}_sh', f'shoe_{s_}', f'boot_{s_}', f'sole_{s_}')}
+    for y in range(cw):
+        for x in range(cw):
+            if op[x, y][3] or bp[x, y] not in ids:
+                continue
+            if ((x // S) + (y // S)) % 2 == 0:
+                op[x, y] = col
+    return out
+
 
 
 def hit_reach(buf, pose):
@@ -363,11 +399,15 @@ def render_move(ch, name, mv, idle_pts=None):
         scarf = scarf_track(body, poses, False, start=idle_pts)
     out = []
     for i, (pose, ms) in enumerate(mv['frames']):
-        buf, meta = render_parts(body, pose, scarf[i])
+        prev, prev2 = frame_history(poses, i, mv['loop'])
+        buf, meta = render_parts(body, pose, scarf[i], prev=prev, hist=(prev2, prev))
         hip_y = meta['hip'][1]
-        prev = poses[i - 1] if i else pose
-        im_r = ghost(finish(buf, body, pose, hip_y), pose.ghost, body, False, pose, prev)
-        im_l = ghost(finish(mirror_parts(buf, meta, body), body, pose, hip_y), pose.ghost, body, True, pose, prev)
+        gprev = prev if prev is not None else pose
+        im_r = ghost(finish(buf, body, pose, hip_y), pose.ghost, body, False, pose, gprev)
+        im_l = ghost(finish(mirror_parts(buf, meta, body), body, pose, hip_y), pose.ghost, body, True, pose, gprev)
+        if rig.is_smear(pose) and prev is not None and not pose.flash and not pose.ghost:
+            im_r = ghost_prev(im_r, body, prev, False, pose)
+            im_l = ghost_prev(im_l, body, prev, True, pose)
         hp = os.path.join(hand_dir(), ch.name, f'{name}_{i}.png')
         if os.path.exists(hp):                           # an artist's frame (same palette, same cell size) replaces the generated one
             hand = Image.open(hp).convert('RGBA')

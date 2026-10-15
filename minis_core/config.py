@@ -21,16 +21,17 @@ DEFAULTS = {
     "plan_feed_max_age_min": 15,
     "limit_pct": 90,
     "fps_active": 10,
+    "fps_fight": 30,                       # V6: redraw rate while a fight script runs (smears, hitstop and flashes need it)
     "fps_idle": 4,
     "topmost_tick_ms": 250,
     "bout_min_s": 45,                      # neither working: a spar / ranged duel this often
     "bout_max_s": 90,
     "console_min_s": 40,                   # partner knocked out (limit): visit and console it this often
     "console_max_s": 80,
-    "shadowbox_min_s": 3,                  # a working fighter throws a shadow punch this often
-    "shadowbox_max_s": 6,
+    "shadowbox_min_s": 8,                  # a working fighter throws a shadow punch this often (V6: was 3-6 s)
+    "shadowbox_max_s": 14,
     "walk_px_s": 40,
-    "gap_px": 24,                          # hip-to-hip distance for close combat
+    "gap_px": 32,                          # hip-to-hip distance for close combat (V6: 24 overlapped the ~24 px wide bodies)
     "plate": True,
     "clash_min_s": 20,                     # both agents working: a short clash this often
     "clash_max_s": 40,

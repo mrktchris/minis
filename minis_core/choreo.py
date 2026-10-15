@@ -28,13 +28,19 @@ KICKS = ('low_kick', 'roundhouse', 'spin_kick')
 COMBOS = (('jab', 'cross', 'uppercut'), ('jab', 'jab', 'roundhouse'), ('low_kick', 'cross'), ('jab', 'cross'),
           ('cross', 'uppercut'), ('jab', 'low_kick', 'roundhouse'), ('low_kick', 'uppercut'))
 MAX_PER_ROUND = 2
-METER_SUPER = 72                      # hit meter (damage dealt + half the damage taken) that unlocks a super
+METER_SUPER = 250                     # hit meter (damage dealt + half the damage taken) that unlocks a super (V6: was 72 -> 3 per match)
+SUPER_CHANCE = 0.4
+ULT_HP = 30                           # V6: the ultimate is a desperation move: only an attacker below this HP may fire it
+ULT_CHANCE = 0.35                     # ... and then only this often per exchange; one per MATCH between both fighters (rounds.Bout)
+HITSTOP_FLOOR_MS = 100                # V6: below ~100 ms the freeze falls between two taskbar redraws and is never seen
+BLOCK_HITSTOP_K = 0.7
+EDGE_MAX = 0.25                       # story: how far HP / round score may tilt hit-vs-defence odds toward the trailing fighter
 DMG_PER_POWER = 12
 DMG_SUPER = 24
 DMG_ULTIMATE = 40
 HITSTOP_K = {'strike': 0.5, 'counter': 0.5, 'special': 0.6, 'super': 1.0, 'ultimate': 1.0}   # the art already holds its hit frame
 DEFAULT_HITSTOP = {'strike': 150, 'counter': 150, 'special': 150, 'super': 220, 'ultimate': 300}
-KNOCK_PX = {'hit': 4, 'hit_heavy': 10, 'knockdown': 18, 'block_hit': 2, 'parry': 0}
+KNOCK_PX = {'hit': 6, 'hit_heavy': 18, 'knockdown': 42, 'block_hit': 3, 'parry': 0}     # V6: real travel on the strip (was 4 / 10 / 18)
 ATTACK_KINDS = ('strike', 'special', 'super', 'ultimate', 'counter')
 
 
@@ -64,7 +70,20 @@ def hitstop_ms(atlas, move, kind):
     already hold the hit frame for most of that time (docs/ANIMATION-NOTES.md)."""
     a = atlas.anim.get(move) or {}
     base = a.get('hitstop_ms') or DEFAULT_HITSTOP.get(kind, 150)
-    return int(round(float(base) * HITSTOP_K.get(kind, 0.5)))
+    return max(HITSTOP_FLOOR_MS, int(round(float(base) * HITSTOP_K.get(kind, 0.5))))
+
+
+def block_hitstop(hs):
+    """A blocked hit freezes shorter than a landed one, but still long enough to be drawn."""
+    return max(int(HITSTOP_FLOOR_MS * BLOCK_HITSTOP_K), int(hs * BLOCK_HITSTOP_K))
+
+
+def reach_of(atlas, move, default=20):
+    """How far (RES 1 px from the hip) the move's hit frame reaches: anim.json `reach`, else a typical strike."""
+    try:
+        return float((atlas.anim.get(move) or {}).get('reach') or default) / max(1, getattr(atlas, 'res', 1))
+    except (TypeError, ValueError):
+        return float(default)
 
 
 def move_shake(atlas, move):
@@ -135,7 +154,11 @@ def plan_exchange(rng, att, dfn, sit):
          range     'close' | 'far'
          meter     the attacker's hit meter (unlocks a super at METER_SUPER)
          ult_ok    the attacker still has its once-per-match ultimate
-         dramatic  round point / low HP: when the ultimate is allowed
+         dramatic  the attacker is below ULT_HP (dramatic()): when the ultimate is allowed
+         ult_sure  the caller already rolled ULT_CHANCE (rounds.make_match rolls once per match): no second roll
+         edge      story tilt in [-EDGE_MAX, EDGE_MAX] (edge_for): + lands more often, - gets defended more
+         comeback  the round's comeback exchange: a strike that lands, then a full combo
+         boost     the attacker's agent just finished a task: its signature super lands (signature strike without one)
          friendly  spar / clash: no supers, no ultimates, no knockdowns, nothing that empties a bar
          air       an air-to-air exchange (jump-in kicks; the arena hovers both)
          k         exchange index within the round
@@ -148,10 +171,17 @@ def plan_exchange(rng, att, dfn, sit):
     beats = []
     kind = 'strike'
     fresh = lambda m: bool(m) and m != att.last and att.used[m] < MAX_PER_ROUND      # the no-repeat rule binds specials and supers too
-    if not friendly:
-        if sit.get('ult_ok') and sit.get('dramatic') and A.ultimate() and rng.random() < 0.7:
+    boost = bool(sit.get('boost'))                                       # V6: the agent just finished a task: its signature super lands
+    comeback = bool(sit.get('comeback')) and not boost
+    sup_ok = bool(sig['super']) and sig['super'] != A.ultimate()
+    if boost and sup_ok:
+        kind = 'super'
+    elif boost or comeback:
+        kind = 'strike'
+    elif not friendly:
+        if sit.get('ult_ok') and sit.get('dramatic') and A.ultimate() and (sit.get('ult_sure') or rng.random() < ULT_CHANCE):
             kind = 'ultimate'
-        elif sig['super'] and sig['super'] != A.ultimate() and fresh(sig['super']) and sit.get('meter', 0) >= METER_SUPER and rng.random() < 0.65:
+        elif sup_ok and fresh(sig['super']) and sit.get('meter', 0) >= METER_SUPER and rng.random() < SUPER_CHANCE:
             kind = 'super'
         elif has_projectile(A, sig['special']) and fresh(sig['special']) and rng.random() < (0.4 if far else 0.08):
             kind = 'special'
@@ -162,7 +192,7 @@ def plan_exchange(rng, att, dfn, sit):
         opener = 'jump'
     elif far:
         if kind == 'strike':
-            opener = weighted(rng, [('dash', 0.65), ('jump', 0.35)])          # dash-in jab / jump-in kick
+            opener = weighted(rng, [('dash', 0.4), ('jump', 0.3), ('lunge', 0.3)])   # dash-in jab / jump-in kick / long sliding lunge
         elif kind == 'super' or (kind == 'ultimate' and not sit.get('ult_reaches')):
             opener = 'dash'                                                  # melee finishers close the gap first
     elif kind == 'strike':
@@ -174,9 +204,15 @@ def plan_exchange(rng, att, dfn, sit):
             opener = None
     # ---- the first attack
     if kind == 'strike':
-        if opener == 'sweep' and 'low_kick' in A.anim:
-            move = 'low_kick'
+        if boost and sig['strike']:
+            move = sig['strike']
             att.note(move)
+        elif opener == 'sweep':                                         # through the picker: a sweep prefers the low kick, never forces it
+            move = att.pick(att.strikes(), prefer=['low_kick'] if 'low_kick' in A.anim else None)
+        elif opener == 'lunge':                                         # one long sliding strike from range (rounds.py slides it in)
+            move = att.pick(att.strikes(), prefer=['roundhouse', 'low_kick'])  # a sliding kick (cross is already favoured by dash-ins, counters, combos)
+        elif comeback:
+            move = att.pick(att.strikes(), prefer=['uppercut', 'roundhouse'])
         elif opener == 'jump':
             move = att.pick(att.strikes(), prefer=[k for k in KICKS if k in A.anim])
         elif opener == 'dash':
@@ -193,7 +229,11 @@ def plan_exchange(rng, att, dfn, sit):
         move = A.ultimate()
         att.note(move)
     dmg = damage_of(A, move, kind)
-    first = _resolve(rng, A, D, move, kind, dmg, friendly)
+    first = _resolve(rng, A, D, move, kind, dmg, friendly, edge=float(sit.get('edge') or 0.0), force_hit=boost or comeback)
+    if opener == 'lunge':
+        first['lunge'] = True
+    if boost:
+        first['boost'] = True
     beats.append(first)
     # ---- what follows the first attack
     if first['outcome'] == 'parry' and not air:
@@ -204,21 +244,23 @@ def plan_exchange(rng, att, dfn, sit):
                           hitstop=hitstop_ms(D, counter, 'counter'), knock=KNOCK_PX[react], down=False))
     elif first['outcome'] == 'whiff' and kind == 'ultimate' and 'taunt' in D.anim:
         beats.append(dict(who='dfn', kind='emote', anim='taunt'))
-    elif first['outcome'] == 'hit' and kind == 'strike' and not air and rng.random() < 0.55:
+    elif first['outcome'] == 'hit' and kind == 'strike' and not air and not boost and not first['down'] and (comeback or rng.random() < 0.55):
         chain = _combo(rng, att, move)
         for i, m in enumerate(chain):
             d = damage_of(A, m, 'strike')
-            if rng.random() < 0.85:
+            if comeback or rng.random() < 0.85:
                 last = i == len(chain) - 1
                 big = d >= 3 * DMG_PER_POWER or (last and len(chain) >= 2 and d >= 2 * DMG_PER_POWER)
                 down = (not friendly) and last and big and rng.random() < 0.6
                 react = 'knockdown' if down else ('hit_heavy' if d >= 2 * DMG_PER_POWER else 'hit')
                 beats.append(dict(who='att', kind='strike', anim=m, dmg=d, outcome='hit', pre=None, react=react,
                                   hitstop=hitstop_ms(A, m, 'strike'), knock=KNOCK_PX[react], down=down))
+                if last and m == 'uppercut' and not down and 'jump' in A.anim and rng.random() < 0.5:
+                    _juggle(rng, att, beats, friendly)                   # the launcher pops them up: jump after them, kick
             else:
                 pre = 'block' if 'block' in D.anim else None
                 beats.append(dict(who='att', kind='strike', anim=m, dmg=0, outcome='block', pre=pre, react='block_hit' if 'block_hit' in D.anim else None,
-                                  hitstop=hitstop_ms(A, m, 'strike') // 2, knock=KNOCK_PX['block_hit'], down=False))
+                                  hitstop=block_hitstop(hitstop_ms(A, m, 'strike')), knock=KNOCK_PX['block_hit'], down=False))
                 break
     # ---- pressure or a spacing reset
     range_after = 'close'
@@ -234,13 +276,37 @@ def plan_exchange(rng, att, dfn, sit):
             range_after = 'far'
     elif beats[-1].get('down'):
         range_after = 'far'
-    return dict(kind=kind, beats=beats, range_after=range_after, air=air, opener=opener)
+    return dict(kind=kind, beats=beats, range_after=range_after, air=air, opener=opener, boost=boost, comeback=comeback)
 
 
-def _resolve(rng, A, D, move, kind, dmg, friendly):
-    """The defender's answer to the first attack, as a strike beat."""
+def _juggle(rng, att, beats, friendly):
+    """Air juggle after a landed launcher: the attacker jumps in place and meets the airborne defender with a kick."""
+    A = att.atlas
+    m = att.pick([(k, 1.0) for k in KICKS if k in A.anim] or att.strikes())
+    if not m:
+        return
+    d = damage_of(A, m, 'strike')
+    down = not friendly
+    react = 'knockdown' if down else 'hit_heavy'
+    beats.append(dict(who='att', kind='move', anim='jump', dx=0, juggle=True))
+    beats.append(dict(who='att', kind='strike', anim=m, dmg=d, outcome='hit', pre=None, react=react, juggle=True,
+                      hitstop=hitstop_ms(A, m, 'strike'), knock=KNOCK_PX[react], down=down))
+
+
+def edge_for(hp_att, hp_dfn, wins_att=0, wins_dfn=0):
+    """Story tilt for one exchange, in [-EDGE_MAX, EDGE_MAX]; positive favours the attacker.  The fighter behind on HP or
+    on rounds lands a little more often and the leader gets defended a little more, so matches swing instead of snowballing."""
+    e = (float(hp_dfn) - float(hp_att)) / 100.0 * 0.5 + 0.12 * (int(wins_dfn) - int(wins_att))
+    return max(-EDGE_MAX, min(EDGE_MAX, e))
+
+
+def _resolve(rng, A, D, move, kind, dmg, friendly, edge=0.0, force_hit=False):
+    """The defender's answer to the first attack, as a strike beat.  `edge` tilts hit vs defence (edge_for); `force_hit`
+    (a comeback exchange, a boost super) skips the defender's choice."""
     has = lambda n: n in D.anim
-    if kind == 'ultimate':
+    if force_hit:
+        outcome = 'hit'
+    elif kind == 'ultimate':
         outcome = weighted(rng, [('hit', 0.8), ('whiff', 0.2 if has('backdash') else 0.0)])
     elif kind == 'super':
         outcome = weighted(rng, [('hit', 0.78), ('whiff', 0.14 if has('backdash') else 0.0), ('parry', 0.08 if has('parry') else 0.0)])
@@ -252,6 +318,12 @@ def _resolve(rng, A, D, move, kind, dmg, friendly):
     else:
         outcome = weighted(rng, [('hit', 0.46), ('block', 0.2 if has('block') else 0.0), ('parry', 0.11 if has('parry') else 0.0),
                                  ('whiff', 0.09 if has('backdash') else 0.0), ('crouch_block', 0.14 if has('crouch_block') and move in HIGHS else 0.0)])
+    if edge and not force_hit and kind != 'ultimate':
+        r = rng.random()                                     # always one extra draw, so both processes stay in step
+        if outcome == 'hit' and edge < 0 and r < -edge and (has('block') or has('parry')):
+            outcome = 'block' if has('block') else 'parry'
+        elif outcome != 'hit' and edge > 0 and r < edge:
+            outcome = 'hit'
     pre = react = None
     knock = 0
     down = False
@@ -262,9 +334,9 @@ def _resolve(rng, A, D, move, kind, dmg, friendly):
         react = 'knockdown' if down else ('hit_heavy' if heavy else 'hit')
         knock = KNOCK_PX[react] * (2 if kind == 'ultimate' else 1)
     elif outcome == 'block':
-        pre, react, knock, dmg, hs = 'block', ('block_hit' if has('block_hit') else 'block'), KNOCK_PX['block_hit'], 0, hs // 2
+        pre, react, knock, dmg, hs = 'block', ('block_hit' if has('block_hit') else 'block'), KNOCK_PX['block_hit'], 0, block_hitstop(hs)
     elif outcome == 'crouch_block':
-        pre, react, knock, dmg, hs = 'crouch_block', ('block_hit' if has('block_hit') else 'crouch_block'), 1, 0, hs // 2
+        pre, react, knock, dmg, hs = 'crouch_block', ('block_hit' if has('block_hit') else 'crouch_block'), 2, 0, block_hitstop(hs)
     elif outcome == 'parry':
         pre, react, dmg = None, 'parry', 0
     else:                                                    # whiff: the defender is already gone when the hit frame lands
@@ -291,8 +363,10 @@ def _combo(rng, att, first):
 
 
 def dramatic(wins_att, hp_att, hp_dfn, k, rounds_to_win=2):
-    """When an ultimate may come out: round point, or either bar low, and never in the first two exchanges."""
-    return k >= 2 and (wins_att >= rounds_to_win - 1 or hp_att <= 40 or hp_dfn <= 40)
+    """When an ultimate may come out (V6): only as a desperation move of an attacker below ULT_HP, never in the first two
+    exchanges of a round.  (V5 allowed it to anyone up a round, 70% per exchange: 1.7 ultimates per match.)  The caller
+    still rolls ULT_CHANCE (plan_exchange) and allows one ultimate per match between both fighters."""
+    return k >= 2 and hp_att < ULT_HP
 
 
 def tally(beats_by_slot):

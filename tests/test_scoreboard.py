@@ -19,13 +19,18 @@ class Pure(unittest.TestCase):
         self.assertLess(SB.left_x(CFG), 940)
         self.assertTrue(SB.enabled(CFG) and not SB.enabled(dict(CFG, scoreboard=False)))
 
-    def test_only_the_buttons_are_solid(self):
+    def test_only_the_buttons_names_and_a_visible_show_are_solid(self):
         self.assertEqual(SB.hit(10, 30), 'pause')
         self.assertEqual(SB.hit(90, 30), 'arena')
         self.assertEqual(SB.hit(150, 30), 'bout')
-        self.assertIsNone(SB.hit(10, 5))                                     # the record line is click-through
+        self.assertEqual(SB.hit(10, 5), 'name_a')                            # a name opens the select screen
+        self.assertEqual(SB.hit(180, 5), 'name_b')
+        self.assertIsNone(SB.hit(95, 5))                                     # "vs" is click-through
         self.assertIsNone(SB.hit(64, 30))                                    # the gap between buttons too
         self.assertIsNone(SB.hit(-1, 30))
+        self.assertIsNone(SB.hit(160, 17))                                   # no "show" unless something is hidden
+        self.assertEqual(SB.hit(160, 17, {'hidden': {'b': 60.0}}), 'show')
+        self.assertTrue(SB.BTN_Y1 - SB.BTN_Y0 + 1 >= 20 and SB.H <= 46)      # 20 px buttons inside a 48 px band
 
     def test_render_states(self):
         base = dict(names={'a': 'Claude', 'b': 'Codex'}, records={'a': (3, 1), 'b': (1, 3)}, mode='taskbar', arena=False, paused=False, hp=None,
@@ -49,11 +54,11 @@ class Pure(unittest.TestCase):
 
     def test_model_from_assignment_bus_record_and_flags(self):
         assign = {'a': {'source': 'claude', 'character': 'claude', 'program': 'Claude Code'}, 'b': {'source': 'aider', 'character': 'generic', 'program': 'aider'}}
-        rec = {'characters': {'claude': {'w': 2, 'l': 5}, 'generic': {'w': 1, 'l': 0}}}
+        rec = {'characters': {'claude': {'w': 2, 'l': 5}, 'generic': {'w': 1, 'l': 0}}}      # a V5 file: migrated on read
         buses = {'a': {'hp': 40, 'wins': {'a': 1, 'b': 0}}, 'b': {'hp': 0}}
         st = SB.Model.state(assign, buses, rec, False, True, 'random')
-        self.assertEqual(st['names'], {'a': 'Claude Code', 'b': 'aider'})
-        self.assertEqual(st['records'], {'a': (2, 5), 'b': (1, 0)})
+        self.assertEqual(st['names'], {'a': 'Claude', 'b': 'aider'})                       # short labels, never "Claude C."
+        self.assertEqual(st['records'], {'a': (2, 5), 'b': (0, 0)})                        # the shared generic line is not aider's
         self.assertEqual((st['mode'], st['hp'], st['wins'], st['winners']), ('arena', {'a': 40, 'b': 0}, {'a': 1, 'b': 0}, 'random'))
         st = SB.Model.state({'a': None, 'b': None}, {}, {}, True, False, 'decided')
         self.assertEqual((st['mode'], st['names'], st['hp']), ('paused', {'a': None, 'b': None}, None))
@@ -93,7 +98,7 @@ class Hosted(Isolated):
         self.go(0.5)
         self.assertEqual(len(ov.presented), n + 1)                           # HP arrived: one redraw
         self.assertEqual(self.board.state['hp'], {'a': 52})
-        self.assertTrue(ov.on_hittest(10, 30) and not ov.on_hittest(10, 5))
+        self.assertTrue(ov.on_hittest(10, 30) and ov.on_hittest(10, 5) and not ov.on_hittest(95, 5))
 
     def test_buttons_pause_bout_and_arena(self):
         self.go(0.3)

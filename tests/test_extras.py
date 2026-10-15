@@ -82,8 +82,8 @@ class Spark(Isolated):
                     wins={}, winners='decided')
         plain, spark = SB.render(base), SB.render(dict(base, spark=[None, 10, 50, 95, 70, None, 30]))
         self.assertNotEqual(plain.tobytes(), spark.tobytes())
-        self.assertEqual(spark.getpixel((72 + 3 * 6 + 2, 22))[:3], render.RED)        # 95 % day is red
-        self.assertEqual(spark.getpixel((72 + 2 * 6 + 2, 22))[:3], (150, 220, 150))     # 50 % day is green
+        self.assertEqual(spark.getpixel((SB.SPARK_X + 3 * SB.SPARK_PITCH + 1, 20))[:3], render.RED)        # 95 % day is red
+        self.assertEqual(spark.getpixel((SB.SPARK_X + 2 * SB.SPARK_PITCH + 1, 20))[:3], (150, 220, 150))     # 50 % day is green
         self.assertNotEqual(SB.signature(base), SB.signature(dict(base, spark=[1])))
 
 

@@ -149,3 +149,94 @@ How this turns into work for minis (the order is by payoff):
 - **Streak smears** drawn from the limb path (thin, tapered, one colour), plus one ghosted previous pose, instead of blobs.
 - **Silhouette test.** Each key pose has to read as a black shape on `#202020` at 1x; if two poses look the same, redraw one.
 - **No long trailing cloth** (owner: the cape/scarf "doesn't look good"). Short hanging parts that lag one frame only.
+
+## 7. V6 fight feel in the engine (2026-10-14)
+
+Found in a live taskbar recording and a 300-match audit; fixed in `minis_core/{choreo,rounds,brain,effects,fx,sim}.py`. Numbers
+are from the same 300-match audit before / after (seeded, all roster pairs, played through the real `Brain` playback at 30 fps).
+
+**Timing that is actually drawn.** The taskbar redrew at 10 fps during fights, so 40 ms smears, the halved hitstop (75 ms) and the
+60 ms ultimate flash mostly fell between two redraws. Now: a fight script redraws at `fps_fight` (30); `Brain.held_ms` lengthens any
+smear / hit frame shorter than 50 ms by taking the time from the frame before it (contact time and total unchanged, so the shared
+timeline still lines up); hitstop has a 100 ms floor (`choreo.HITSTOP_FLOOR_MS`, blocks 70 ms); flashes last 100-120 ms; a knockback
+slide runs on the animation clock, so it waits out the hitstop instead of sliding through the freeze.
+
+**Knockdowns.** A knockdown that is not a KO no longer returns to idle before the get-up (the "stand, then fall again" bug); the
+get-up starts the instant the fall ends, and nobody is hit while still on the floor.
+
+**The finisher beat (match-deciding KO), inside 3.4 s:** a 280 ms freeze with impact frames, the fall in slow motion (0.55 s at
+0.35x), dust on landing, the winner's victory pose under a name banner centred over where it really stands, the loser stays down
+~1 s and slumps up (a get-up at 0.6x). V5 left the KO'd fighter lying ~6 s with nothing happening.
+
+**Impact frames** (`@impact`, ANIMATION-NOTES section 6) play only on heavy hits (power 3), supers, ultimates and KOs, for 130 ms:
+the fx `impact` on the struck fighter when the sheet has it, else a strong white flash. control.json `flashes` off removes every
+flash and impact frame.
+
+**Rarity.** The ultimate is a desperation move: only an attacker below 30 HP, one roll (35 %) per match, one per match between both
+(1.72 -> 0.30 per match). Supers need a 250 hit meter (2.99 -> ~1.0 per match) and are never an idle flourish.
+
+**Spacing and travel.** Bouts start 32 px apart; a strike stands its fighter at the move's own `reach` + 9 px from the defender; no
+two hips come closer than 22 px (body-overlap frames 6.5 % -> 0.3 %). Knockback is 6 / 18 / 42 px (hit / heavy / knockdown) with a
+dust skid; a far strike may be a lunge that slides the whole gap with dust.
+
+**Story and rhythm.** Hit-vs-defence odds tilt up to 25 % toward the fighter behind on HP or rounds (2-0 rate 53 % -> ~28 %); the
+loser of a round gets one comeback exchange; a KO lands with the signature strike; a launcher can be followed by a jump-up juggle
+kick; ranged duels end with a landed hit or a parry and one taunt. The sweep opener goes through the picker; shadowboxing uses a
+no-repeat picker every 8-14 s. A round called on time shows TIME and the loser slumps (no unprovoked fall). A defender braces
+(guard, or a low guard below 30 HP) through a long wind-up. Fighters turn and walk home facing their way (no moonwalk), then turn
+back. An agent that finishes a task opens the next bout (within 20 s) with its signature super (`plan['boost']`); near the context
+limit, or below 25 HP in a match, a fighter pulses white once a second.
+
+**Arena (same rules, `minis_core/arena.py`).** The arena plays the same V6 rules: tilt / comeback / boost / one desperation
+ultimate per match, signature-strike KOs, a guard on long wind-ups, TIME + slump, the finisher (freeze, slow fall, name banner,
+slowed get-up, KO -> exit about 3.4 s). Impact frames there are flat silhouettes of the two sprites (struck = white, striker =
+dark) plus the fx `impact`, never a full-screen frame, and the arena reads control.json `flashes` itself. Pacing: V5 arena rounds
+mostly ran out the clock (48 % TIME, mean 21.5 s) because a far special bounced between "approach" and "beat" until the exchange
+deadline, fighters walked at 180 px/s, the defender flew to a ledge half the time and an exchange could start while someone was
+on the floor. Fixed, plus walk 240 px/s, ledge 30 %, shorter cooldowns and arena hits x1.25 (the ultimate stays 40): 15 % TIME,
+mean round 16 s over 40 seeded matches. Afterimages are now one per two frames and the sprite cache no longer thrashes, so a
+frame costs less than before (1.06 vs 1.16 ms headless).
+
+## 7. V6: the new roster, the weapon rig and real HD (2026-10-14)
+
+The audit of V5.1: one stiff 3.3-head chibi recoloured seven times, 13 px heads with 1 px eyes, boxers with no weapons,
+small kicks with tiny smears, and an HD build that was the 64 px frame doubled. What V6 changed (all in `art/`):
+
+- **Proportions.** ~4.5 heads: 11 px head, 15 px torso, 20-23 px legs, 50-54 px tall in the 64 px cell (the engine
+  bottom-aligns the cell on the taskbar, so the top ~11 px of a standing fighter now sit just above the 48 px taskbar).
+  Pose data is still authored for the old body; `rig.skeleton()` scales hand targets by `ka`, foot lifts and hip drops
+  by `kl`, foot spread by `stance` (walks pin `fk=1` so the planted foot never slides) and rises by `KJ` so a jump
+  stays in the cell. A planted foot that cannot reach the floor sinks the hips instead of floating.
+- **A held weapon is a rig part** (`rig.Weapon`: kind, length, grip, rest angle on the forearm, width, `slide` for
+  poles, `grip2` for a two-handed grip). `Pose.wa` / `wb` aim it per key; a weapon that would leave the cell slides
+  through the hand (spear, staff) or turns toward the side it already leans. Kinds: katana, short sword, energy blade,
+  greatsword, dagger, kunai, spear, staff, kanabo, axe, tonfa, tessen fan, chakram, bow. Impact sparks of a weapon
+  strike sit on the blade, and `reach` is measured from the weapon pixels.
+- **Every swing draws its crescent.** On a smear frame the rig draws, behind the body, the white band between the path
+  of the weapon's striking point and a path inside it (hairline at the start, widest just before the end, going round
+  the front of the shoulder); a thrust gets a tapered band and two speed lines; a kick gets the same crescent off the
+  hip. The frame after a smear draws a thin tapered streak along the path, and the smear frame keeps one checker
+  ghost of the striking limb and weapon from the previous frame (section 6: streak smears plus one ghosted pose).
+- **Timing (section 6).** Strikes are a two-key held wind-up (110-150 ms, then a 70-110 ms tension hold), one 40 ms
+  smear with a lunge (`dx` 4-5), the contact hold with hitstop, then a held follow-through (220-280 ms) on medium and
+  heavy hits; kicks turn the hips (`turn` 0.55-0.8). Dash and backdash cover 38 / 31 px with dust and speed lines.
+- **Short hanging bits only** (`rig.Bit`: 2-3 segments, at most ~7 px): topknot tail, mask knots, tassels, sash ends,
+  a plume, a turban tail, a chain. They hang by gravity and swing opposite to how far their anchor moved since the
+  previous frame, so they lag one frame without any state. No long tails or capes.
+- **Real HD.** RES 2 renders the same pose data into a 128 px cell with a one-pixel outline, five tones per material
+  (rim, highlight, base, shadow, deep shadow), tinted inner lines where one material crosses another, one light
+  direction (top-left, also for left-facing frames, which are shaded after the mirror) and HD-only detail drawn at
+  pixel level: 2x2 eyes with a white, kasa straw seams, armour and plate seams, blade highlights, helmet breaths.
+  Palettes are hue-shifted ramps (`rig.ramp`): highlights lean warm, shadows cool, outlines are a dark tint of the
+  material, never black. Colour caps: <= 31 + transparency at RES 1, <= 63 at RES 2.
+- **Impact frames.** Every character's `fx.json` has an `impact` effect (4 opaque cells, 40/40/40/30 ms): its ultimate
+  contact pose as a silhouette on white with radial lines inside, the inverse on black with longer chaotic lines,
+  broken outline strokes, one blank frame. The engine plays it on heavy (power 3) and ultimate contacts only.
+- **Roster.** Thirteen characters: the seven program ids keep their names, moves and signatures (new bodies), and six
+  selectable extras reuse the signature and ultimate templates under their own move names (`fx.character_effects`
+  aliases the template's main effect to the move name).
+
+Checks: `python art/qa_v6.py sheet <char|all> [--res 2]` (contact sheets with per-frame timing / HIT / smear labels),
+`python art/qa_v6.py silhouettes` (every idle as flat black on #202020, 1x and 4x) and `python art/qa_v6.py lineup`.
+`tests/test_art.py` asserts the proportions, a weapon and a swing crescent on every strike, distinct idle silhouettes
+(IoU < 0.8 for every pair), short bits only, and the impact-frame sequence.

@@ -16,6 +16,7 @@ LIB = Library()
 HD = Library(hd=True)
 FX = fxmod.default()
 PAIRS = [('claude', 'codex'), ('gemini', 'cursor'), ('ollama', 'lmstudio'), ('generic', 'claude')]
+PAIRS += [(c, 'claude') for c in available() if c not in {x for pr in PAIRS for x in pr}]      # a newly built character joins
 
 
 def plan(seed, c1, c2, kind='match'):
@@ -68,7 +69,7 @@ class PickerRules(unittest.TestCase):
         kinds, openers, outcomes, lens, resets, counters, taunts = set(), set(), set(), [], 0, 0, 0
         for s in range(300):
             rng = random.Random(s)
-            sit = dict(range=('far' if s % 2 else 'close'), meter=(100 if s % 5 == 0 else 0), ult_ok=True, dramatic=(s % 7 == 0), friendly=False, air=False, k=3)
+            sit = dict(range=('far' if s % 2 else 'close'), meter=(choreo.METER_SUPER if s % 5 == 0 else 0), ult_ok=True, dramatic=(s % 7 == 0), friendly=False, air=False, k=3)
             ex = choreo.plan_exchange(rng, choreo.Picker(rng, A), choreo.Picker(rng, D), sit)
             kinds.add(ex['kind'])
             openers.add(ex['opener'])
@@ -82,7 +83,7 @@ class PickerRules(unittest.TestCase):
                 self.assertIn(b['anim'], A.anim if b['who'] == 'att' else D.anim)
                 self.assertGreaterEqual(b['hitstop'], 0)
         self.assertEqual(kinds, {'strike', 'special', 'super', 'ultimate'})
-        self.assertEqual(openers, {None, 'dash', 'jump', 'sweep'})
+        self.assertEqual(openers, {None, 'dash', 'jump', 'sweep', 'lunge'})
         self.assertEqual(outcomes, {'hit', 'block', 'crouch_block', 'parry', 'whiff'})
         self.assertGreater(max(lens), 2)                         # combos: jab -> cross -> uppercut chains
         self.assertGreater(resets, 30)
@@ -92,7 +93,7 @@ class PickerRules(unittest.TestCase):
 
 class Variety(unittest.TestCase):
     def test_twenty_seeded_matches_no_move_over_25pct_and_12_plus_distinct_moves_per_character(self):
-        picks, anims, sums = seeded_matches(20)
+        picks, anims, sums = seeded_matches(max(20, 5 * len(PAIRS)))           # every character plays >= 5 matches as the roster grows
         self.assertEqual(set(picks), set(available()))
         for ch, c in picks.items():
             n = sum(c.values())
@@ -109,13 +110,18 @@ class Variety(unittest.TestCase):
         self.assertGreater(sum(s['air'] for c1, c2, tl, s in sums), 20)      # air-to-air exchanges
 
     def test_the_ultimate_comes_once_per_match_at_a_dramatic_moment_with_flash_and_shake(self):
-        picks, anims, sums = seeded_matches(20)
+        picks, anims, sums = seeded_matches(40)
         n_ult = 0
         for c1, c2, tl, s in sums:
+            both = [b for slot in 'ab' for b in s['beats'][slot] if b['kind'] == 'ultimate']
+            self.assertLessEqual(len(both), 1, (c1, c2))                 # V6: one per MATCH between both fighters
             for slot in 'ab':
                 ults = [b for b in s['beats'][slot] if b['kind'] == 'ultimate']
-                self.assertLessEqual(len(ults), 1, (c1, c2))
                 n_ult += len(ults)
+                for t, n, o in tl[slot]:                                  # a desperation move: the attacker is below ULT_HP
+                    if o.get('kind') == 'ultimate' and 'contact' in o:
+                        before = [h for t2, h in rounds.hp_trace(tl) if t2 < t]
+                        self.assertLess(before[-1][slot], choreo.ULT_HP, (c1, c2, before[-1]))
                 if ults and ults[0]['outcome'] == 'hit':
                     self.assertTrue(any(n == '@flash' for t, n, o in tl[slot]), 'an ultimate that lands flashes')
                     self.assertTrue(any(n == '@shake' for t, n, o in tl[slot]), 'and shakes')
@@ -129,7 +135,7 @@ class Variety(unittest.TestCase):
                     self.assertTrue(r, (t, s['rounds']))
                     before = [1 for w in 'ab' for t2, n2, o2 in tl[w] if 'contact' in o2 and r[0]['t0'] <= t2 < t]
                     self.assertGreaterEqual(len(before), 2)
-        self.assertGreater(n_ult, 10)
+        self.assertTrue(4 <= n_ult <= 24, n_ult)                          # ~0.35 per match: rare, but it does happen
 
     def test_knockdowns_get_up_and_hitstop_rides_on_the_contact(self):
         c1, c2 = 'claude', 'codex'
@@ -330,6 +336,7 @@ WINS = [(11, 2560 + 300, 76 + 200, 2560 + 1200, 76 + 800), (12, 2560 + 1300, 76 
 def arena_match(seed, chars=('claude', 'codex'), secs=150):
     st = AR.Stage(MON, WINS, floor_y=FLOOR)
     ar = AR.Arena(st, {'a': HD[chars[0]], 'b': HD[chars[1]]}, FX, seed=seed, backdrop=None, now=0.0, record=lambda *a, **k: None)
+    ar.flashes = True
     now = 0.0
     while ar.phase != 'done' and now < secs:
         now += 1 / 30.0
@@ -359,9 +366,9 @@ class ArenaChoreo(unittest.TestCase):
             t_up = [e[1] for e in ev if e[0] == 'getup']
             for t in t_down:
                 self.assertTrue(any(t < u < t + 3.0 for u in t_up), (t, t_up))      # knocked down but not out: kip up
-        self.assertGreater(kinds_all['beam'], 0)
-        self.assertGreater(kinds_all['flash'], 0)
-        self.assertGreater(kinds_all['explosion'], 0)
+        # V6: the ultimate is rare (desperation only), so four matches may not land one; every landing still flashes and bursts
+        # (test_beam_ultimate_lands_on_the_defender... drives a landing directly)
+        self.assertEqual(kinds_all['flash'], kinds_all['explosion'])
         self.assertGreater(kinds_all['parry'] + kinds_all['block'], 3)
         self.assertGreater(kinds_all['reset'], 3)
         self.assertGreater(kinds_all['whiff'], 0)
@@ -372,6 +379,7 @@ class ArenaChoreo(unittest.TestCase):
     def test_beam_ultimate_lands_on_the_defender_with_knockback_along_the_beam_and_the_flash_is_one_full_frame(self):
         st = AR.Stage(MON, WINS, floor_y=FLOOR)
         ar = AR.Arena(st, {'a': HD['claude'], 'b': HD['codex']}, FX, seed=2, backdrop=None, now=0.0, record=lambda *a, **k: None)
+        ar.flashes = True
         now = 0.0
         while ar.phase != 'fight':
             now += 1 / 30.0
@@ -419,6 +427,209 @@ class ArenaChoreo(unittest.TestCase):
         st_json = json.dumps(ar.state())                                         # the heartbeat carries the recent events
         self.assertIn('"events"', st_json)
         self.assertTrue(any(k == 'beam' and name == ult for k, t, name in ar.state()['events']))   # the heartbeat names the effect that fired
+
+
+class FightFeelV6Brain(unittest.TestCase):
+    """V6 playback and planner rules: no moonwalk, slides wait out hitstop, smears are held long enough to be drawn,
+    braces / slumps hold, slow motion, shadowboxing without repeats, no super flourish, the boost window, impact frames
+    and the flashes switch, the sweep goes through the picker, ranged duels end with a hit or a parry."""
+
+    def brain(self):
+        cfg, atl, brains = sim.make(1, dict(CFG), 1000.0)
+        return brains[LEFT]
+
+    def test_fighters_turn_and_walk_home_then_face_the_opponent_again(self):
+        cfg = dict(CFG, bout_min_s=999, bout_max_s=999, clash_min_s=999, clash_max_s=999, match_min_s=3, match_max_s=4, scoreboard=False)
+        _, atl, brains = sim.make(4, cfg, 1000.0)
+        tele = {LEFT: sim.FakeTelemetry(LEFT, [(0, 'working', 41.0)]), RIGHT: sim.FakeTelemetry(RIGHT, [(0, 'idle', 70.0)])}
+        bus, prev, walked = {}, {}, {LEFT: 0, RIGHT: 0}
+        for i in range(1500):
+            now = 1000 + i / 10.0
+            sim.step(brains, tele, now, bus)
+            for w, b in brains.items():
+                if b.mode == 'walk' and b.walk_then == 'home' and w in prev and abs(b.x - prev[w]) > 0.5:
+                    self.assertEqual(b.facing, 1 if b.x > prev[w] else -1, (w, now, b.anim))      # faces where it goes
+                    self.assertEqual(b.anim, 'walk')
+                    walked[w] += 1
+                prev[w] = b.x
+            if brains[LEFT].last_match and all(b.mode == 'home' for b in brains.values()) and all(walked.values()):
+                break
+        self.assertTrue(all(walked.values()), walked)
+        for _ in range(3):
+            now += 0.1
+            sim.step(brains, tele, now, bus)
+        a, b = brains[LEFT], brains[RIGHT]
+        self.assertEqual(a.facing, 1 if b.x > a.x else -1)                          # turned back toward the opponent
+        self.assertEqual(b.facing, 1 if a.x > b.x else -1)
+
+    def test_knockback_slide_waits_out_the_hitstop(self):
+        b = self.brain()
+        b.mode, b.x = 'script', 400.0
+        b.script = dict(kind='match', plan=dict(pos={LEFT: 400.0, RIGHT: 432.0}), t_end=1003.0, projs=[],
+                        tl=[(1001.0, 'hit_heavy', {'react_to': 'cross', 'hitstop': 120, 'to': 380.0, 'slide_ms': 200})])
+        b.script_i = -1
+        b._tick_script(1001.0)
+        b._tick_script(1001.1)
+        self.assertEqual(b.x, 400.0)                                                # frozen with the hitstop
+        b._tick_script(1001.2)
+        self.assertTrue(380.0 < b.x < 400.0, b.x)
+        b._tick_script(1001.35)
+        self.assertEqual(b.x, 380.0)
+
+    def test_smear_and_hit_frames_last_one_redraw_and_the_contact_time_is_unchanged(self):
+        b = self.brain()
+        a = b.atlas
+        for move in ('jab', 'cross', 'uppercut', 'low_kick', 'roundhouse'):
+            meta = a.anim[move]
+            held = b.held_ms(move) or [f['ms'] for f in meta['frames']]
+            for i in set(meta.get('smear_frames') or []) | {meta['hit_frame']}:
+                self.assertGreaterEqual(held[i], 50 - 1e-9, (move, i, held))
+            self.assertEqual(sum(held), a.total_ms(move))
+            self.assertEqual(sum(held[:meta['hit_frame']]), a.contact_ms(move))
+            b.play(move, 0.0, loop=False)
+            b.stop = b.slow = None
+            ok = {b.frame(t / 1000.0)[0] for t in range(0, a.total_ms(move), 33)}   # sampled at 30 fps
+            for i in meta.get('smear_frames') or []:
+                self.assertIn(i, ok, (move, i))
+
+    def test_hold_keeps_a_brace_and_slow_motion_stretches_the_clock(self):
+        b = self.brain()
+        b.mode = 'script'
+        b.script = dict(kind='match', plan=dict(pos={LEFT: 400.0, RIGHT: 432.0}), t_end=1010.0, projs=[],
+                        tl=[(1000.0, 'facepalm', {'hold': True})])
+        b.script_i = -1
+        b.tick(1000.0, Snapshot('x', 'idle', 20.0), dict(x=432.0, mode='script'))
+        b.tick(1003.0, Snapshot('x', 'idle', 20.0), dict(x=432.0, mode='script'))
+        self.assertEqual(b.anim, 'facepalm')                                          # not back to idle
+        b.slow = (10.0, 11.0, 0.5)
+        self.assertAlmostEqual(b.clock(10.0, 11.0), 0.5)
+        self.assertAlmostEqual(b.clock(9.0, 12.0), 2.5)
+        b.stop = (9.5, 10.0)
+        self.assertAlmostEqual(b.clock(9.0, 12.0), 2.0)
+
+    def test_shadowboxing_never_repeats_and_the_idle_flourish_is_never_the_super(self):
+        b = self.brain()
+        tele = sim.FakeTelemetry(LEFT, [(0, 'working', 30.0)])
+        seq, starts = [], []
+        for i in range(0, 3000):
+            now = 1000.0 + i / 10.0
+            b.tick(now, tele.poll(now), None)
+            if b.anim in choreo.STRIKES + (b.sig['strike'],) and (not seq or b.anim_t0 != starts[-1]):
+                seq.append(b.anim)
+                starts.append(b.anim_t0)
+        self.assertGreater(len(seq), 10)
+        self.assertTrue(all(x != y for x, y in zip(seq, seq[1:])), seq)
+        self.assertTrue(all(t2 - t1 >= CFG['shadowbox_min_s'] - 0.2 for t1, t2 in zip(starts, starts[1:])), starts)
+        b2 = self.brain()
+        tele2 = sim.FakeTelemetry(LEFT, [(0, 'idle', 30.0)])
+        for i in range(0, 3000):
+            now = 1000.0 + i / 10.0
+            b2.tick(now, tele2.poll(now), None)
+            self.assertNotEqual(b2.anim, b2.sig['super'])
+
+    def test_a_finished_task_puts_its_slot_in_the_next_bout_plan_within_the_window(self):
+        cfg, atl, brains = sim.make(1, dict(CFG), 1000.0)
+        a = brains[LEFT]
+        a.partner = dict(x=600.0, character='codex', state='idle', mode='home')
+        a.snap = Snapshot('x', 'idle', 20.0)
+        a.note_finish(LEFT, 1000.0)
+        self.assertEqual(a._plan('spar', 1005.0).get('boost'), [LEFT])
+        self.assertNotIn('boost', a._plan('spar', 1000.0 + 25.0))                     # window over
+        self.assertNotIn('boost', a._plan('ranged', 1005.0))                          # only fights carry it
+        a.script = dict(kind='spar')
+        a.note_finish(RIGHT, 1030.0)                                                  # partner finished mid-bout
+        self.assertEqual(a.finish_due[RIGHT], 'after')
+        a.script, a.last_now = None, 1040.0
+        a._end_match_visuals()
+        self.assertEqual(a._plan('match', 1050.0).get('boost'), [RIGHT])
+        a._commit('spar', dict(a._plan('spar', 1050.0), t0=1060.0), 1050.0)
+        self.assertNotIn(RIGHT, a.finish_due)                                         # consumed
+
+    def test_impact_frames_flash_long_enough_and_obey_the_flashes_switch(self):
+        for on in (True, False):
+            b = self.brain()
+            b.flashes = on
+            b.mode = 'script'
+            b.script = dict(kind='match', plan=dict(pos={LEFT: 400.0, RIGHT: 432.0}), t_end=1003.0, projs=[],
+                            tl=[(1000.0, '@impact', {'ms': 130, 'on': RIGHT}), (1000.5, '@flash', {'alpha': 0.7, 'ms': 120})])
+            b.script_i = -1
+            b._tick_script(1000.01)
+            b.fxp.tick(1000.01)
+            art = FX.has_art('impact')                                              # with the art: the effect on the struck side, no flash
+            self.assertEqual(b.view(1000.01)['flash'] > 0, on and not art)
+            self.assertEqual(b.view(1000.12)['flash'] > 0, on and not art)              # >= 100 ms, not one 60 ms frame
+            b._tick_script(1000.5)
+            v = b.view(1000.59)
+            self.assertEqual(v['flash'] > 0, on)
+            self.assertEqual(v['busy'], on)                                         # a flash forces a redraw
+            self.assertEqual(b.view(1000.75)['flash'], 0.0)
+
+    def test_impact_art_spawns_only_on_the_struck_fighter(self):
+        class ArtFx:
+            def __init__(s, base):
+                s.base = base
+            def has_art(s, n):
+                return n == 'impact' or s.base.has_art(n)
+            def get(s, n):
+                return s.base.get('hit_heavy' if n == 'impact' else n)
+            def __getattr__(s, n):
+                return getattr(s.base, n)
+        for slot, n_expected in ((LEFT, 0), (RIGHT, 1)):
+            cfg, atl, brains = sim.make(1, dict(CFG), 1000.0)
+            b = brains[slot]
+            b.fx = ArtFx(FX)
+            b.fxp.fx = b.fx
+            b.flashes = True
+            b.mode = 'script'
+            b.script = dict(kind='match', plan=dict(pos={LEFT: 400.0, RIGHT: 432.0}), t_end=1003.0, projs=[], tl=[(1000.0, '@impact', {'ms': 130, 'on': RIGHT})])
+            b.script_i = -1
+            b._tick_script(1000.01)
+            self.assertEqual(len(b.fxp.active), n_expected)
+
+    def test_near_the_context_limit_the_fighter_pulses(self):
+        b = self.brain()
+        b.snap = Snapshot('x', 'idle', 88.0)
+        flashes = [b.view(1000.0 + i / 30.0)['flash'] for i in range(60)]
+        self.assertTrue(any(f > 0 for f in flashes) and any(f == 0 for f in flashes))
+        b.flashes = False
+        self.assertTrue(all(b.view(1000.0 + i / 30.0)['flash'] == 0 for i in range(60)))
+        b.flashes, b.snap = True, Snapshot('x', 'idle', 40.0)
+        self.assertTrue(all(b.view(1000.0 + i / 30.0)['flash'] == 0 for i in range(60)))
+
+    def test_the_sweep_goes_through_the_picker(self):
+        A, D = LIB['claude'], LIB['codex']
+        firsts = collections.Counter()
+        for s in range(400):
+            rng = random.Random(s)
+            att = choreo.Picker(rng, A)
+            att.last = 'low_kick' if s % 2 else None
+            ex = choreo.plan_exchange(rng, att, choreo.Picker(rng, D), dict(range='close', meter=0, ult_ok=False, friendly=False, air=False, k=1))
+            if ex['opener'] == 'sweep':
+                first = [b for b in ex['beats'] if b['kind'] in choreo.ATTACK_KINDS][0]['anim']
+                firsts[first] += 1
+                if s % 2:
+                    self.assertNotEqual(first, 'low_kick')                        # the no-repeat rule binds the sweep too
+        self.assertGreater(firsts['low_kick'], 0)
+        self.assertGreater(len(firsts), 2)
+
+    def test_story_helpers(self):
+        self.assertFalse(choreo.dramatic(1, 45, 10, 5))                             # up a round, but healthy: no ultimate
+        self.assertFalse(choreo.dramatic(0, 20, 50, 1))                             # never in the first exchanges
+        self.assertTrue(choreo.dramatic(0, 20, 50, 2))
+        self.assertGreater(choreo.edge_for(20, 80), 0)                              # trailing attacker: tilted up
+        self.assertLess(choreo.edge_for(80, 20, 1, 0), 0)
+        self.assertLessEqual(abs(choreo.edge_for(0, 100, 0, 1)), choreo.EDGE_MAX)
+
+    def test_ranged_duels_end_with_a_hit_or_a_parry_and_one_taunt(self):
+        endings = collections.Counter()
+        for seed in range(12):
+            p = dict(kind='ranged', left=LEFT, right=RIGHT, pos={LEFT: 400, RIGHT: 550}, t0=50.0, seed=seed, chars={LEFT: 'claude', RIGHT: 'codex'})
+            tl, t_end, projs = make_timeline('ranged', p, LIB, FX)
+            taunts = [w for w in tl for t, n, o in tl[w] if n == 'taunt']
+            self.assertEqual(len(taunts), 1, tl)
+            last = [o.get('outcome') for t, n, o in tl[LEFT] if 'react_to' in o]
+            endings[last[-1]] += 1
+        self.assertEqual(set(endings), {'hit', 'parry'})
 
 
 if __name__ == '__main__':

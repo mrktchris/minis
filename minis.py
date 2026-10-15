@@ -10,11 +10,20 @@
   python minis.py demo [kind]    start one bout now (spar | clash | ranged | match); plates keep the real numbers
   python minis.py winners random|decided   how match winners are drawn (decided = biased by the health score)
   python minis.py rival on|off   rival mode: a sleeping partner (or the sparring bot) is woken for a match now and then
+  python minis.py flash on|off   white flashes on big hits (off: never a flash, for anyone who dislikes strobing)
+  python minis.py fighters       programs seen + their state, the characters, the current lineup
+  python minis.py fighters set a|b <program|character>   pin a program to a side, or give that side's program a look
+  python minis.py fighters pin a|b <program>   keep this program on that side (asleep when it is not detected)
+  python minis.py fighters auto | reset        both sides back to auto (reset also forgets every look)
+  python minis.py pick a|b <program>|auto      alias of `fighters pin` / back to auto for one side
+  python minis.py skin <program> <character>|default   draw a program as another character
+  python minis.py show [a|b]     bring back a hidden fighter
   python minis.py detect         which known AI programs the sources see right now, and how (names and numbers only)
   python minis.py monitors       list monitors (index, rect, primary) for `arena --monitor N`
-  python minis.py arena --monitor N [--freeze] [--seconds S] [--seed K]   arena mode on monitor N, as its own process
+  python minis.py arena [--monitor N] [--freeze] [--seconds S] [--seed K]   arena mode (default monitor: the Arena button's)
   python minis.py arena stop     ask the arena to leave (then force-stop it if it will not)
-  python minis.py arena capture <png>   PrintWindow of the arena's OWN window only (never the desktop)
+  python minis.py arena capture <png>   PrintWindow of the arena's OWN window only; refused while --freeze is on, and
+                                        only under qa/ or the data folder
   python minis.py director       run the director + scoreboard widget in the foreground
   python minis.py run <slot>     run one fighter slot in the foreground (a = left, b = right)
   python minis.py run arena ...  the arena process body (what `arena` launches)
@@ -29,6 +38,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 from minis_core import config as cfgmod  # noqa: E402
 
+logging.getLogger('minis.null').addHandler(logging.NullHandler())       # the default log of injectable parts: silent
 SLOTS = ('a', 'b')
 LEGACY = ('claude', 'codex')                      # v2 fighters (`run claude|codex`): stop/status still recognise them
 ROLES = ('director',) + SLOTS
@@ -42,6 +52,36 @@ TASKKILL = os.path.join(SYSROOT, 'System32', 'taskkill.exe')
 
 def other(slot):
     return 'b' if slot == 'a' else 'a'
+
+
+FPS_KEYS = (('fps_active', 1, 60), ('fps_idle', 1, 60), ('arena_fps', 5, 60))
+
+
+def load_config(path=None, log=None):
+    """cfgmod.load() plus two guards: a minis.json that does not parse is logged (it used to be ignored silently), and the
+    fps values are clamped (fps 0 divided by zero in the loops)."""
+    p = Path(path) if path else cfgmod.ROOT / 'minis.json'
+    cfg = cfgmod.load(p)
+    problem = None
+    if p.exists():
+        import json
+        try:
+            data = json.loads(p.read_text(encoding='utf-8'))
+            if not isinstance(data, dict):
+                problem = 'minis.json is not a JSON object: ignored, defaults used'
+                cfg = dict(cfgmod.DEFAULTS)
+        except (OSError, ValueError) as e:
+            problem = f'minis.json could not be read ({type(e).__name__}): ignored, defaults used'
+    for k, lo, hi in FPS_KEYS:
+        try:
+            v = float(cfg.get(k, cfgmod.DEFAULTS.get(k, lo)))
+        except (TypeError, ValueError):
+            v = float(cfgmod.DEFAULTS.get(k, lo))
+        cfg[k] = max(lo, min(hi, v))
+    if problem:
+        (log or get_logger('config')).warning(problem)
+        cfg['_config_problem'] = problem
+    return cfg
 
 
 # ------------------------------------------------------------------ logging (small, rotating, never content)
@@ -94,7 +134,9 @@ def argv_is_ours(argv, role, root=ROOT):
     if os.path.basename(argv[0]).lower() not in PYTHONS:
         return False
     try:
-        script_ok = os.path.normcase(os.path.abspath(argv[1])) == os.path.normcase(str(Path(root) / 'minis.py'))
+        if not os.path.isabs(argv[1]):                   # relative paths would resolve against OUR cwd, not the process's
+            return False
+        script_ok = os.path.normcase(os.path.normpath(argv[1])) == os.path.normcase(str(Path(root) / 'minis.py'))
     except (TypeError, ValueError):
         return False
     return script_ok and (list(argv[2:4]) == tail if role == ARENA else list(argv[2:]) == tail)
@@ -145,21 +187,88 @@ def python_exe(windowless=True):
     return pyw if windowless and pyw.exists() else exe
 
 
-def cmd_start(args=None):
+DETACHED = 0x00000008 | 0x00000200 | 0x08000000           # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
+
+
+def role_argv(role):
+    return [str(python_exe()), str(ROOT / 'minis.py')] + expected_tail(role)
+
+
+def launch_role(role):
+    """Start one role as a detached, windowless process.  Refused under tests; the argv is proven ours before it runs."""
+    if os.environ.get('MINIS_TESTING'):
+        return False
+    argv = role_argv(role)
+    if not argv_is_ours(argv, role):
+        return False
+    subprocess.Popen(argv, creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
+    return True
+
+
+def on_screen(now=None, taskbar=None):
+    """-> (line, ok): what the fighters show right now in plain words ('a: Claude Code, b: Sparring bot'), or why nothing
+    shows.  Reads pid files, assign.json and control.json; `taskbar` (rect tuple, autohide) is injectable."""
+    from minis_core import control, director
+    now = time.time() if now is None else now
+    why = []
+    states = {r: proc_state(r)[0] for r in ROLES}
+    if states['director'] != 'running':
+        why.append('the director is not running')
+    data = director.read_assign()
+    parts = []
+    for s in SLOTS:
+        a = DEFAULT_ASSIGN[s] if data is None else director.slot_assignment(data, s)
+        if states[s] != 'running':
+            parts.append(f'{s}: (not running)')
+            continue
+        if a is None:
+            parts.append(f'{s}: (nothing to show)')
+            continue
+        tail = ' asleep' if a.get('dormant') or a.get('bot') else ''
+        left = control.hidden_left(s, now=now)
+        if left is not None:
+            tail += ' (hidden)' if left == float('inf') else f' (hidden {int(left // 60) + 1}m)'
+        parts.append(f"{s}: {a.get('program') or a.get('source')}{tail}")
+    if taskbar is None:
+        try:
+            from minis_win import shell
+            taskbar = (shell.taskbar_rect(), shell.taskbar_autohide())
+        except Exception:
+            taskbar = None
+    if taskbar is not None:
+        rect, autohide = taskbar
+        if rect[4] != 3:
+            why.append('the taskbar is not at the bottom (fighters hide)')
+        elif autohide:
+            why.append('the taskbar auto-hides (fighters hide)')
+    if control.arena_active(now=now):
+        why.append('the arena is up (taskbar fighters wait)')
+    if control.paused():
+        why.append('animations are paused')
+    ok = all(states[r] == 'running' for r in ROLES)
+    return ', '.join(parts) + (('  -  ' + '; '.join(why)) if why else ''), ok
+
+
+def cmd_start(args=None, wait_s=3.0, sleep=time.sleep):
     legacy = [r for r in LEGACY if running(r)]
     if legacy:
         print(f'v2 fighters still running ({", ".join(legacy)}): run `python minis.py stop` first')
         return 1
-    exe = python_exe()
-    flags = 0x00000008 | 0x00000200 | 0x08000000          # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
+    started = []
     for role in ROLES:
         st, pid = proc_state(role)
         if st == 'running':
             print(f'{role}: already running (pid {pid})')
             continue
-        subprocess.Popen([str(exe), str(ROOT / 'minis.py')] + expected_tail(role), creationflags=flags, close_fds=True, cwd=str(ROOT))
-        print(f'{role}: started')
-    return 0
+        if launch_role(role):
+            started.append(role)
+        else:
+            print(f'{role}: could not be launched' + (' (refused under tests)' if os.environ.get('MINIS_TESTING') else ''))
+    if started:
+        sleep(wait_s)                                      # give the windows a moment, then say what is really there
+    line, ok = on_screen()
+    print(('on screen: ' if ok else 'not everything started: ') + line)
+    return 0 if ok else 1
 
 
 def cmd_stop(args=None, roles=None):
@@ -201,8 +310,40 @@ def cmd_stop(args=None, roles=None):
     return rc
 
 
+def status_line(now=None):
+    """The one-line summary `status` starts with: running or not, who is on which side, and rival mode."""
+    from minis_core import control, director
+    now = time.time() if now is None else now
+    states = {r: proc_state(r)[0] for r in ROLES}
+    rival = 'on' if control.rival_on(default=load_config().get('rival', True)) else 'off'
+    if not any(v == 'running' for v in states.values()):
+        return f'minis is not running (start it with `python minis.py start`). Rival mode {rival}.'
+    data = director.read_assign()
+    sides = []
+    for s, side in (('a', 'left'), ('b', 'right')):
+        a = DEFAULT_ASSIGN[s] if data is None else director.slot_assignment(data, s)
+        if states[s] != 'running':
+            sides.append(f'nothing on the {side} (slot {s} is not running)')
+        elif a is None:
+            sides.append(f'nothing on the {side}')
+        else:
+            extra = []
+            if a.get('bot'):
+                extra.append('stand-in')
+            elif a.get('dormant'):
+                extra.append('asleep')
+            if a.get('picked'):
+                extra.append('picked')
+            if control.hidden_left(s, now=now) is not None:
+                extra.append('hidden')
+            sides.append(f"{a.get('program') or a.get('source')} on the {side}" + (f" ({', '.join(extra)})" if extra else ''))
+    run = 'minis is running' if all(v == 'running' for v in states.values()) else 'minis is partly running'
+    return f"{run}: {sides[0]} vs {sides[1]}. Rival mode {rival}" + ('; paused.' if control.paused() else '.')
+
+
 def cmd_status(args=None):
     from minis_core import bus, control, director
+    print(status_line())
     data = director.read_assign()
     now = time.time()
     for role in ROLES + LEGACY:
@@ -227,14 +368,16 @@ def cmd_status(args=None):
     else:
         print(f'assign.json: written {round(now - float(data.get("ts", 0)), 1)}s ago')
     print('animations:', 'PAUSED' if control.paused() else 'running', '| HUD plates:', 'on' if control.plates_on() else 'off',
-          '| winners:', control.winners())
+          '| winners:', control.winners(), '| flash effects:', 'on' if control.flashes_on() else 'off')
+    lu = control.lineup()
+    print(f"lineup: a={lu['a']} b={lu['b']}" + (' | looks: ' + ', '.join(f'{k}->{v}' for k, v in sorted(lu['skins'].items())) if lu['skins'] else ''))
     st, pid = proc_state(ARENA)
     ar = control.arena_state()
     print(f'arena: {st}{" pid %s" % pid if pid else ""}' + (f'  monitor {ar.get("monitor")} phase={ar.get("phase")} round={ar.get("round")} hp={ar.get("hp")}' if ar else ''))
-    from minis_core import rounds
-    rec = rounds.read_record()
-    if rec.get('characters'):
-        print('record:', ', '.join(f'{c} {v.get("w", 0)}-{v.get("l", 0)}' for c, v in sorted(rec['characters'].items())))
+    from minis_core import records
+    rec = records.read()
+    if rec.get('programs'):
+        print('record:', ', '.join(f'{c} {v.get("w", 0)}-{v.get("l", 0)}' for c, v in sorted(rec['programs'].items())))
     return 0
 
 
@@ -287,11 +430,121 @@ def cmd_rival(args):
     return 0 if ok else 1
 
 
+def cmd_flash(args):
+    from minis_core import control
+    ok = control.set_flashes(args.state == 'on')
+    print(f'flash effects {args.state}' if ok else 'could not write control.json')
+    return 0 if ok else 1
+
+
+def cmd_show(args):
+    from minis_core import control
+    ok = control.show(getattr(args, 'slot', None))
+    print(('shown: ' + (args.slot or 'both')) if ok else 'could not write control.json')
+    return 0 if ok else 1
+
+
+def _fighters_table():
+    from minis_core import control, director, lineup
+    data = director.read_assign() or {}
+    lu = control.lineup()
+    chars = lineup.characters()
+    print('programs (source id, name, state, look):')
+    for r in lineup.programs(data):
+        look = lineup.look_of(r['source'], lu, data)
+        mark = [f'slot {s}' for s in SLOTS if lu[s] == r['source']]
+        on = [f'on {s}' for s in SLOTS if (director.slot_assignment(data, s) or {}).get('source') == r['source']]
+        print(f"  {r['source']:11s} {r['label']:11s} {lineup.state_word(r['state']):9s} {lineup.display_of(look, chars):10s}"
+              + (f"  [{', '.join(mark + on)}]" if mark or on else ''))
+    print('characters: ' + ', '.join(f"{c['id']} ({c['display']})" if c['display'].lower() != c['id'] else c['id'] for c in chars))
+    print(f"lineup: a = {lu['a']}, b = {lu['b']}" + ('; looks: ' + ', '.join(f'{k} as {v}' for k, v in sorted(lu['skins'].items())) if lu['skins'] else ''))
+    if not data.get('programs'):
+        print('(the director has not written a program list yet: states are unknown until `python minis.py start`)')
+    return 0
+
+
+def _pick(slot, name):
+    from minis_core import control, director, lineup
+    kind, val = lineup.resolve_name(name, director.read_assign())
+    if kind == 'auto':
+        control.set_pick(slot, 'auto')
+        print(f'{slot}: auto')
+        return 0
+    if kind != 'program':
+        print(f'{name!r} is not a program; known: ' + ', '.join(lineup.known_ids(director.read_assign())))
+        return 2
+    control.set_pick(slot, val)
+    print(f'{slot}: {val} (stays on this side; asleep when it is not detected)')
+    return 0
+
+
+def _skin(program, character):
+    from minis_core import control, director, lineup
+    kind, val = lineup.resolve_name(program, director.read_assign())
+    if kind != 'program':
+        print(f'{program!r} is not a program; known: ' + ', '.join(lineup.known_ids(director.read_assign())))
+        return 2
+    if str(character).lower() in ('default', 'auto', 'none'):
+        control.set_skin(val, None)
+        print(f'{val}: its own character again')
+        return 0
+    cid = lineup.resolve_character(character)
+    if cid is None:
+        print(f'{character!r} is not a character; have: ' + ', '.join(lineup.character_ids()))
+        return 2
+    control.set_skin(val, cid)
+    print(f'{val}: drawn as {cid}')
+    return 0
+
+
+def cmd_fighters(args):
+    """`fighters` (list), `fighters set a|b <program|character>`, `fighters pin a|b <program>`, `fighters auto|reset`."""
+    from minis_core import control, director, lineup
+    act = args.action or 'list'
+    rest = list(args.rest or [])
+    if act == 'list':
+        return _fighters_table()
+    if act in ('auto', 'reset'):
+        control.reset_lineup(skins=act == 'reset')
+        print('both sides: auto' + (' (looks forgotten)' if act == 'reset' else ' (looks kept)'))
+        return 0
+    if act in ('set', 'pin'):
+        if len(rest) != 2 or rest[0] not in SLOTS:
+            print(f'usage: fighters {act} a|b <{"program|character" if act == "set" else "program"}>')
+            return 2
+        slot, name = rest
+        if act == 'pin':
+            return _pick(slot, name)
+        data = director.read_assign()
+        kind, val = lineup.resolve_name(name, data)
+        if kind in ('program', 'auto'):
+            return _pick(slot, name)
+        if kind == 'character':
+            lu = control.lineup()
+            src = lu[slot] if lu[slot] != 'auto' else (director.slot_assignment(data, slot) or {}).get('source')
+            if not src:
+                print(f'slot {slot} shows nothing right now: pin a program first (fighters pin {slot} <program>)')
+                return 2
+            return _skin(src, val)
+        print(f'{name!r} is neither a program nor a character; see `python minis.py fighters`')
+        return 2
+    print('fighters: list | set a|b <program|character> | pin a|b <program> | auto | reset')
+    return 2
+
+
+def cmd_pick(args):
+    return _pick(args.slot, args.program)
+
+
+def cmd_skin(args):
+    return _skin(args.program, args.character)
+
+
 def cmd_detect(args=None):
     """What the sources layer sees right now, program by program.  Names, states and numbers only: never a window title,
     never a path beyond the executable's file name."""
     from minis_core import sources
-    cfg = cfgmod.load()
+    cfg = load_config()
     srcs = sources.Sources(cfg)
     now = time.time()
     srcs.poll(now)                                      # process sources need two polls a second apart for a CPU rate
@@ -336,9 +589,56 @@ def start_arena(monitor, freeze=False, seconds=None, seed=None):
         argv += ['--seconds', str(float(seconds))]
     if seed is not None:
         argv += ['--seed', str(int(seed))]
-    flags = 0x00000008 | 0x00000200 | 0x08000000
-    subprocess.Popen(argv, creationflags=flags, close_fds=True, cwd=str(ROOT))
+    subprocess.Popen(argv, creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
     return f'arena: started on monitor {monitor}' + (' (freeze)' if freeze else ''), 0
+
+
+class ArenaStopper:
+    """Non-blocking `arena stop` for the UI loops (menu, scoreboard): request() asks the arena to leave and returns at
+    once; poll(now), called every loop iteration, force-stops it (command line verified) once `grace_s` has passed."""
+
+    def __init__(self, grace_s=4.0):
+        self.grace_s = grace_s
+        self.deadline = None
+
+    def request(self, now):
+        from minis_core import control
+        st, pid = proc_state(ARENA)
+        if st != 'running':
+            control.clear_arena_state()
+            return 'arena: not running'
+        control.request_arena_stop()
+        self.deadline = now + self.grace_s
+        return 'arena: asked to leave'
+
+    def poll(self, now):
+        if self.deadline is None:
+            return None
+        if proc_state(ARENA)[0] != 'running':
+            from minis_core import control
+            control.clear_arena_state()
+            self.deadline = None
+            return 'arena: stopped'
+        if now >= self.deadline:
+            self.deadline = None
+            rc = cmd_stop(roles=(ARENA,))
+            return 'arena: force-stopped' if rc == 0 else 'arena: could not stop'
+        return None
+
+
+def capture_allowed(path):
+    """`arena capture` writes only under ROOT/qa or the data folder (never anywhere a typo or a relative path lands)."""
+    try:
+        target = Path(path).resolve()
+    except (OSError, ValueError):
+        return False
+    for base in (ROOT / 'qa', cfgmod.data_dir()):
+        try:
+            if target.is_relative_to(base.resolve()):
+                return True
+        except (OSError, ValueError):
+            pass
+    return False
 
 
 def stop_arena(wait_s=4.0):
@@ -366,8 +666,16 @@ def cmd_arena(args):
         print(msg)
         return rc
     if args.action == 'capture':
+        from minis_core import control
         if not args.path:
             print('arena capture <png>: a path is needed')
+            return 2
+        st = control.arena_state()
+        if st and st.get('freeze'):
+            print('arena capture: refused while the freeze backdrop is on (it holds a full-monitor grab)')
+            return 2
+        if not capture_allowed(args.path):
+            print(f'arena capture: refused - write under {ROOT / "qa"} or {cfgmod.data_dir()}')
             return 2
         hwnd = shell.find_own_window('MinisArena')
         if not hwnd:
@@ -382,8 +690,13 @@ def cmd_arena(args):
         print(f'arena capture: {im.size[0]}x{im.size[1]} -> {args.path}')
         return 0
     if args.monitor is None:
-        print('arena: --monitor N is required (no default; see `python minis.py monitors`)')
-        return 2
+        try:
+            args.monitor = pick_arena_monitor(load_config(), shell.monitors())       # the same pick as the Arena button
+        except Exception:
+            args.monitor = None
+        if args.monitor is None:
+            print('arena: no default monitor (set arena_monitor in minis.json, or pass --monitor N; see `python minis.py monitors`)')
+            return 2
     mons = {m['index'] for m in shell.monitors()}
     if args.monitor not in mons:
         print(f'arena: monitor {args.monitor} does not exist; have {sorted(mons)}')
@@ -391,6 +704,15 @@ def cmd_arena(args):
     msg, rc = start_arena(args.monitor, args.freeze, args.seconds, getattr(args, 'seed', None))
     print(msg)
     return rc
+
+
+def quit_all():
+    """Right-click "Quit minis": a detached `minis.py stop` (stops the director first, so nothing restarts a slot).  It runs
+    in its own process because a slot cannot stop the others and then itself from inside its own loop.  Refused under tests."""
+    if os.environ.get('MINIS_TESTING'):
+        return False
+    subprocess.Popen([str(python_exe()), str(ROOT / 'minis.py'), 'stop'], creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
+    return True
 
 
 def cmd_print_startup(args=None):
@@ -428,7 +750,7 @@ def _own_process_with(shell, role):
 # ------------------------------------------------------------------ director process
 def cmd_director(args):
     from minis_win import shell
-    return run_director(shell, cfgmod.load())
+    return run_director(shell, load_config(log=get_logger('director')))
 
 
 def run_director(shell, cfg, detector_sources=None, wall=time.time, mono=time.monotonic, max_iterations=None):
@@ -451,6 +773,7 @@ def run_director(shell, cfg, detector_sources=None, wall=time.time, mono=time.mo
         log.error('scoreboard setup failed\n' + safe_traceback(e))
         board = None
     log.info('director started')
+    dog = Watchdog(log=log, mono=mono)
     errors = 0
     next_poll = -1e9
     n = 0
@@ -462,6 +785,7 @@ def run_director(shell, cfg, detector_sources=None, wall=time.time, mono=time.mo
                     next_poll = now + cfg['director_poll_s'] + (2.0 if errors > 20 else 0.0)
                     data, acts = runner.step(wall())
                     hist.record(acts, wall())
+                    dog.check(now)
                     errors = 0
                 if board is not None and board.step() is None:
                     break
@@ -478,25 +802,70 @@ def run_director(shell, cfg, detector_sources=None, wall=time.time, mono=time.mo
     return 0
 
 
-class Scoreboard:
-    """The right-side widget (minis_core.scoreboard draws it): records, mode, HP bars during a bout, three buttons.
-    Lives in the director process; solid to the mouse only on its buttons (WM_NCHITTEST), so clicks elsewhere fall
-    through to the taskbar."""
+class Watchdog:
+    """The director restarts a fighter slot that died.  Only a slot it has itself seen running (so `stop` and a slot
+    that never started are left alone); only when the slot's state is 'stopped' (a recorded pid that is alive with a
+    foreign or unreadable command line is never touched); the relaunch argv is proven ours first (launch_role); at most
+    `max_restarts` per slot in `window_s`, never more often than every `min_gap_s`."""
 
-    def __init__(self, cfg, shell, wall=time.time, mono=time.monotonic, log=None):
+    def __init__(self, log=None, mono=time.monotonic, every_s=5.0, min_gap_s=30.0, max_restarts=3, window_s=600.0,
+                 state=None, launch=None):
+        self.log = log or logging.getLogger('minis.null')
+        self.mono, self.every_s, self.min_gap_s = mono, every_s, min_gap_s
+        self.max_restarts, self.window_s = max_restarts, window_s
+        self.state = state or (lambda role: proc_state(role)[0])
+        self.launch = launch or launch_role
+        self.seen = {s: False for s in SLOTS}
+        self.restarts = {s: [] for s in SLOTS}
+        self.next = -1e18
+
+    def check(self, now=None):
+        now = self.mono() if now is None else now
+        if now < self.next:
+            return []
+        self.next = now + self.every_s
+        done = []
+        for s in SLOTS:
+            st = self.state(s)
+            if st == 'running':
+                self.seen[s] = True
+                continue
+            if st != 'stopped' or not self.seen[s]:
+                continue
+            hist = [t for t in self.restarts[s] if now - t < self.window_s]
+            self.restarts[s] = hist
+            if len(hist) >= self.max_restarts or (hist and now - hist[-1] < self.min_gap_s):
+                continue
+            ok = self.launch(s)
+            hist.append(now)
+            self.log.warning('watchdog: slot %s was not running; restart %s', s, 'launched' if ok else 'refused')
+            done.append((s, ok))
+        return done
+
+
+class Scoreboard:
+    """The right-side widget (minis_core.scoreboard draws it): names + records per program, HP bars / result line /
+    status, three buttons.  Lives in the director process; solid to the mouse only on its names, buttons and a visible
+    "show" (WM_NCHITTEST), so clicks elsewhere fall through to the taskbar.  It also hosts the fighter-select screen
+    (a click on a name, or a "Select fighters..." request a slot's menu writes to control.json)."""
+
+    def __init__(self, cfg, shell, wall=time.time, mono=time.monotonic, log=None, lib=None):
         from minis_core import scoreboard as SB
         self.cfg, self.shell, self.wall, self.mono = cfg, shell, wall, mono
         self.SB = SB
         self.log = log or logging.getLogger('minis.null')
+        self.lib = lib
         self.ov = None
         self.g = None
         self.pressed = None
         self.press_t = 0.0
-        self.last = dict(draw=-1e9, sig=None, tb=-1e9, top=-1e9, read=-1e9)
+        self.last = dict(draw=-1e9, sig=None, tb=-1e9, top=-1e9, read=-1e9, picker=None)
         self.state = None
         self.clicks = []                                  # (button, mono) for tests
         self.hidden = True
         self.quit = False
+        self.select = None                                # the open SelectWindow, or None
+        self.stopper = ArenaStopper()
 
     def geometry(self):
         l, t, r, b, edge = self.shell.taskbar_rect()
@@ -510,18 +879,22 @@ class Scoreboard:
         return dict(scale=sc, y=y, usable=ok)
 
     def setup(self):
+        from minis_core import control
         self.g = self.geometry()
         self.ov = self.shell.Overlay('minis-scoreboard', self.SB.left_x(self.cfg) * self.g['scale'], self.g['y'], self.SB.W, self.SB.H,
-                                     scale=self.g['scale'], on_event=self.on_event, on_hittest=lambda x, y: self.SB.hit(x, y) is not None)
+                                     scale=self.g['scale'], on_event=self.on_event,
+                                     on_hittest=lambda x, y: self.SB.hit(x, y, self.state) is not None)
         self.ov.show(False)
+        req = control.picker_request(now=self.wall())
+        self.last['picker'] = req and req.get('id')       # a request from before this process started is not replayed
 
     def on_event(self, kind, mx, my):
-        name = self.SB.hit(mx, my)
+        name = self.SB.hit(mx, my, self.state)
         if kind == 'down' and name:
             self.pressed, self.press_t = name, self.mono()
             self.last['sig'] = None
         elif kind == 'up':
-            if self.pressed and self.SB.hit(mx, my) == self.pressed:
+            if self.pressed and self.SB.hit(mx, my, self.state) == self.pressed:
                 self.act(self.pressed)
             self.pressed = None
             self.last['sig'] = None
@@ -533,9 +906,13 @@ class Scoreboard:
             control.set_paused(not control.paused())
         elif name == 'bout':
             control.request_demo('match', now=self.wall())
+        elif name in ('name_a', 'name_b'):
+            self.open_select((name[-1],))
+        elif name == 'show':
+            control.show()
         elif name == 'arena':
             if control.arena_active():
-                self.log.info('arena: %s', stop_arena()[0])
+                self.log.info('%s', self.stopper.request(self.mono()))      # never blocks the loop: poll() finishes it
             else:
                 try:
                     mon = pick_arena_monitor(self.cfg, self.shell.monitors())
@@ -547,22 +924,60 @@ class Scoreboard:
                     self.log.info('arena: %s', start_arena(mon)[0])
         self.last['read'] = -1e9
 
+    # -------------------------------------------------- the select screen
+    def open_select(self, slots):
+        """Open (or re-open for other slots) the fighter-select popup above the taskbar."""
+        from minis_core import control, director, lineup, select
+        from minis_win.select_window import SelectWindow
+        if self.select is not None:
+            self.select.close()
+            self.select = None
+        if self.lib is None:
+            from minis_core.atlas import Library
+            self.lib = Library()
+        lu = control.lineup()
+        data = director.read_assign() or {}
+        rows = select.offer(lineup.programs(data), lu)
+        model = select.Model(slots, rows, lu, lineup.characters(), select.Portraits(self.lib), now=self.mono())
+        sc = max(2, self.g['scale'] * 2 if self.g else 2)
+        centre = (self.cfg['zone'][0] + self.cfg['zone'][1]) // 2 * (self.g['scale'] if self.g else 1)
+        self.select = SelectWindow(self.shell, model, self.mono, self.select_done, scale=sc, centre_x=centre)
+
+    def select_done(self, model):
+        from minis_core import control
+        picks, skins = model.result()
+        lu = control.lineup()
+        for prog in set(lu['skins']) | set(skins):
+            if lu['skins'].get(prog) != skins.get(prog):
+                control.set_skin(prog, skins.get(prog))
+        for slot in ('a', 'b'):
+            if slot in picks:
+                control.set_pick(slot, picks[slot])
+        self.log.info('select: %s', ', '.join(f'{k}={v}' for k, v in sorted(picks.items())))
+
     def read_state(self):
-        from minis_core import bus, control, director, rounds
+        from minis_core import bus, control, director, records
         wall = self.wall()
         assign = director.read_assign()
         if assign is None:
             assign = DEFAULT_ASSIGN
         from minis_core import history
         buses = {s: bus.read(s, now=wall) for s in SLOTS}
-        return self.SB.Model.state(assign, buses, rounds.read_record(), control.paused(), control.arena_active(now=wall), control.winners(),
-                                   pressed=self.pressed, spark=history.last_days(7, wall))
+        hidden = {s: v for s in SLOTS for v in [control.hidden_left(s, now=wall)] if v is not None}
+        return self.SB.Model.state(assign, buses, records.read(), control.paused(), control.arena_active(now=wall), control.winners(),
+                                   pressed=self.pressed, spark=history.last_days(7, wall), now=wall, hidden=hidden)
 
     def step(self):
         """One iteration; None when the window is gone."""
+        from minis_core import control
         if not self.ov.pump() or self.quit:
             return None
         now = self.mono()
+        if self.select is not None and not self.select.step():
+            self.select = None
+        msg = self.stopper.poll(now)
+        if msg:
+            self.log.info('%s', msg)
         if self.pressed and now - self.press_t > 1.5:
             self.pressed = None
         if now - self.last['tb'] >= 2.0:
@@ -581,6 +996,14 @@ class Scoreboard:
         if self.ov.visible and now - self.last['top'] >= self.cfg['topmost_tick_ms'] / 1000.0:
             self.ov.reassert_topmost()
             self.last['top'] = now
+        if now - self.last['read'] >= 0.25:
+            req = control.picker_request(now=self.wall())
+            if req and req.get('id') != self.last['picker']:
+                self.last['picker'] = req.get('id')
+                try:
+                    self.open_select(tuple(req.get('slots') or SLOTS))
+                except Exception as e:
+                    self.log.error('select screen failed\n' + safe_traceback(e))
         if self.ov.visible and now - self.last['read'] >= 0.25:
             self.last['read'] = now
             self.state = self.read_state()
@@ -588,10 +1011,14 @@ class Scoreboard:
             if sig != self.last['sig']:
                 self.ov.present(self.SB.render(self.state), x=self.SB.left_x(self.cfg) * self.g['scale'])
                 self.last['sig'] = sig
+        elif not self.ov.visible and now - self.last['read'] >= 0.25:
+            self.last['read'] = now
         return 0.05
 
     def close(self):
         try:
+            if self.select:
+                self.select.close()
             if self.ov:
                 self.ov.close()
         except Exception:
@@ -617,7 +1044,7 @@ class Fighter:
         z0, z1 = cfg['zone']
         self.win_x = int(z0 - 36)
         self.zone_w = int(z1 + 36 - self.win_x)
-        self.st = dict(drag=False, dx=0.0, hide_until=0.0, quit=False, menu=False, drag_t=0.0, drag_x=0.0, drag_v=0.0, drag_vmax=0.0)
+        self.st = dict(drag=False, dx=0.0, quit=False, menu=False, drag_t=0.0, drag_x=0.0, drag_v=0.0, drag_vmax=0.0)
         self.arena = False            # the arena process is up: the taskbar fighters hide while it plays
         self.assigned = None          # {'source','character','program'} or None
         self.detector = None
@@ -633,6 +1060,9 @@ class Fighter:
         self.last = dict(tele=-1e9, bus=-1e9, top=-1e9, tb=-1e9, draw=-1e9, sig=None, pbus=-1e9, assign=-1e9, ctl=-1e9, pubkey=None, evkey=None,
                          psig=None, demo=None, notes=0)
         self.gone_written = False
+        self.flash = True             # control.json `flashes`: off = no white flash frames on this fighter
+        self.ctl_hidden = None        # control.hidden_left() for this slot (hide / hide 1 h, undone by `show`)
+        self.stopper = ArenaStopper()
 
     # -------------------------------------------------- setup
     def geometry(self):
@@ -657,7 +1087,7 @@ class Fighter:
         now = self.mono()
         self._apply_assignment(self._read_assignment(), now, force=True)
         atlas = self.lib[self.assigned['character'] if self.assigned else 'claude']
-        self.brain = Brain(self.slot, atlas, self.lib, self.cfg, self.rng, now)
+        self.brain = Brain(self.slot, atlas, self.lib, self.cfg, self.rng, now, record=self._record)
         self.snap = Snapshot(atlas.character, 'sleeping')
         self.ov = self.shell.Overlay(f'minis-{self.slot}', int(self.cfg['zone'][0]), self.g['y'], 64, self.cell, scale=self.g['scale'],
                                      on_event=self.on_event, on_timer=self.menu_tick)
@@ -670,12 +1100,35 @@ class Fighter:
 
     def display_name(self):
         """What the plate calls this fighter: the program's name (Claude, Codex, Gemini ...).  A character drawn with the
-        generic skin (aider, opencode, a missing atlas) is named after the program it stands for."""
+        generic skin (aider, opencode, a missing atlas) or a look the owner picked (V6 skins) is named after the program it
+        stands for, never after the costume."""
+        from minis_core import sources
         a = self.assigned or {}
         atlas = self.brain.atlas
+        if a.get('skin') and a.get('source'):
+            return sources.short_label(a['source'], a.get('program'))
         if atlas.character == 'generic' or (a.get('character') and a['character'] != atlas.character):
             return a.get('program') or atlas.display
         return atlas.display
+
+    def _record(self, winner_char, loser_char, **kw):
+        """The brain's match result (it only knows characters), keyed by PROGRAM (V6): the round score says which side
+        won; the characters are the fallback.  Written by the left side only (the brain's own rule)."""
+        from minis_core import director, records, rounds
+        mine = (self.assigned or {}).get('source')
+        theirs = (director.slot_assignment(director.read_assign(self.assign_path), other(self.slot)) or {}).get('source')
+        wins = ((self.brain.round or {}).get('wins') or {}) if self.brain is not None else {}
+        me, op = wins.get(self.slot), wins.get(other(self.slot))
+        if mine and theirs:
+            if me is not None and op is not None and me != op:
+                won = me > op
+            elif winner_char != loser_char:
+                won = winner_char == self.brain.character
+            else:
+                return rounds.record_result(winner_char, loser_char)      # cannot tell: the old per-character line
+            score = (max(me, op), min(me, op)) if me is not None and op is not None else None
+            return records.record(mine if won else theirs, theirs if won else mine, score=score)
+        return rounds.record_result(winner_char, loser_char)
 
     # -------------------------------------------------- assignment + controls
     def _read_assignment(self):
@@ -697,9 +1150,18 @@ class Fighter:
         if force or prev is None or prev.get('source') != a['source']:
             self.detector = self.detector_for(a['source'], self.cfg)
             self.last['tele'] = -1e9
-        if self.brain is not None and (prev is None or prev.get('character') != a['character'] or self.brain.character != self.lib[a['character']].character):
-            self.brain.set_atlas(self.lib[a['character']], now)
-            self.last['sig'] = None
+        self._swap_skin(now)
+
+    def _swap_skin(self, now):
+        """Wear the assigned character.  A change (the director moved on, or the owner picked a fighter) waits until the fighter
+        is home and free: swapping the atlas under a bout in progress would cancel it mid-exchange."""
+        a, b = self.assigned, self.brain
+        if a is None or b is None or b.character == self.lib[a['character']].character:
+            return
+        if b.bout is not None or b.script is not None or b.pending is not None or b.mode != 'home':
+            return
+        b.set_atlas(self.lib[a['character']], now)
+        self.last['sig'] = self.last['psig'] = None
 
     # -------------------------------------------------- mouse + menu
     def on_event(self, kind, mx, my):
@@ -748,49 +1210,55 @@ class Fighter:
             self.pov.reassert_topmost()
 
     def open_menu(self):
-        from minis_core import control
-        name = (self.assigned or {}).get('program') or self.slot
-        paused = control.paused(self.control_path)
-        plates = control.plates_on(self.control_path)
-        winners = control.winners(self.control_path)
-        arena = control.arena_active(self.control_path and None)
-        rival = control.rival_on(self.control_path, default=self.cfg.get('rival', True))
-        choice = self.ov.menu([(1, f'Quit this mini ({name})'), (2, 'Hide for 1 hour'), (3, 'Hide HUD plates' if plates else 'Show HUD plates'),
-                               (4, 'Resume animations' if paused else 'Pause all animations'), (5, 'Start a bout now'),
-                               (6, 'Start a match now (best of 3)'),
-                               (7, f'Winners: {winners} -> {"random" if winners == "decided" else "decided"}'),
-                               (8, 'Exit arena mode' if arena else 'Arena mode...'),
-                               (9, f'Rival mode: {"on" if rival else "off"} -> {"off" if rival else "on"}')])
-        if choice == 1:
-            self.st['quit'] = True
-        elif choice == 2:
-            self.st['hide_until'] = self.mono() + 3600
-        elif choice == 3:
-            control.set_plates(not plates, self.control_path)
-            self.last['ctl'] = -1e9
-        elif choice == 4:
-            control.set_paused(not paused, self.control_path)
-            self.last['ctl'] = -1e9
-        elif choice == 5:
-            control.request_demo('spar', self.control_path, now=self.wall())
-            self.last['ctl'] = -1e9
-        elif choice == 6:
-            control.request_demo('match', self.control_path, now=self.wall())
-            self.last['ctl'] = -1e9
-        elif choice == 7:
-            control.set_winners('random' if winners == 'decided' else 'decided', self.control_path)
-            self.last['ctl'] = -1e9
-        elif choice == 8:
+        from minis_core import control, director, lineup as L
+        cp = self.control_path
+        flags = dict(paused=control.paused(cp), plates=control.plates_on(cp), winners=control.winners(cp), arena=control.arena_active(),
+                     rival=control.rival_on(cp, default=self.cfg.get('rival', True)), flash=control.flashes_on(cp, default=self.cfg.get('flashes', True)))
+        lu = control.lineup(cp)
+        data = director.read_assign(self.assign_path) or {}
+        if self.assigned and not director.slot_assignment(data, self.slot):
+            data = dict(data, **{self.slot: self.assigned})
+        items, actions = L.fighter_menu(self.slot, data, lu, flags, L.characters())
+        choice = self.ov.menu(items)
+        self.last['ctl'] = -1e9
+        if choice in actions:
+            kind, val = actions[choice]
+            if kind == 'pick':
+                control.set_pick(self.slot, val, cp)
+            elif kind == 'skin' and (self.assigned or {}).get('source'):
+                control.set_skin(self.assigned['source'], val, cp)
+        elif choice == L.QUIT_ALL:
+            if not quit_all():
+                self.log.info('quit: refused (tests)')
+        elif choice == L.HIDE:
+            control.hide(self.slot, None, cp, now=self.wall())
+        elif choice == L.HIDE_1H:
+            control.hide(self.slot, 3600, cp, now=self.wall())
+        elif choice == L.PLATES:
+            control.set_plates(not flags['plates'], cp)
+        elif choice == L.PAUSE:
+            control.set_paused(not flags['paused'], cp)
+        elif choice == L.FLASH:
+            control.set_flashes(not flags['flash'], cp)
+        elif choice == L.BOUT:
+            control.request_demo('spar', cp, now=self.wall())
+        elif choice == L.MATCH:
+            control.request_demo('match', cp, now=self.wall())
+        elif choice in (L.WIN_DECIDED, L.WIN_RANDOM):
+            control.set_winners('decided' if choice == L.WIN_DECIDED else 'random', cp)
+        elif choice == L.ARENA:
             self.toggle_arena()
-        elif choice == 9:
-            control.set_rival(not rival, self.control_path)
-            self.last['ctl'] = -1e9
+        elif choice == L.RIVAL:
+            control.set_rival(not flags['rival'], cp)
+        elif choice == L.SELECT:
+            control.request_picker(SLOTS, cp, now=self.wall())       # the director hosts the select screen
 
     def toggle_arena(self):
-        """Menu / scoreboard: start the arena on the configured (or the only other) monitor, or ask it to leave."""
+        """Menu / scoreboard: start the arena on the configured (or the only other) monitor, or ask it to leave (without
+        blocking this loop: the stopper finishes the job from step())."""
         from minis_core import control
         if control.arena_active():
-            self.log.info('arena: %s', stop_arena()[0])
+            self.log.info('%s', self.stopper.request(self.mono()))
             return
         try:
             mon = pick_arena_monitor(self.cfg, self.shell.monitors())
@@ -832,9 +1300,13 @@ class Fighter:
             if self.st['quit']:
                 return None
         now, wall = self.mono(), self.wall()
+        msg = self.stopper.poll(now)
+        if msg:
+            self.log.info('%s', msg)
         if now - self.last['assign'] >= 1.0:
             self.last['assign'] = now
             self._apply_assignment(self._read_assignment(), now)
+        self._swap_skin(now)                              # cheap: a pending skin change lands at the next return home
         if now - self.last['ctl'] >= 0.5:
             self.last['ctl'] = now
             p = control.paused(self.control_path)
@@ -848,6 +1320,15 @@ class Fighter:
                 self.last['psig'] = None
                 self._show_plate()
             b.winners = control.winners(self.control_path)
+            self.flash = control.flashes_on(self.control_path, default=self.cfg.get('flashes', True))
+            if hasattr(b, 'flashes'):
+                b.flashes = self.flash                     # the engine's own switch (impact frames + white flashes)
+            else:
+                set_flash_effects(b.fxp, self.flash)
+            hl = control.hidden_left(self.slot, self.control_path, now=wall)
+            if (hl is None) != (self.ctl_hidden is None):
+                self.last['tb'] = -1e9                              # hide / come back on this iteration
+            self.ctl_hidden = hl
             b.rival = control.rival_on(self.control_path, default=self.cfg.get('rival', True))
             ar = control.arena_active(now=wall)
             if ar != self.arena:
@@ -893,7 +1374,7 @@ class Fighter:
                 self.pov.move(self.plate_x(), g2['plate_y'])
                 self.last['sig'] = self.last['psig'] = None
             self.g = g2
-            hidden = (self.assigned is None or now < self.st['hide_until'] or not g2['usable'] or self.shell.fullscreen_busy() or self.arena)
+            hidden = (self.assigned is None or self.ctl_hidden is not None or not g2['usable'] or self.shell.fullscreen_busy() or self.arena)
             if not hidden and not ov.visible:
                 self.last['sig'] = None
             ov.show(not hidden)
@@ -904,12 +1385,13 @@ class Fighter:
             if self.pov.visible:
                 self.pov.reassert_topmost()
             self.last['top'] = now
+        fps = self.cfg.get('fps_fight', 30) if b.mode == 'script' else self.cfg['fps_active']    # V6: 30 fps while a fight script runs
         if ov.visible:
             v = b.view(now)
             sig = (v['anim'], v['frame'], int(v['x']), v['facing'], v['dim'], (v['proj'] or {}).get('x', 0) // 2, b.character,
-                   int(now * self.cfg['fps_active']) if v.get('busy') else 0, v.get('eye'))       # effects / banners: redraw at the active rate
+                   int(now * fps) if v.get('busy') else 0, v.get('eye'))       # effects / banners: redraw at the active rate
             quiet = self.paused or (v['anim'] in ('idle', 'sleep', 'wait', 'dizzy', 'rage', 'type', 'work') and b.mode == 'home' and not v.get('busy'))
-            min_dt = 1.0 / (self.cfg['fps_idle'] if quiet else self.cfg['fps_active'])
+            min_dt = 1.0 / (self.cfg['fps_idle'] if quiet else fps)
             stale = (not self.paused) and now - self.last['draw'] > 1.0
             if (sig != self.last['sig'] and now - self.last['draw'] >= min_dt) or stale:
                 im, x0 = render.compose(b.atlas, b.atlas, v, self.snap, now, self.cfg, show_plate=False)
@@ -917,7 +1399,7 @@ class Fighter:
                 self.last['sig'], self.last['draw'] = sig, now
         if self.pov.visible:
             self._draw_plate(now)
-        return 0.25 if (self.paused or not ov.visible) else 0.05
+        return 0.25 if (self.paused or not ov.visible) else min(0.05, 1.0 / fps)
 
     def _show_plate(self):
         vis = self.plates and not self.hidden
@@ -960,8 +1442,9 @@ def cmd_run(args):
         if args.monitor is None:
             print('run arena: --monitor N is required')
             return 2
-        return run_arena(dict(monitor=args.monitor, freeze=args.freeze, seconds=args.seconds), shell, cfgmod.load(), seed=getattr(args, 'seed', None))
-    return run_slot(args.slot, shell, cfgmod.load())
+        return run_arena(dict(monitor=args.monitor, freeze=args.freeze, seconds=args.seconds), shell, load_config(log=get_logger('arena')),
+                         seed=getattr(args, 'seed', None))
+    return run_slot(args.slot, shell, load_config(log=get_logger(args.slot)))
 
 
 # ------------------------------------------------------------------ arena process
@@ -1001,12 +1484,12 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
     lib = Library(hd=True)
     atl = {s: lib[slots[s]['character']] for s in SLOTS}
     names = {s: slots[s].get('program') or atl[s].display for s in SLOTS}
-    chars = {s: atl[s].character for s in SLOTS}
+    chars = {s: slots[s].get('source') or atl[s].character for s in SLOTS}     # V6: the record is per program
     buses = {s: bus.read(s, now=wall()) for s in SLOTS}
     scores = {s: rounds.score_of_bus(buses[s]) for s in SLOTS}
     arena = AR.Arena(AR.Stage(rect, [], floor_y, tuple(cfg.get('arena_min_window_px', (160, 100)))), atl, fxmod.default(),
                      seed=seed if seed is not None else int(wall() * 1000) % 100000, mode=control.winners(), scores=scores, backdrop=backdrop,
-                     names=names, chars=chars, now=mono(), cfg=cfg)
+                     names=names, chars=chars, now=mono(), cfg=cfg, record=lambda w, l, where='arena': _arena_record(arena, w, l, where))
     own = []
     if surface is None:
         from minis_win.arena_window import ArenaWindow, VK_ESCAPE
@@ -1050,7 +1533,8 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
                 if now - last_hb >= 1.0:
                     last_hb = now
                     st = arena.state()
-                    control.write_arena_state(dict(active=True, pid=os.getpid(), monitor=mon, fps=fps, cpu_pct=round(cpu_pct, 1), **st), now=wall())
+                    control.write_arena_state(dict(active=True, pid=os.getpid(), monitor=mon, fps=fps, cpu_pct=round(cpu_pct, 1),
+                                                   freeze=backdrop is not None, **st), now=wall())
                     if procs is not None:
                         tm = procs.times(os.getpid())
                         if tm and last_cpu is not None:
@@ -1073,6 +1557,25 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
         arena.backdrop = None
         log.info('arena stopped: %s', arena.state())
     return 0
+
+
+def _arena_record(arena, winner, loser, where='arena'):
+    """The arena's match result, keyed by program (its `chars` are source ids), with the round score."""
+    from minis_core import records
+    side = {v: k for k, v in arena.chars.items()}
+    w = getattr(arena, 'wins', {}) or {}
+    score = (w.get(side.get(winner), 0), w.get(side.get(loser), 0)) if side.get(winner) and side.get(loser) else None
+    return records.record(winner, loser, where=where, score=score)
+
+
+def set_flash_effects(fxp, on):
+    """Flash effects off (`minis.py flash off`, the menu): the effect player reports no white flash at all, so neither the
+    taskbar fighter nor the arena ever whitens a frame.  Done from outside the engine by shadowing EffectPlayer.flash on
+    this one instance; back on removes the shadow."""
+    if on:
+        fxp.__dict__.pop('flash', None)
+    elif 'flash' not in fxp.__dict__:
+        fxp.flash = lambda now: 0.0
 
 
 def run_slot(slot, shell, cfg, detector_for=None):
@@ -1128,7 +1631,7 @@ def cmd_selftest(args):
     from PIL import ImageGrab, Image, ImageDraw
     from minis_win import shell
     from minis_core import director
-    cfg = cfgmod.load()
+    cfg = load_config()
     l, t, r, b, edge = shell.taskbar_rect()
     if edge != 3 or b - t > 96 or shell.taskbar_autohide():
         print(f'selftest-gui: refused (taskbar edge={edge}, band={b - t}px, autohide={shell.taskbar_autohide()}); needs a bottom taskbar <= 96 px')
@@ -1199,11 +1702,29 @@ def main(argv=None):
     rv.add_argument('state', choices=('on', 'off'))
     rv.set_defaults(fn=cmd_rival)
     sub.add_parser('detect', help='which known AI programs the sources see right now, and how').set_defaults(fn=cmd_detect)
+    fl = sub.add_parser('flash', help='white flashes on big hits on or off')
+    fl.add_argument('state', choices=('on', 'off'))
+    fl.set_defaults(fn=cmd_flash)
+    sh = sub.add_parser('show', help='bring back a hidden fighter')
+    sh.add_argument('slot', nargs='?', default=None, choices=SLOTS)
+    sh.set_defaults(fn=cmd_show)
+    fi = sub.add_parser('fighters', help='list programs, characters and the lineup; set / pin / auto / reset')
+    fi.add_argument('action', nargs='?', default='list', choices=('list', 'set', 'pin', 'auto', 'reset'))
+    fi.add_argument('rest', nargs='*')
+    fi.set_defaults(fn=cmd_fighters)
+    pk = sub.add_parser('pick', help='alias of `fighters pin`: keep a program on side a or b, or auto')
+    pk.add_argument('slot', choices=SLOTS)
+    pk.add_argument('program')
+    pk.set_defaults(fn=cmd_pick)
+    sk = sub.add_parser('skin', help='draw a program as another character (or default)')
+    sk.add_argument('program')
+    sk.add_argument('character')
+    sk.set_defaults(fn=cmd_skin)
     sub.add_parser('monitors', help='list monitors for arena --monitor N').set_defaults(fn=cmd_monitors)
     ar = sub.add_parser('arena', help='arena mode: fighters break out onto a whole monitor')
     ar.add_argument('action', nargs='?', default='start', choices=('start', 'stop', 'capture'))
     ar.add_argument('path', nargs='?', default=None)
-    ar.add_argument('--monitor', type=int, default=None, help='required for start: see `monitors`')
+    ar.add_argument('--monitor', type=int, default=None, help='default: the Arena button\'s pick (arena_monitor, else the one other monitor)')
     ar.add_argument('--freeze', action='store_true', help='snapshot the monitor into RAM as the stage backdrop')
     ar.add_argument('--seconds', type=float, default=None, help='leave on its own after this long')
     ar.add_argument('--seed', type=int, default=None, help='fix the choreography seed (captures, previews)')

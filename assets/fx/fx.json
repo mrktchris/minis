@@ -3,7 +3,8 @@
  "sheet": "fx.png",
  "schema_notes": {
   "grow": "optional {from_w, to_w, ms} (px at this res): the engine draws the effect stretched horizontally from from_w to to_w over its first ms after spawn, the anchored end fixed, so a beam extends from the hands instead of appearing whole; null = draw the frames as authored.",
-  "flash": "bool: frame 0 is a one-frame release flash (white-hot); the engine may whiten the owner sprite / flash the scene for that frame's ms.  Never true on a looping effect."
+  "flash": "bool: frame 0 is a one-frame release flash (white-hot); the engine may whiten the owner sprite / flash the scene for that frame's ms.  Never true on a looping effect.",
+  "impact": "V6 effect id (every character sheet): the 2D impact-frame sequence for a heavy hit (power 3) or an ultimate's contact - dark silhouette with white rays and rim, the white inverse with speed lines, outline strokes, a white silhouette (40/40/40/30 ms, one cell each, transparent outside the figure - never an opaque box).  Play it once on the contact frame, never on light hits."
  },
  "effects": {
   "hit_light": {

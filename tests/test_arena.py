@@ -23,6 +23,7 @@ def make(seed=3, freeze=True, windows=WINS, record=None, mode='decided', scores=
     bd = AR.synthetic_backdrop(st.w, st.h) if freeze else None
     ar = AR.Arena(st, {'a': LIB['claude'], 'b': LIB['codex']}, FX, seed=seed, mode=mode, scores=scores, backdrop=bd, now=0.0,
                   record=record or (lambda *a, **k: None))
+    ar.flashes = True                                          # never read this machine's control.json
     return st, ar
 
 
@@ -105,11 +106,11 @@ class Match(unittest.TestCase):
 
     def test_decided_mode_bias_reaches_the_arena(self):
         wins = collections.Counter()
-        for seed in range(6):
+        for seed in range(20):                                    # V6: the story tilt helps the underdog, so judge a bigger batch
             st, ar = make(seed=seed, freeze=False, scores={'a': 140.0, 'b': 20.0})
             run(ar)
             wins[ar.winner] += 1
-        self.assertGreaterEqual(wins['a'], 5, wins)
+        self.assertGreaterEqual(wins['a'], 14, wins)
         st, ar = make(seed=1, mode='random', scores={'a': 140.0, 'b': 20.0})
         self.assertEqual(ar.p_left, 0.5)
 
@@ -250,6 +251,153 @@ class Composing(unittest.TestCase):
         many = [(i * 50, 0, i * 50 + 10, 10) for i in range(30)]
         self.assertLessEqual(len(merge_rects(many, limit=12)), 12)
         self.assertEqual(merge_rects([]), [])
+
+
+class FightFeelV6(unittest.TestCase):
+    """V6 rules in the arena: rare ultimate (one per match, attacker below 30 HP), impact frames that honour the flashes
+    switch without full-screen frames, the KO finisher beat inside 3.5 s, braces on wind-ups, TIME + slump, comeback, boost."""
+
+    def test_pacing_most_rounds_end_by_ko_in_10_to_18_s(self):
+        lens, ko = [], 0
+        for seed in range(30):
+            st, ar = make(seed=seed, freeze=False)
+            run(ar, secs=240)
+            for r in ar.rounds:
+                lens.append(r['dur'])
+                ko += r['ko']
+        self.assertLess(1 - ko / len(lens), 0.2, (ko, len(lens)))             # TIME is the exception (V5: 46 % of rounds)
+        mean = sum(lens) / len(lens)
+        self.assertTrue(10.0 <= mean <= 18.0, mean)
+
+    def test_a_far_special_fires_instead_of_bouncing_between_approach_and_beat(self):
+        st, ar = make(freeze=False)
+        run(ar, until_phase='fight')
+        now = ar.last_now
+        a, b = ar.f['a'], ar.f['b']
+        a.x, b.x = 300.0, 1600.0
+        sp = a.atlas.signature()['special']
+        beat = dict(who='att', kind='special', anim=sp, dmg=12, outcome='block', pre='block', react='block_hit', hitstop=100, knock=3, down=False)
+        ar.exchange = dict(att='a', dfn='b', beats=[beat], i=0, state='beat', t=now, deadline=now + 6.0, air=False, kind='special', opener=None,
+                           range_after='far', hit=False)
+        ar._start_beat(ar.exchange, now)
+        self.assertEqual(ar.exchange['state'], 'strike')
+
+
+    def matches(self, seeds):
+        out = []
+        for seed in seeds:
+            st, ar = make(seed=seed, freeze=False)
+            ar.flashes = True
+            ko_t, exit_t = [], []
+
+            def hook(now, ar=ar):
+                if ar.phase == 'exit' and not exit_t:
+                    exit_t.append(now)
+            run(ar, secs=200, hook=hook)
+            out.append((ar, exit_t[0] if exit_t else None))
+        return out
+
+    def test_one_ultimate_per_match_only_below_30_hp_and_ko_finisher_inside_3_5_s(self):
+        n_ult = finals = 0
+        for ar, t_exit in self.matches(range(6)):
+            ev = list(ar.events)
+            ults = [e for e in ev if e[0] == 'ultimate']
+            self.assertLessEqual(len(ults), 1)
+            n_ult += len(ults)
+            for kind, t, kw in ults:                                   # the attacker's HP when it fired
+                hp = [h for (t2, who, h) in ar.hp_history if who == kw['who'] and t2 <= t]
+                self.assertTrue(hp and hp[-1] < 30, (kw, hp))
+            if ar.final_ko is not None and ar.rounds[-1]['ko']:
+                finals += 1
+                self.assertIsNotNone(t_exit)
+                self.assertLessEqual(t_exit - ar.final_ko[0], rounds.POST_KO_MAX_S + 0.1, (ar.final_ko, t_exit))
+                self.assertIn('impact', [e[0] for e in ev if e[1] >= ar.final_ko[0] - 1e-3])
+            self.assertEqual(ar.phase, 'done')
+        self.assertGreater(finals, 2)
+
+    def test_winner_beat_has_the_name_banner_and_the_loser_slumps_up(self):
+        st, ar = make(seed=2, freeze=False)
+        ar.flashes = True
+        seen = {}
+
+        def hook(now):
+            if ar.phase == 'winner':
+                if ar.banner and ar.banner[0] == 'winner':
+                    seen['banner'] = ar.banner
+                loser = 'b' if ar.winner == 'a' else 'a'
+                if ar.f[loser].anim == 'getup':
+                    seen['getup'] = ar.f[loser].slow
+        run(ar, secs=200, hook=hook)
+        self.assertEqual(seen['banner'][3], ar.names[ar.winner])
+        if ar.rounds[-1]['ko']:
+            self.assertIsNotNone(seen.get('getup'))
+            self.assertEqual(seen['getup'][2], rounds.GETUP_SLOW_K)
+
+    def test_impact_frames_are_silhouettes_never_full_frames_and_obey_the_switch(self):
+        for on in (True, False):
+            st, ar = make(freeze=False)
+            ar.flashes = on
+            run(ar, until_phase='fight')
+            now = ar.last_now
+            surf = AR.Surface(st.w, st.h)
+            comp = AR.Compositor(ar, surf)
+            comp.render(now)
+            ar.exchange = dict(att='a', dfn='b', move='roundhouse', kind='strike', dmg=36, state='strike', t=now, contact=now, end=now + 1,
+                               hit_done=False)
+            ar._resolve(ar.exchange, now)
+            self.assertEqual(ar.impact is not None, on)
+            self.assertEqual('impact' in [e[0] for e in ar.events], on)
+            d = comp.render(now + 0.03)
+            self.assertNotEqual(d, [(0, 0, st.w, st.h)])                       # only the sprite rects change
+            if on:
+                im = ar._sprite(ar.f['b'].atlas, ar.f['b'].anim, ar.f['b'].frame(now + 0.03)[0], ar.f['b'].facing, silhouette='white')
+                px = {p for p in im.getdata() if p[3]}
+                self.assertEqual(px, {(255, 255, 255, 255)})
+
+    def test_flashes_off_means_no_white_frame_from_an_ultimate(self):
+        st, ar = make(freeze=False)
+        ar.flashes = False
+        run(ar, until_phase='fight')
+        now = ar.last_now
+        ar.exchange = dict(att='a', dfn='b', move=ar.f['a'].atlas.ultimate(), kind='ultimate', dmg=40, state='strike', t=now, contact=now,
+                           end=now + 1, hit_done=False)
+        ar.f['b'].hp = 80
+        ar._resolve(ar.exchange, now)
+        surf = AR.Surface(st.w, st.h)
+        comp = AR.Compositor(ar, surf)
+        comp.render(now)
+        self.assertNotEqual(comp.render(now + 0.03), [(0, 0, st.w, st.h)])
+        self.assertFalse(comp.flashed)
+
+    def test_time_banner_and_slump_and_the_round_loser_gets_a_comeback(self):
+        st, ar = make(freeze=False)
+        run(ar, until_phase='fight')
+        now = ar.last_now
+        ar.f['a'].hp, ar.f['b'].hp = 70, 40
+        ar._end_round(now, None)
+        self.assertEqual(ar.banner[0], 'time')
+        self.assertIn(ar.f['b'].anim, rounds.SLUMP)
+        self.assertEqual(ar.f['b'].hold, AR.HOLD_LAST)
+        self.assertFalse(ar.f['b'].down)                                     # nobody falls over unprovoked
+        self.assertEqual(ar.comeback_for, 'b')
+        run(ar, until_phase='fight')
+        ar.k_round = 1
+        ar.cooldown_until = 0.0
+        ar._new_exchange(ar.last_now)
+        self.assertEqual(ar.exchange['att'], 'b')
+        self.assertIsNone(ar.comeback_for)
+
+    def test_boost_opens_with_the_signature_super_and_wind_ups_get_a_brace(self):
+        st, ar = make(freeze=False)
+        ar.boost = ['b']
+        run(ar, until_phase='fight')
+        ar._new_exchange(ar.last_now)
+        first = [bt for bt in ar.exchange['beats'] if bt['kind'] in ('strike', 'super', 'special', 'ultimate', 'counter')][0]
+        self.assertEqual((ar.exchange['att'], first['kind'], first['outcome']), ('b', 'super', 'hit'))
+        braces = 0
+        for ar2, _ in self.matches(range(3)):
+            braces += sum(1 for e in ar2.events if e[0] == 'brace')
+        self.assertGreater(braces, 0)
 
 
 if __name__ == '__main__':

@@ -56,14 +56,17 @@ def bbox(im):
 
 
 def parts(ch, name, i, scarf=True):
-    """(right-facing part buffer, meta, pose) exactly as the builder renders it."""
+    """(right-facing part buffer, meta, pose) exactly as the builder renders it (previous poses included: they drive the
+    swing crescent, the speed streak and the lag of the hanging bits)."""
     c = roster.get(ch)
     mv = M.build_moves(c)[name]
-    pose = mv['frames'][i][0]
+    poses = [f[0] for f in mv['frames']]
+    pose = poses[i]
     pts = None
     if scarf and c.body.has_tail:
         pts = tracks(ch)[name][i]
-    buf, meta = rig.render_parts(c.body, pose, pts)
+    prev, prev2 = BF.frame_history(poses, i, mv['loop'])
+    buf, meta = rig.render_parts(c.body, pose, pts, prev=prev, hist=(prev2, prev))
     return buf, meta, pose
 
 
@@ -90,7 +93,12 @@ def glyph_cells(sym):
 
 class Roster(unittest.TestCase):
     def test_every_roster_character_is_built_with_its_identity(self):
-        self.assertEqual(set(CHARS), {'claude', 'codex', 'gemini', 'cursor', 'ollama', 'lmstudio', 'generic'})
+        programs = {'claude', 'codex', 'gemini', 'cursor', 'ollama', 'lmstudio', 'generic'}     # the engine's default mapping
+        self.assertTrue(programs <= set(CHARS), f'a program character is missing: {programs - set(CHARS)}')
+        self.assertEqual(set(CHARS) - programs, {'kunoichi', 'knight', 'barbarian', 'monk', 'nomad', 'oni'})   # V6 extras
+        for ch in CHARS:
+            self.assertTrue((ROOT / 'assets' / ch / 'anim.json').exists(), f'{ch}: not built into assets/')
+            self.assertTrue((ROOT / 'assets_hd' / ch / 'anim.json').exists(), f'{ch}: not built into assets_hd/')
         for ch in CHARS:
             c, s = roster.get(ch), Sheet(ch)
             for k in ('character', 'display', 'tag', 'accent', 'signature'):
@@ -217,9 +225,24 @@ class Motion(unittest.TestCase):
 class Scarf(unittest.TestCase):
     TAILS = [ch for ch in CHARS if roster.get(ch).body.has_tail]
 
-    def test_some_characters_have_a_tail(self):
-        self.assertNotIn('claude', self.TAILS)        # owner 2026-10-14: the trailing scarf read as a cape, removed
-        self.assertIn('gemini', self.TAILS)          # ponytail
+    def test_no_long_tails_only_short_hanging_bits(self):
+        """Owner 2026-10-14: no long trailing scarf / cape on anyone.  Cloth, hair and chains are short gravity-hanging
+        bits (2-3 segments, at most ~7 px long) that lag one frame."""
+        self.assertEqual(self.TAILS, [])
+        for ch in CHARS:
+            for bit in roster.get(ch).body.bits:
+                self.assertTrue(2 <= bit.n <= 3, f'{ch}: a hanging bit with {bit.n} segments')
+                self.assertLessEqual(bit.n * bit.seg, 7.5, f'{ch}: a hanging bit {bit.n * bit.seg:.1f} px long')
+        self.assertTrue(any(roster.get(ch).body.bits for ch in CHARS))
+
+    def test_hanging_bits_lag_the_motion_by_one_frame(self):
+        """A bit hangs at rest when nothing moved and swings away from the direction its anchor just moved."""
+        body = roster.get('claude').body
+        bit = body.bits[0]
+        still = rig.bit_points(body, rig.Pose(), bit, rig.Pose())
+        moved = rig.bit_points(body, rig.Pose(), bit, rig.Pose(head=(-4, 0)))      # the head came from further back
+        self.assertGreater(still[-1][0] - still[0][0], moved[-1][0] - moved[0][0] - 1e-6)
+        self.assertLess(moved[-1][0] - moved[0][0], still[-1][0] - still[0][0])
 
     def test_segment_lengths_stay_bounded_in_every_frame(self):
         """The pole bug: a fall moved the neck 10+ px and the first segment stretched into a stick (knockdown/1)."""
@@ -282,6 +305,36 @@ class Look(unittest.TestCase):
     def test_the_claude_and_codex_silhouettes_differ(self):
         self.assertLess(self._iou('claude', 'codex'), 0.8)
 
+    def test_every_idle_silhouette_is_distinct(self):
+        """The flat-black silhouette test (docs/ANIMATION-NOTES.md section 6): no two idles overlap more than 80%."""
+        for i, a in enumerate(CHARS):
+            for b in CHARS[i + 1:]:
+                self.assertLess(self._iou(a, b), 0.8, f'{a} and {b} have near-identical silhouettes')
+
+    def test_proportions_are_about_four_and_a_half_heads(self):
+        for ch in CHARS:
+            body = roster.get(ch).body
+            self.assertTrue(10 <= body.head_h <= 12, f'{ch}: head {body.head_h} px')
+            self.assertGreaterEqual(body.thigh + body.shin, 20, f'{ch}: legs {body.thigh + body.shin} px')
+            bb = bbox(Sheet(ch).frame('idle', 0))
+            self.assertTrue(46 <= bb[3] - bb[1] <= 58, f'{ch}: idle is {bb[3] - bb[1]} px tall')
+
+    def test_every_character_holds_a_weapon_and_every_strike_swings_it(self):
+        for ch in CHARS:
+            body = roster.get(ch).body
+            self.assertIsNotNone(body.weapon, f'{ch}: no weapon')
+            for name, mv in M.build_moves(ch).items():
+                sm = mv.get('smear_frames') or []
+                kick = sm and all(not (mv['frames'][i][0].smear_f or mv['frames'][i][0].smear_b) for i in sm)
+                if mv['cat'] not in ('strike', 'ultimate') or kick:          # kicks smear the leg, not the weapon
+                    continue
+                hand_smears = [i for i in sm if mv['frames'][i][0].smear_f or mv['frames'][i][0].smear_b]
+                self.assertTrue(hand_smears, f'{ch}/{name}: the weapon never swings')
+                i = hand_smears[0]
+                buf, _, _ = parts(ch, name, i)
+                n = buf.tobytes().count(bytes([rig.PID['swoosh']]))
+                self.assertGreater(n, 0, f'{ch}/{name}/{i}: no crescent')
+
     def test_every_character_looks_different_from_every_other(self):
         for i, a in enumerate(CHARS):
             for b in CHARS[i + 1:]:
@@ -295,8 +348,8 @@ class Look(unittest.TestCase):
             s = Sheet(ch)
             for name, m in M.build_moves(ch).items():
                 for i, (pose, _) in enumerate(m['frames']):
-                    if pose.fx or pose.ghost or pose.aura:
-                        continue
+                    if pose.fx or pose.ghost or pose.aura or rig.is_smear(pose) or (i and rig.is_smear(m['frames'][i - 1][0])):
+                        continue                           # effects, trails, smears and their speed streak are intended
                     mask = s.frame(name, i).getchannel('A').point(lambda a: 1 if a else 0)
                     nb = mask.filter(kern).load()
                     mp = mask.load()
@@ -341,8 +394,18 @@ class Sigil(unittest.TestCase):
         px = im.load()
         return {(x, y) for y in range(5) for x in range(3) if px[x0 + x, y0 + y][:3]}
 
-    def test_sigil_reads_correctly_on_the_real_sheets_in_both_facings(self):
+    def test_v6_bodies_draw_no_letter_sigil_so_left_facing_is_a_plain_mirror(self):
         for ch in CHARS:
+            c = roster.get(ch)
+            self.assertFalse(c.body.show_sigil, ch)
+            for name in ('idle', 'jab', 'victory'):
+                buf, meta, _ = parts(ch, name, 0)
+                self.assertIsNone(rig.sigil_box_l(meta, c.body))
+                if 'text_fx' not in meta:
+                    self.assertEqual(rig.mirror_parts(buf, meta, c.body).tobytes(), buf.transpose(Image.FLIP_LEFT_RIGHT).tobytes())
+
+    def test_sigil_reads_correctly_on_the_real_sheets_in_both_facings(self):
+        for ch in [n for n in CHARS if roster.get(n).body.show_sigil]:
             c, s = roster.get(ch), Sheet(ch)
             sig = c.body.palette['trim']['hi']
             want = glyph_cells(c.body.sigil)
@@ -426,11 +489,14 @@ class Sigil(unittest.TestCase):
                     os.environ['MINIS_HAND_DIR'] = old
         self.assertEqual(out[0]['r'].tobytes(), hand.tobytes(), 'the hand frame replaces the generated right frame')
         self.assertEqual(out[0]['l'].getpixel((61, 40)), (255, 0, 255, 255), 'the left frame is the mirror of the hand frame')
-        x0, y0 = rig.sigil_box_l(gen[0]['meta'], c.body)
-        sig = c.body.palette['trim']['hi']
-        px = out[0]['l'].load()
-        got = {(x, y) for y in range(5) for x in range(3) if px[x0 + x, y0 + y][:3] == sig}
-        self.assertEqual(got, glyph_cells(c.body.sigil))
+        if rig.sigil_box_l(gen[0]['meta'], c.body) is None:     # V6: no sigil, the left frame is exactly the mirror
+            self.assertEqual(out[0]['l'].tobytes(), hand.transpose(Image.FLIP_LEFT_RIGHT).tobytes())
+        else:
+            x0, y0 = rig.sigil_box_l(gen[0]['meta'], c.body)
+            sig = c.body.palette['trim']['hi']
+            px = out[0]['l'].load()
+            got = {(x, y) for y in range(5) for x in range(3) if px[x0 + x, y0 + y][:3] == sig}
+            self.assertEqual(got, glyph_cells(c.body.sigil))
         self.assertEqual(out[1]['l'].tobytes(), gen[1]['l'].tobytes(), 'frames without a hand file are untouched')
 
 
@@ -530,7 +596,9 @@ GENERIC_FX = ('hit_light', 'hit_heavy', 'block_spark', 'dust', 'ko_stars', 'crac
               'letters', 'ko_text', 'round_text')
 BANNER_FX = ('round_1', 'round_2', 'round_3', 'fight', 'winner', 'ko')
 ULTIMATES = {'claude': 'kamehameha', 'codex': 'rasengan', 'gemini': 'getsuga', 'cursor': 'odm_strike',
-             'ollama': 'wind_scar', 'lmstudio': 'bankai', 'generic': 'spirit_bomb'}
+             'ollama': 'wind_scar', 'lmstudio': 'bankai', 'generic': 'spirit_bomb',
+             'kunoichi': 'petal_dance', 'knight': 'holy_crescent', 'barbarian': 'earthsplitter', 'monk': 'chi_sphere',
+             'nomad': 'ring_storm', 'oni': 'oni_roar'}
 FX_KEYS = {'frames', 'anchor', 'offset', 'loop', 'layer', 'hit_frame', 'travel', 'shake', 'grow', 'flash'}
 
 
@@ -711,11 +779,20 @@ class Resolution(unittest.TestCase):
                         if i not in (0, mv.get('hit_frame'), mv.get('proj_frame')) or pose.flash:
                             continue
                         pts = tracks(ch)[name][i] if c.body.has_tail else None
-                        buf, meta = rig.render_parts(c.body, pose, pts)
+                        poses = [f[0] for f in mv['frames']]
+                        prev, prev2 = BF.frame_history(poses, i, mv['loop'])
+                        buf, meta = rig.render_parts(c.body, pose, pts, prev=prev, hist=(prev2, prev))
                         flipped = meta.get('pre_text', buf).transpose(Image.FLIP_LEFT_RIGHT).load()
                         left = rig.mirror_parts(buf, meta, c.body).load()
                         real = s.frame(name, i, -1).load()
-                        x0, y0 = rig.sigil_box_l(meta, c.body)
+                        box = rig.sigil_box_l(meta, c.body)
+                        if box is None:                    # V6: no sigil, nothing is redrawn - the whole mirror must match
+                            self.assertEqual(rig.mirror_parts(buf, meta, c.body).tobytes(),
+                                             meta.get('pre_text', buf).transpose(Image.FLIP_LEFT_RIGHT).tobytes() if 'text_fx' not in meta
+                                             else rig.mirror_parts(buf, meta, c.body).tobytes())
+                            checked += 1
+                            continue
+                        x0, y0 = box
                         for y in range(max(0, y0 - 2), min(128, y0 + 12)):
                             for x in range(max(0, x0 - 2), min(128, x0 + 8)):
                                 if flipped[x, y] in SKINLIKE:
@@ -826,6 +903,28 @@ class Effects(unittest.TestCase):
                         ib = s.fxs.crop((fb['x'], fb['y'], fb['x'] + fb['w'], fb['y'] + fb['h']))
                         self.assertEqual(ia.tobytes(), ib.tobytes(), f'{root}/{ch}/{n}: generic art differs')
 
+    def test_impact_frames_effect_for_heavy_hits_and_ultimates(self):
+        """Dark silhouette with white rays + rim, the white inverse with speed lines, outline strokes, a white silhouette.
+        Never an opaque cell: on the live strip a full white cell read as a glitch box (owner, 2026-10-15)."""
+        for root, res in ROOTS.items():
+            for ch in CHARS:
+                s = Sheet(ch, root)
+                e = s.fx['effects']['impact']
+                self.assertEqual(len(e['frames']), 4, f'{root}/{ch}')
+                self.assertTrue(100 <= sum(f['ms'] for f in e['frames']) <= 180)
+                ims = [s.fxs.crop((f['x'], f['y'], f['x'] + f['w'], f['y'] + f['h'])).convert('RGBA') for f in e['frames']]
+                self.assertTrue(all(im.size == (64 * res, 64 * res) for im in ims))
+                for i, im in enumerate(ims):
+                    clear = sum(1 for p in im.getdata() if p[3] == 0)
+                    self.assertGreater(clear, 0.4 * im.size[0] * im.size[1], f'{root}/{ch} frame {i}: mostly transparent, no box')
+                opaque = [[p[:3] for p in im.getdata() if p[3]] for im in ims]
+                W_ = (255, 255, 255)
+                dark0 = sum(1 for c in opaque[0] if sum(c) < 150)
+                self.assertGreater(dark0, opaque[0].count(W_), 'frame 0: a dark silhouette')
+                self.assertGreater(opaque[1].count(W_), len(opaque[1]) // 2, 'frame 1: the white inverse')
+                self.assertEqual(set(opaque[3]), {W_}, 'frame 3: a white silhouette only')
+                self.assertIn('impact', s.fx['schema_notes'])
+
     def test_beams_and_waves_are_wide_and_energy_has_a_white_core(self):
         s = Sheet('claude', 'assets_hd')
         beam = s.fx['effects']['kamehameha']
@@ -866,6 +965,6 @@ def frame_hashes():
 if __name__ == '__main__':
     if '--regen-hashes' in sys.argv:
         (ROOT / 'tests' / 'fixtures' / 'v5_frame_hashes.json').write_text(json.dumps(frame_hashes(), indent=0), encoding='utf-8')
-        print('wrote tests/fixtures/v5_frame_hashes.json')
+        print('wrote tests/fixtures/v5_frame_hashes.json (V6 art, signed off by eye)')
     else:
         unittest.main()

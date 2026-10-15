@@ -1,0 +1,1936 @@
+{
+ "who": "nomad",
+ "character": "nomad",
+ "display": "Nomad",
+ "tag": "nomad",
+ "accent": "#2A9D8F",
+ "signature": {
+  "strike": "ring_spin",
+  "special": "chakram_throw",
+  "super": "mirage",
+  "ultimate": "ring_storm"
+ },
+ "cell": [
+  128,
+  128
+ ],
+ "cols": 8,
+ "ground_y": 114,
+ "anchor": {
+  "R": 60,
+  "L": 67
+ },
+ "sheets": {
+  "R": "sheet.png",
+  "L": "sheet_l.png"
+ },
+ "projectile": {
+  "file": "proj.png",
+  "frames": 3,
+  "w": 48,
+  "h": 40,
+  "speed": 260,
+  "kind": "chakram_throw",
+  "move": "chakram_throw",
+  "style": "arc"
+ },
+ "palette": [
+  "#0E131D",
+  "#102E37",
+  "#131C2C",
+  "#134754",
+  "#192A3B",
+  "#1A1620",
+  "#1A6771",
+  "#264653",
+  "#2A9D8F",
+  "#3F1F1E",
+  "#52A0AB",
+  "#5E2C27",
+  "#60D1B0",
+  "#61101E",
+  "#682F12",
+  "#7A3816",
+  "#7E4235",
+  "#940D1F",
+  "#A04710",
+  "#B07850",
+  "#B6D8D9",
+  "#B8BCD0",
+  "#BA5515",
+  "#BDE8D7",
+  "#C7141A",
+  "#C9B08D",
+  "#D67217",
+  "#E68832",
+  "#E6DFCF",
+  "#E76F51",
+  "#E9C46A",
+  "#EDB18F",
+  "#EEE49F",
+  "#F0D9A0",
+  "#F4EEC2",
+  "#F5E1D0",
+  "#F6F5D7",
+  "#F9F9E6",
+  "#FFE27A",
+  "#FFFFFF"
+ ],
+ "colors": 40,
+ "anims": {
+  "idle": {
+   "row": 0,
+   "loop": true,
+   "cat": "locomotion",
+   "desc": "Nomad stance: chakrams wide; spins the lead ring.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 170,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 180,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 230,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 140,
+     "dx": 0
+    }
+   ]
+  },
+  "idle_flourish": {
+   "row": 1,
+   "loop": false,
+   "cat": "locomotion",
+   "desc": "Shoulder roll and hop; plays every 6-10 s while idle.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 120,
+     "dx": 0
+    }
+   ]
+  },
+  "walk": {
+   "row": 2,
+   "loop": true,
+   "cat": "locomotion",
+   "desc": "Stride-locked walk: contact, down, passing; planted foot does not slide.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 8
+    },
+    {
+     "i": 1,
+     "ms": 100,
+     "dx": 8
+    },
+    {
+     "i": 2,
+     "ms": 100,
+     "dx": 8
+    },
+    {
+     "i": 3,
+     "ms": 100,
+     "dx": 8
+    },
+    {
+     "i": 4,
+     "ms": 100,
+     "dx": 8
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 8
+    }
+   ],
+   "stride": 48
+  },
+  "walk_back": {
+   "row": 3,
+   "loop": true,
+   "cat": "locomotion",
+   "desc": "Retreat while facing the opponent.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 110,
+     "dx": -8
+    },
+    {
+     "i": 1,
+     "ms": 110,
+     "dx": -8
+    },
+    {
+     "i": 2,
+     "ms": 110,
+     "dx": -8
+    },
+    {
+     "i": 3,
+     "ms": 110,
+     "dx": -8
+    },
+    {
+     "i": 4,
+     "ms": 110,
+     "dx": -8
+    },
+    {
+     "i": 5,
+     "ms": 110,
+     "dx": -8
+    }
+   ],
+   "stride": 48
+  },
+  "dash": {
+   "row": 4,
+   "loop": false,
+   "cat": "locomotion",
+   "desc": "Low dash forward that covers real ground, with dust and speed lines.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 50,
+     "dx": 28
+    },
+    {
+     "i": 2,
+     "ms": 60,
+     "dx": 28
+    },
+    {
+     "i": 3,
+     "ms": 80,
+     "dx": 16
+    },
+    {
+     "i": 4,
+     "ms": 110,
+     "dx": 4
+    }
+   ]
+  },
+  "backdash": {
+   "row": 5,
+   "loop": false,
+   "cat": "defense",
+   "desc": "Evasive hop back with an afterimage trail.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 60,
+     "dx": -24
+    },
+    {
+     "i": 2,
+     "ms": 50,
+     "dx": -24
+    },
+    {
+     "i": 3,
+     "ms": 80,
+     "dx": -12
+    },
+    {
+     "i": 4,
+     "ms": 110,
+     "dx": -2
+    }
+   ]
+  },
+  "turn": {
+   "row": 6,
+   "loop": false,
+   "cat": "locomotion",
+   "desc": "Pivot to face the other way.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 60,
+     "dx": 0
+    }
+   ]
+  },
+  "crouch": {
+   "row": 7,
+   "loop": true,
+   "cat": "locomotion",
+   "desc": "Low stance.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 120,
+     "dx": 0
+    }
+   ],
+   "loop_range": [
+    1,
+    2
+   ]
+  },
+  "jump": {
+   "row": 8,
+   "loop": false,
+   "cat": "locomotion",
+   "desc": "Neutral jump: squash, stretch, hang, squash on landing.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 50,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 90,
+     "dx": 0
+    }
+   ]
+  },
+  "jab": {
+   "row": 9,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Fast lead-hand thrust. Light hit, small hit-stop.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 10
+    },
+    {
+     "i": 3,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 90,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 1,
+   "hitstop_ms": 150,
+   "smear_frames": [
+    2
+   ],
+   "reach": 53
+  },
+  "cross": {
+   "row": 10,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Big diagonal power slash. Medium hit, forces a block-stagger.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 10
+    },
+    {
+     "i": 3,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 230,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 80,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 2,
+   "hitstop_ms": 180,
+   "smear_frames": [
+    2
+   ],
+   "reach": 62
+  },
+  "uppercut": {
+   "row": 11,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Rising launcher slash. Pops the opponent up.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 4
+    },
+    {
+     "i": 3,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 220,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 90,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 2,
+   "hitstop_ms": 180,
+   "smear_frames": [
+    2
+   ],
+   "reach": 22
+  },
+  "low_kick": {
+   "row": 12,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Sweep along the ground with a hip turn. Trips guard-high opponents.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 8
+    },
+    {
+     "i": 3,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 180,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 1,
+   "hitstop_ms": 150,
+   "smear_frames": [
+    2
+   ],
+   "reach": 51
+  },
+  "roundhouse": {
+   "row": 13,
+   "loop": false,
+   "cat": "strike",
+   "desc": "High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 8
+    },
+    {
+     "i": 3,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 260,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 120,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 3,
+   "hitstop_ms": 220,
+   "smear_frames": [
+    2
+   ],
+   "reach": 53
+  },
+  "ring_spin": {
+   "row": 14,
+   "loop": false,
+   "cat": "strike",
+   "desc": "A spinning kick, both chakrams whirling.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 50,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 40,
+     "dx": 8
+    },
+    {
+     "i": 4,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 260,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 90,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 4,
+   "power": 3,
+   "hitstop_ms": 220,
+   "smear_frames": [
+    3
+   ],
+   "reach": 51
+  },
+  "chakram_throw": {
+   "row": 15,
+   "loop": false,
+   "cat": "special",
+   "desc": "Whips a chakram across the taskbar.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 8
+    },
+    {
+     "i": 3,
+     "ms": 180,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 230,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 110,
+     "dx": 0
+    }
+   ],
+   "proj_frame": 3,
+   "power": 2,
+   "smear_frames": [
+    2
+   ],
+   "proj_from": [
+    41.0,
+    -16.1
+   ],
+   "hand": [
+    41,
+    -49
+   ]
+  },
+  "block": {
+   "row": 16,
+   "loop": true,
+   "cat": "defense",
+   "desc": "High guard.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 80,
+     "dx": 0
+    }
+   ],
+   "loop_range": [
+    1,
+    2
+   ]
+  },
+  "block_hit": {
+   "row": 17,
+   "loop": false,
+   "cat": "defense",
+   "desc": "Guard absorbs a hit with a flash.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -6
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": -2
+    },
+    {
+     "i": 2,
+     "ms": 100,
+     "dx": 0
+    }
+   ]
+  },
+  "crouch_block": {
+   "row": 18,
+   "loop": true,
+   "cat": "defense",
+   "desc": "Low guard.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    }
+   ],
+   "loop_range": [
+    0,
+    1
+   ]
+  },
+  "parry": {
+   "row": 19,
+   "loop": false,
+   "cat": "defense",
+   "desc": "Swat the strike aside with a flash. Counter window.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 1,
+   "hitstop_ms": 150,
+   "smear_frames": [
+    1
+   ],
+   "reach": 58
+  },
+  "hit": {
+   "row": 20,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Head snap first, body follows, overshoots forward, settles.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -4
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": -4
+    },
+    {
+     "i": 2,
+     "ms": 80,
+     "dx": -2
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 90,
+     "dx": 0
+    }
+   ]
+  },
+  "hit_heavy": {
+   "row": 21,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Slides back, arms fly, wobbles forward, settles.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -8
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": -10
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": -8
+    },
+    {
+     "i": 3,
+     "ms": 90,
+     "dx": -6
+    },
+    {
+     "i": 4,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    }
+   ]
+  },
+  "knockdown": {
+   "row": 22,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Falls through an arc, flattens on impact, bounces once.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -8
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": -10
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": -10
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": -4
+    },
+    {
+     "i": 4,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 160,
+     "dx": 0
+    }
+   ],
+   "shake": {
+    "frames": 3,
+    "amp": 2
+   }
+  },
+  "getup": {
+   "row": 23,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Kip up from a knockdown.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 90,
+     "dx": 0
+    }
+   ]
+  },
+  "dizzy": {
+   "row": 24,
+   "loop": true,
+   "cat": "reaction",
+   "desc": "Stagger with stars. Used when a fighter is near its limit.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 130,
+     "dx": 0
+    }
+   ]
+  },
+  "ko": {
+   "row": 25,
+   "loop": true,
+   "cat": "reaction",
+   "desc": "Knocked out; stars orbit. Shown when a plan limit is hit.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -8
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": -10
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": -10
+    },
+    {
+     "i": 3,
+     "ms": 80,
+     "dx": -4
+    },
+    {
+     "i": 4,
+     "ms": 200,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 200,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 200,
+     "dx": 0
+    }
+   ],
+   "loop_range": [
+    4,
+    6
+   ]
+  },
+  "victory": {
+   "row": 26,
+   "loop": false,
+   "cat": "emote",
+   "desc": "Points at the loser, clicks, head tilt.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 50,
+     "dx": 4
+    },
+    {
+     "i": 2,
+     "ms": 260,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 300,
+     "dx": 0
+    }
+   ],
+   "smear_frames": [
+    1
+   ]
+  },
+  "victory2": {
+   "row": 27,
+   "loop": false,
+   "cat": "emote",
+   "desc": "Flex. The big-win version.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 140,
+     "dx": 0
+    }
+   ]
+  },
+  "taunt": {
+   "row": 28,
+   "loop": false,
+   "cat": "emote",
+   "desc": "Come-on beckon. Used when the other fighter's idle too long.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    }
+   ]
+  },
+  "bow": {
+   "row": 29,
+   "loop": false,
+   "cat": "pair",
+   "desc": "Respect bow before and after a bout.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 200,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 250,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 150,
+     "dx": 0
+    }
+   ]
+  },
+  "fistbump": {
+   "row": 30,
+   "loop": false,
+   "cat": "pair",
+   "desc": "Fist bump. Ends every bout.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 2,
+   "hitstop_ms": 150,
+   "smear_frames": [
+    1
+   ],
+   "reach": 58
+  },
+  "highfive": {
+   "row": 31,
+   "loop": false,
+   "cat": "pair",
+   "desc": "Jump high-five. Both finished at the same time.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 2,
+   "hitstop_ms": 150,
+   "reach": 46
+  },
+  "wave": {
+   "row": 32,
+   "loop": false,
+   "cat": "emote",
+   "desc": "Greeting wave.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 120,
+     "dx": 0
+    }
+   ]
+  },
+  "thumbs_up": {
+   "row": 33,
+   "loop": false,
+   "cat": "emote",
+   "desc": "Approved.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 220,
+     "dx": 0
+    }
+   ]
+  },
+  "facepalm": {
+   "row": 34,
+   "loop": false,
+   "cat": "emote",
+   "desc": "Something broke.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 200,
+     "dx": 0
+    }
+   ]
+  },
+  "shrug": {
+   "row": 35,
+   "loop": false,
+   "cat": "emote",
+   "desc": "Unsure.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 100,
+     "dx": 0
+    }
+   ]
+  },
+  "work": {
+   "row": 36,
+   "loop": true,
+   "cat": "state",
+   "desc": "Shadowboxing: the fighter is working.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "smear_frames": [
+    0,
+    2,
+    4
+   ]
+  },
+  "type": {
+   "row": 37,
+   "loop": true,
+   "cat": "state",
+   "desc": "Typing on an air keyboard. Used for long edit streaks.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 90,
+     "dx": 0
+    }
+   ]
+  },
+  "review": {
+   "row": 38,
+   "loop": true,
+   "cat": "state",
+   "desc": "Strokes chin, reads the diff. Played when visiting a finished partner.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 120,
+     "dx": 0
+    }
+   ]
+  },
+  "wait": {
+   "row": 39,
+   "loop": true,
+   "cat": "state",
+   "desc": "Foot tap, hands on hips: waiting for input or approval.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 150,
+     "dx": 0
+    }
+   ]
+  },
+  "sleep": {
+   "row": 40,
+   "loop": true,
+   "cat": "state",
+   "desc": "Sitting nap. No session in 30 minutes.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 600,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 600,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 600,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 600,
+     "dx": 0
+    }
+   ]
+  },
+  "wake": {
+   "row": 41,
+   "loop": false,
+   "cat": "state",
+   "desc": "Stretch and yawn.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 200,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 200,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 140,
+     "dx": 0
+    }
+   ]
+  },
+  "powerup": {
+   "row": 42,
+   "loop": true,
+   "cat": "state",
+   "desc": "Charging up. Context past 70%.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 80,
+     "dx": 0
+    }
+   ],
+   "loop_range": [
+    1,
+    4
+   ]
+  },
+  "rage": {
+   "row": 43,
+   "loop": true,
+   "cat": "state",
+   "desc": "Aura on. Context past 85%.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 80,
+     "dx": 0
+    }
+   ]
+  },
+  "mirage": {
+   "row": 44,
+   "loop": false,
+   "cat": "super",
+   "desc": "Slips back a second like a heat mirage, a giant \"Y\" left behind.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 50,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 60,
+     "dx": -24
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": -24
+    },
+    {
+     "i": 4,
+     "ms": 60,
+     "dx": -20
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": -8
+    },
+    {
+     "i": 6,
+     "ms": 260,
+     "dx": 0
+    }
+   ]
+  },
+  "handoff_give": {
+   "row": 45,
+   "loop": false,
+   "cat": "pair",
+   "desc": "Holds out a finished diff. The writer hands work to the reviewer.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 300,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "release_frame": 3
+  },
+  "handoff_take": {
+   "row": 46,
+   "loop": false,
+   "cat": "pair",
+   "desc": "Reaches out and takes the diff.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 200,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "grab_frame": 2
+  },
+  "console": {
+   "row": 47,
+   "loop": false,
+   "cat": "pair",
+   "desc": "Pats the other fighter on the shoulder after a KO.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 160,
+     "dx": 0
+    }
+   ]
+  },
+  "ring_storm": {
+   "row": 48,
+   "loop": false,
+   "cat": "ultimate",
+   "desc": "Throws two chakrams on lines, zips after them and finishes with a spinning cross cut.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 180,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 200,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": 32
+    },
+    {
+     "i": 4,
+     "ms": 60,
+     "dx": 32
+    },
+    {
+     "i": 5,
+     "ms": 50,
+     "dx": 12
+    },
+    {
+     "i": 6,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 220,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 6,
+   "proj_frame": 1,
+   "hitstop_ms": 260,
+   "shake": {
+    "frames": 5,
+    "amp": 4
+   },
+   "smear_frames": [
+    5
+   ],
+   "reach": 44,
+   "proj_from": [
+    30.6,
+    -36.5
+   ],
+   "fx": [
+    {
+     "name": "odm_lines",
+     "at": 1
+    },
+    {
+     "name": "odm_slash",
+     "at": 6
+    }
+   ],
+   "hand": [
+    31,
+    -77
+   ]
+  }
+ },
+ "res": 2,
+ "credits": "Animation reference & inspiration: LuizMelo (Martial Hero, CC0), Mattz Art / xzany (Samurai pack), GandalfHardcore (Archer pack). All frames are original; see docs/CREDITS.md.",
+ "schema_notes": {
+  "hitstop_ms": "per move: how long both fighters should freeze when hit_frame lands (light 150, medium 180, heavy 220, ultimate 260-320).",
+  "shake": "per move, optional {frames, amp}: screen shake the fighter itself asks for on its hit_frame (amp in px at this res).",
+  "smear_frames": "per move, optional: frame indices drawn as smears (one-frame motion arcs); play them short (<= 50 ms), never hold them.",
+  "credits": "top level: the reference-pack credit line to show in-game."
+ },
+ "fx": {
+  "file": "fx.json",
+  "sheet": "fx.png"
+ }
+}

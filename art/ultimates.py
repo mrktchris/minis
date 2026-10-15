@@ -11,16 +11,26 @@ are drawn as the arc they swept, a release hold that carries `hitstop_ms` and a 
 heavy recovery.  Eight frames each, the sheet's column budget.
 """
 from __future__ import annotations
+from dataclasses import replace
 from moves import M, p
 
 ULT_HITSTOP = 300
+
+
+def _wa(move, angles):
+    """V6: point the held weapon where each key of the ultimate needs it ({frame index: screen angle})."""
+    fr = move['frames']
+    for i, a in angles.items():
+        ps, ms = fr[i]
+        fr[i] = (replace(ps, wa=a, wb=a), ms)
+    return move
 
 
 def ult_kamehameha(desc, **_):
     """Two-hand charge at the hip for 1.2 s with a growing glow, then a horizontal beam."""
     def ch(i):
         return (('charge_big', 'hb', -1, -1),) if i < 2 else (('charge_big', 'hb', -1, -1), ('spark_s', 'hf', -2, 1))
-    return M([
+    return _wa(M([
         (p(dy=3, lean=-4, hf=(-5, 4), hb=(-6, 5), ff=(8, 0), fb=(-7, 0), face='g', fx=ch(0)), 200),
         (p(dy=4, lean=-6, chest=1.03, hf=(-5, 5), hb=(-6, 6), ff=(8, 0), fb=(-7, 0), face='g', aura=1, fx=ch(1)), 220),
         (p(dy=4, lean=-6, sq=0.97, chest=1.05, hf=(-6, 5), hb=(-7, 6), ff=(8, 0), fb=(-7, 0), face='g', aura=2, fx=ch(2)), 240),
@@ -32,12 +42,12 @@ def ult_kamehameha(desc, **_):
            fx=(('spark', 'hf', 4, 0),)), 600),
         (p(dy=3, lean=8, sq=0.96, hf=(8, 0), hb=(5, 1), face='b'), 260)],
         cat='ultimate', desc=desc, proj_frame=6, hit_frame=6, hitstop_ms=ULT_HITSTOP, shake=dict(frames=8, amp=3),
-        fx=[{'name': 'kamehameha_charge', 'from': 0, 'to': 4}, {'name': 'kamehameha', 'at': 6}])
+        fx=[{'name': 'kamehameha_charge', 'from': 0, 'to': 4}, {'name': 'kamehameha', 'at': 6}]), {0: 150, 1: 150, 2: 152, 3: 154, 4: 156, 5: -6, 6: -4})
 
 
 def ult_rasengan(desc, **_):
     """A spinning sphere forms in the open hand, dash in with afterimages, thrust it home, spiral burst."""
-    return M([
+    return _wa(M([
         (p(dy=2, lean=4, hf=(6, -3), hb=(3, -2), open_f=True, face='g', fx=(('charge', 'hf', 1, -4),)), 200),
         (p(dy=2, lean=4, chest=1.03, hf=(6, -3), hb=(3, -2), open_f=True, face='g', aura=1, fx=(('charge_big', 'hf', 1, -5),)), 210),
         (p(dy=3, lean=8, sq=0.95, chest=1.06, hf=(7, -4), hb=(3, -2), open_f=True, face='g', aura=2, fx=(('charge_big', 'hf', 1, -5), ('spark_s', 'hf', 1, -9))), 220),
@@ -49,7 +59,7 @@ def ult_rasengan(desc, **_):
         (p(dy=2, lean=28, hf=(13, -2), hb=(4, 0), open_f=True, ff=(11, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 5, -1),)), 260),
         (p(dy=3, lean=10, sq=0.96, hf=(8, 0), hb=(5, 1), face='g'), 220)],
         cat='ultimate', desc=desc, proj_frame=6, hit_frame=6, hitstop_ms=ULT_HITSTOP, shake=dict(frames=6, amp=3),
-        fx=[{'name': 'rasengan_orb', 'from': 0, 'to': 5}, {'name': 'rasengan_burst', 'at': 6}])
+        fx=[{'name': 'rasengan_orb', 'from': 0, 'to': 5}, {'name': 'rasengan_burst', 'at': 6}]), {5: -4, 6: -2})
 
 
 def sup_shadow_clones(desc, **_):
@@ -67,7 +77,7 @@ def sup_shadow_clones(desc, **_):
 
 def ult_getsuga(desc, **_):
     """Arm raised overhead, energy gathers, a huge crescent slash wave is swung down and released."""
-    return M([
+    return _wa(M([
         (p(dy=2, lean=-8, hf=(2, -11), hb=(-2, -3), eb_f='up', face='g', fx=(('charge', 'hf', 1, -3),)), 200),
         (p(dy=2, lean=-12, chest=1.03, hf=(0, -12), hb=(-3, -4), eb_f='up', face='g', aura=1, fx=(('charge_big', 'hf', 1, -4),)), 220),
         (p(dy=1, lean=-10, sq=1.04, chest=1.05, hf=(1, -12), hb=(-3, -4), eb_f='up', face='o', aura=2,
@@ -79,12 +89,12 @@ def ult_getsuga(desc, **_):
         (p(dy=2, lean=28, hf=(12, 4), hb=(3, 3), fist_f=4, ff=(11, 0), fb=(-9, 0), face='o'), 80),
         (p(dy=3, lean=10, sq=0.96, hf=(8, 0), hb=(5, 1), face='g'), 220)],
         cat='ultimate', desc=desc, proj_frame=5, hit_frame=5, hitstop_ms=280, shake=dict(frames=6, amp=3),
-        fx=[{'name': 'getsuga_charge', 'from': 0, 'to': 3}, {'name': 'getsuga', 'at': 5}])
+        fx=[{'name': 'getsuga_charge', 'from': 0, 'to': 3}, {'name': 'getsuga', 'at': 5}]), {0: -100, 1: -104, 2: -104, 3: -108, 4: 30, 5: 36, 6: 52})
 
 
 def ult_odm(desc, **_):
     """Two grapple lines shoot out, the fighter zips along them and finishes with a spinning cross slash."""
-    return M([
+    return _wa(M([
         (p(dy=2, lean=6, hf=(10, -5), hb=(9, -4), fist_f=4, fist_b=4, face='g'), 180),
         (p(dy=2, lean=4, chest=1.04, hf=(12, -6), hb=(11, -5), fist_f=4, fist_b=4, face='g',
            fx=(('spark_s', 'hf', 3, 0), ('spark_s', 'hb', 3, 0))), 200),
@@ -98,12 +108,12 @@ def ult_odm(desc, **_):
         (p(dy=-2, lean=-6, turn=0.8, hf=(10, -8), hb=(-6, -4), fist_f=4, ff=(7, 2), fb=(-6, 1), face='g', fx=(('spark', 'hf', 3, -1), ('spark_s', 'hb', 2, -1))), 150),
         (p(dy=4, lean=14, sq=0.90, hf=(6, 2), hb=(2, 2), face='g', fx=(('dust', 'ff', 4, 1), ('dust', 'fb', -5, 1))), 220)],
         cat='ultimate', desc=desc, proj_frame=1, hit_frame=6, hitstop_ms=260, shake=dict(frames=5, amp=2),
-        fx=[{'name': 'odm_lines', 'at': 1}, {'name': 'odm_slash', 'at': 6}])
+        fx=[{'name': 'odm_lines', 'at': 1}, {'name': 'odm_slash', 'at': 6}]), {5: -150, 6: 30})
 
 
 def ult_wind_scar(desc, **_):
     """Both arms raised, power builds, a downward slam rips three energy claws along the ground."""
-    return M([
+    return _wa(M([
         (p(dy=1, lean=-6, hf=(3, -12), hb=(1, -12), eb_f='up', eb_b='up', fist_f=4, fist_b=4, face='g', fx=(('charge', 'hf', 1, -3),)), 200),
         (p(dy=1, lean=-10, chest=1.03, hf=(2, -12), hb=(0, -12), eb_f='up', eb_b='up', fist_f=4, fist_b=4, face='g', aura=1,
            fx=(('charge_big', 'hf', 1, -4), ('spark_s', 'hb', -2, -3))), 220),
@@ -118,12 +128,12 @@ def ult_wind_scar(desc, **_):
         (p(dy=4, lean=20, sq=0.95, hf=(6, 4), hb=(3, 5), face='g'), 180),
         (p(dy=2, lean=10, hf=(8, 0), hb=(5, 1), face='b'), 160)],
         cat='ultimate', desc=desc, proj_frame=5, hit_frame=5, hitstop_ms=ULT_HITSTOP, shake=dict(frames=6, amp=3),
-        fx=[{'name': 'wind_scar_charge', 'from': 0, 'to': 3}, {'name': 'wind_scar', 'at': 5}])
+        fx=[{'name': 'wind_scar_charge', 'from': 0, 'to': 3}, {'name': 'wind_scar', 'at': 5}]), {0: -96, 1: -98, 2: -100, 3: -102, 4: 60, 5: 66})
 
 
 def ult_bankai(desc, **_):
     """Arms down, head back, a pillar of aura bursts up, then three flash-step strikes with holographic afterimages."""
-    return M([
+    return _wa(M([
         (p(dy=2, lean=0, hf=(-2, 7), hb=(-4, 7), eb_f='back', eb_b='back', face='g'), 200),
         (p(dy=2, lean=-6, chest=1.04, head=(-1, -1), tilt=-10, hf=(-3, 8), hb=(-5, 8), eb_f='back', eb_b='back', face='o', aura=1), 220),
         (p(dy=1, lean=-8, sq=1.06, head=(-1, -1), tilt=-10, hf=(4, -6), hb=(0, -7), flash=True, aura=3), 100),
@@ -136,12 +146,12 @@ def ult_bankai(desc, **_):
            fx=(('spark', 'hf', 4, 0), ('speedlines', 'hip', -9, -5))), 80),
         (p(dy=3, lean=8, sq=0.95, hf=(8, -1), hb=(4, 1), face='g', aura=1), 300)],
         cat='ultimate', desc=desc, proj_frame=2, hit_frame=4, hitstop_ms=200, shake=dict(frames=4, amp=2),
-        fx=[{'name': 'bankai_aura', 'at': 2}, {'name': 'bankai_slash', 'from': 4, 'to': 6}])
+        fx=[{'name': 'bankai_aura', 'at': 2}, {'name': 'bankai_slash', 'from': 4, 'to': 6}]), {0: 120, 1: 124, 3: -80, 4: 10, 5: -30, 6: 24})
 
 
 def ult_spirit_bomb(desc, **_):
     """Both hands raised, a huge ball gathers overhead, then it is thrown with both arms."""
-    return M([
+    return _wa(M([
         (p(dy=2, lean=-4, hf=(2, -12), hb=(-1, -12), eb_f='up', eb_b='up', open_f=True, face='g', fx=(('charge', 'hf', 0, -4),)), 240),
         (p(dy=2, lean=-4, chest=1.03, hf=(2, -12), hb=(-1, -12), eb_f='up', eb_b='up', open_f=True, face='g', aura=1,
            fx=(('charge_big', 'hf', 0, -5),)), 260),
@@ -155,7 +165,7 @@ def ult_spirit_bomb(desc, **_):
         (p(dy=2, lean=26, hf=(13, -3), hb=(12, -2), fist_f=4, fist_b=4, ff=(10, 0), fb=(-9, 0), face='o'), 80),
         (p(dy=3, lean=10, sq=0.96, hf=(8, 0), hb=(5, 1), face='b'), 220)],
         cat='ultimate', desc=desc, proj_frame=5, hit_frame=5, hitstop_ms=280, shake=dict(frames=8, amp=3),
-        fx=[{'name': 'spirit_bomb_orb', 'from': 0, 'to': 3}, {'name': 'spirit_bomb', 'at': 5}])
+        fx=[{'name': 'spirit_bomb_orb', 'from': 0, 'to': 3}, {'name': 'spirit_bomb', 'at': 5}]), {0: -90, 1: -92, 2: -92, 3: -94, 4: -6, 5: 0, 6: 10})
 
 
 ULTIMATES = {'kamehameha': ult_kamehameha, 'rasengan': ult_rasengan, 'getsuga': ult_getsuga, 'odm_strike': ult_odm,

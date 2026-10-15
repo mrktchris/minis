@@ -1,5 +1,8 @@
 """User controls shared by every fighter: %LOCALAPPDATA%\\minis\\control.json
-  {"paused": bool, "plates": bool, "winners": "decided"|"random", "demo": {"id", "kind", "ts"}, "arena_stop": ts}
+  {"paused": bool, "plates": bool, "winners": "decided"|"random", "demo": {"id", "kind", "ts"}, "arena_stop": ts,
+   "rival": bool, "flashes": bool, "picker": {"id", "slots", "ts"},
+   "lineup": {"a": "auto"|program id, "b": ..., "skins": {program id: character id}},
+   "hidden": {slot: until (wall-clock seconds; 0 = until `minis.py show`)}}
 and the arena's own heartbeat file arena.json {"pid", "monitor", "freeze", "phase", "round", "hp", "ts"} (written by the
 arena process every ~1 s; the taskbar fighters hide while it is fresh)."""
 from __future__ import annotations
@@ -65,6 +68,133 @@ def rival_on(path=None, default=True) -> bool:
 
 def set_rival(flag: bool, path=None) -> bool:
     return _update(path, rival=bool(flag))
+
+
+def flashes_on(path=None, default=True) -> bool:
+    """Impact frames and white screen flashes (V6).  `minis.py effects flashes on|off`; `default` is the config value
+    (`flashes`) when control.json has no say.  Off: no flash of any kind, only the hit effects."""
+    v = read(path).get('flashes')
+    return bool(default) if v is None else bool(v)
+
+
+def set_flashes(flag: bool, path=None) -> bool:
+    return _update(path, flashes=bool(flag))
+
+
+PICKER_MAX_AGE_S = 5.0
+
+
+def request_picker(slots=('a', 'b'), path=None, now=None) -> bool:
+    """Ask the director (which hosts the scoreboard) to open the fighter-select screen for `slots` (the right-click menu's
+    "Select fighters..." lives in a slot process; one host means one select screen at a time)."""
+    now = time.time() if now is None else now
+    slots = [s for s in ('a', 'b') if s in tuple(slots or ())] or ['a', 'b']
+    return _update(path, picker={'id': '%x' % int(now * 1000), 'slots': slots, 'ts': now})
+
+
+def picker_request(path=None, now=None):
+    """-> {'id','slots','ts'} of a select-screen request younger than PICKER_MAX_AGE_S, else None."""
+    d = read(path).get('picker')
+    now = time.time() if now is None else now
+    try:
+        if isinstance(d, dict) and d.get('id') and 0 <= now - float(d['ts']) <= PICKER_MAX_AGE_S:
+            slots = [s for s in ('a', 'b') if s in (d.get('slots') or ())] or ['a', 'b']
+            return dict(d, slots=slots)
+    except (KeyError, TypeError, ValueError):
+        pass
+    return None
+
+
+# ---------------------------------------------------------------- fighter select (V6)
+AUTO = 'auto'
+
+
+def lineup(path=None) -> dict:
+    """-> {'a': 'auto'|program id, 'b': ..., 'skins': {program id: character id}}, always well formed.  A pick keeps that
+    program in its slot (asleep when it is not detected); 'auto' is the director's own choice; a skin is the character a
+    program is drawn as.  The same program in both slots: slot b falls back to auto."""
+    raw = read(path).get('lineup')
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    for s in ('a', 'b'):
+        v = raw.get(s)
+        out[s] = v.strip() if isinstance(v, str) and v.strip() else AUTO
+    if out['a'] != AUTO and out['a'] == out['b']:
+        out['b'] = AUTO
+    skins = raw.get('skins')
+    out['skins'] = {k: v for k, v in (skins.items() if isinstance(skins, dict) else ()) if isinstance(k, str) and isinstance(v, str) and k and v}
+    return out
+
+
+def _write_lineup(lu, path=None) -> bool:
+    return _update(path, lineup={'a': lu['a'], 'b': lu['b'], 'skins': dict(lu['skins'])})
+
+
+def set_pick(slot, program, path=None) -> bool:
+    """Pin `program` (a source id, or 'auto') to `slot`.  Picking the program the other slot holds moves it here and puts
+    the other slot back on auto (one program never fights itself)."""
+    if slot not in ('a', 'b'):
+        raise ValueError(slot)
+    lu = lineup(path)
+    program = (program or AUTO).strip() or AUTO
+    lu[slot] = program
+    o = 'b' if slot == 'a' else 'a'
+    if program != AUTO and lu[o] == program:
+        lu[o] = AUTO
+    return _write_lineup(lu, path)
+
+
+def set_skin(program, character, path=None) -> bool:
+    """Draw `program` as `character`; character None / 'default' gives the program its own character back."""
+    lu = lineup(path)
+    if character in (None, '', 'default'):
+        lu['skins'].pop(program, None)
+    else:
+        lu['skins'][program] = character
+    return _write_lineup(lu, path)
+
+
+def reset_lineup(skins=True, path=None) -> bool:
+    """Both slots back to auto; `skins=True` also forgets every skin (`fighters reset`), False keeps them (`fighters auto`)."""
+    lu = lineup(path)
+    lu['a'] = lu['b'] = AUTO
+    if skins:
+        lu['skins'] = {}
+    return _write_lineup(lu, path)
+
+
+# ---------------------------------------------------------------- hide / show (V6: undoable, visible on the scoreboard)
+def hide(slot, seconds=None, path=None, now=None) -> bool:
+    """Hide one fighter for `seconds`, or until `show` when seconds is None."""
+    now = time.time() if now is None else now
+    h = dict(read(path).get('hidden') or {}) if isinstance(read(path).get('hidden'), dict) else {}
+    h[slot] = 0 if seconds is None else now + float(seconds)
+    return _update(path, hidden=h)
+
+
+def show(slot=None, path=None) -> bool:
+    """Bring back one hidden fighter, or both (slot None)."""
+    h = read(path).get('hidden')
+    h = dict(h) if isinstance(h, dict) else {}
+    for s in (('a', 'b') if slot is None else (slot,)):
+        h.pop(s, None)
+    return _update(path, hidden=h)
+
+
+def hidden_left(slot, path=None, now=None):
+    """-> None (shown), float('inf') (hidden until `show`) or the seconds left of a timed hide."""
+    h = read(path).get('hidden')
+    if not isinstance(h, dict) or slot not in h:
+        return None
+    now = time.time() if now is None else now
+    try:
+        until = float(h[slot])
+    except (TypeError, ValueError):
+        return None
+    if until == 0:
+        return float('inf')
+    left = until - now
+    return left if left > 0 else None
 
 
 DEMO_KINDS = ('spar', 'clash', 'ranged', 'match')

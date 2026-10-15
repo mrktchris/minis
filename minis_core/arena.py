@@ -22,7 +22,7 @@ from .render import font, text, TRACK, AMBER, RED
 SCALE = 2                       # HD atlas (RES 2) drawn 2x -> 256 px cells, ~170 px fighters
 GRAVITY = 2400.0
 MAX_FALL = 2200.0
-WALK = 180.0
+WALK = 240.0                    # V6: was 180; walking across half a monitor ate the rounds
 FLY = 1100.0
 JUMP_VY = -1150.0
 REACH_PX = 72                   # hip-to-hip distance for a strike at this scale
@@ -32,7 +32,25 @@ MIN_PLATFORM_Y = HUD_H + SPRITE_H           # a window top higher than this woul
 EXIT_W, EXIT_H, EXIT_MARGIN = 104, 36, 14
 PHASES = ('entry', 'intro', 'fight', 'round_end', 'winner', 'exit', 'done')
 AFTERIMAGE_S = 0.28
+TRAIL_EVERY_S = 0.06                          # V6: an afterimage every other frame (the art guide asks for 3-4 copies, not 8)
 HOLE = (12, 12, 16, 255)
+# V6 fight feel (docs/ANIMATION-NOTES.md section 7), the same rules as the taskbar timeline (rounds.py)
+IMPACT_S = rounds.IMPACT_MS / 1000.0          # impact frames: heavy hits, supers, ultimates, KOs only
+FINAL_DOWN_S = 1.0                            # final KO: round_end lasts this long (freeze + slow fall), then the winner beat
+WINNER_S = 2.4                                # ... so KO -> exit stays inside rounds.POST_KO_MAX_S
+HOLD_LAST = '@last'                           # Body.hold value: keep the last frame of a one-shot (brace, slump)
+# V6 pacing: V5 rounds mostly ran out the 25 s clock (46 % TIME, mean 21 s; 39 % of fight time was spent approaching).
+LEDGE_P = 0.3                                 # chance the defender flies to a window ledge before an exchange (was 0.5)
+DASH_PX = 220                                 # an approach longer than this is an air dash, not a walk (was 300)
+APPROACH_S = 4.0                              # give up walking and dash in after this (was 6 s)
+COOLDOWN_CLOSE, COOLDOWN_FAR = (0.15, 0.35), (0.3, 0.55)    # pause between exchanges (was 0.25-0.5 / 0.5-0.9)
+ARENA_DMG_K = 1.25                            # landed strikes / specials / supers hit this much harder than on the taskbar (the
+                                              # arena spends time flying between exchanges); the ultimate stays 40
+
+
+def arena_dmg(beat):
+    d = int(beat.get('dmg') or 0)
+    return d if beat.get('kind') == 'ultimate' else int(round(d * ARENA_DMG_K))
 
 
 # ---------------------------------------------------------------- headless surface
@@ -162,6 +180,7 @@ class Body:
         self.hover = False                   # stays in the air at its target while fly_until lasts (air-to-air) (V5)
         self.move_until = 0.0                # a reset step (backdash / walk_back) keeps its velocity until then (V5)
         self.getup_at = None                 # knocked down but not out: kip up at this time (V5)
+        self.slow = None                     # (t0, t1, k): V6 slow motion of animation and motion (the final KO)
 
     def play(self, name, now, loop=None, hold=None):
         if name not in self.atlas.anim:
@@ -176,7 +195,14 @@ class Body:
         el = now - self.anim_t0
         if self.stop is not None:
             el -= max(0.0, min(now, self.stop[1]) - max(self.stop[0], self.anim_t0))
-        return self.atlas.locate(self.anim, el * 1000.0, self.loop)
+        if self.slow is not None:
+            el -= max(0.0, min(now, self.slow[1]) - max(self.slow[0], self.anim_t0)) * (1.0 - self.slow[2])
+        return self.atlas.locate(self.anim, max(0.0, el) * 1000.0, self.loop)
+
+    def speed(self, now):
+        """1.0, or the slow-motion factor while the finisher's slow window runs."""
+        sl = self.slow
+        return sl[2] if sl is not None and sl[0] <= now < sl[1] else 1.0
 
     def stopped(self, now):
         return self.stop is not None and self.stop[0] <= now < self.stop[1]
@@ -237,6 +263,13 @@ class Arena:
         self.k_round = 0
         self.air_done = False
         self.last_att, self.last_hit = None, False
+        self.ult_rolled = False                                # V6: one ultimate roll per match, one ultimate per match
+        self.comeback_for = None                               # the loser of the last round gets one comeback exchange
+        self.boost = []                                        # slots whose agent just finished a task: signature super first
+        self.impact = None                                     # (t0, t1, struck slot): impact frames on screen
+        self.flashes = None                                    # control.json `flashes`; None = read it here (every 2 s)
+        self._flash_cache, self._flash_read = True, -1e9
+        self.final_ko = None                                   # (t, loser) of the match-deciding KO
         for s in 'ab':
             self.f[s].vy = -1700.0                             # entry: burst out of the taskbar, upward
             self.f[s].fly_until = 0.0
@@ -277,13 +310,15 @@ class Arena:
                 b.fly_until = now + 2.0
                 b.play('getup' if b.anim in ('ko', 'knockdown') else 'idle', now, loop=False, hold='idle')
             self.used_ult = {'a': False, 'b': False} if self.round == 1 else self.used_ult      # the ultimate is once per MATCH
+            if self.round == 1:
+                self.ult_rolled = False
             self.banner = (f'round{min(3, self.round)}', now + 1.2, None)
             self.exchange = None
             self.k_round, self.air_done = 0, False
             for p in self.pick.values():
                 p.new_round()
             for s in 'ab':
-                self.f[s].stop, self.f[s].hover, self.f[s].getup_at = None, False, None
+                self.f[s].stop, self.f[s].hover, self.f[s].getup_at, self.f[s].slow = None, False, None, None
         elif phase == 'fight':
             self.banner = None
             self.round_t0 = now
@@ -291,11 +326,17 @@ class Arena:
         elif phase == 'winner':
             champ = self.winner
             loser = 'b' if champ == 'a' else 'a'
-            self.banner = ('winner', now + 2.6, self.f[champ].x)
-            self.f[champ].play('victory2' if self.wins[loser] == 0 and 'victory2' in self.f[champ].atlas.anim else 'victory', now, loop=False, hold='idle')
-            if not self.f[loser].down:
-                self.f[loser].play('knockdown', now, loop=False, hold='ko')
-                self.f[loser].down = True
+            self.banner = ('winner', now + WINNER_S, self.f[champ].x, self.names.get(champ))      # the name banner over the winner
+            self.f[champ].play('victory2' if self.wins[loser] == 0 and 'victory2' in self.f[champ].atlas.anim else 'victory', now, loop=False, hold=HOLD_LAST)
+            L = self.f[loser]
+            if L.down and 'getup' in L.atlas.anim:                 # KO'd: stays down a moment longer, then slumps up (slowed)
+                gu = L.atlas.total_ms('getup') / 1000.0 / rounds.GETUP_SLOW_K
+                L.getup_at = None
+                L.slump_at = (max(now + 0.4, now + WINNER_S - 0.1 - gu), gu)
+            elif not L.down:                                       # lost on time: slumps, nobody falls over unprovoked
+                sl = next((n for n in rounds.SLUMP if n in L.atlas.anim), None)
+                if sl:
+                    L.play(sl, now, loop=False, hold=HOLD_LAST)
             try:
                 self.record(self.chars[champ], self.chars[loser], where='arena')
             except Exception:
@@ -338,14 +379,15 @@ class Arena:
         elif ph == 'fight':
             self._fight(now)
         elif ph == 'round_end':
-            if now - self.phase_t0 >= 2.4:
+            final = self.final_ko is not None and max(self.wins.values()) >= rounds.ROUNDS_TO_WIN
+            if now - self.phase_t0 >= (FINAL_DOWN_S if final else 2.4):
                 if max(self.wins.values()) >= rounds.ROUNDS_TO_WIN:
                     self.winner = 'a' if self.wins['a'] > self.wins['b'] else 'b'
                     self._enter('winner', now)
                 else:
                     self._enter('intro', now)
         elif ph == 'winner':
-            if now - self.phase_t0 >= 3.2:
+            if now - self.phase_t0 >= WINNER_S:
                 self._enter('exit', now)
         elif ph == 'exit':
             if all(self.f[s].y > self.stage.h + 320 for s in 'ab') or now - self.phase_t0 > 4.0:
@@ -362,8 +404,14 @@ class Arena:
                 b.down = False
                 b.play('getup', now, loop=False, hold='idle')
                 self.note('getup', now, who=s)
+            sa = getattr(b, 'slump_at', None)
+            if sa is not None and now >= sa[0] and self.phase == 'winner':
+                b.slump_at = None
+                b.down = False
+                b.play('getup', now, loop=False, hold='idle')
+                b.slow = (now, now + sa[1], rounds.GETUP_SLOW_K)
             idx, done = b.frame(now)
-            if done and not b.loop:
+            if done and not b.loop and b.hold != HOLD_LAST:
                 b.play(b.hold or 'idle', now)
 
     # ---- choreography (V5: choreo.py plans every exchange; the arena plays its beats with physics)
@@ -397,19 +445,30 @@ class Arena:
 
     def _new_exchange(self, now):
         a, b = self.f['a'], self.f['b']
-        if self.last_att is not None and self.last_hit and self.rng.random() < 0.45:
+        k = self.k_round
+        boost = comeback = False
+        if self.boost and k < 2:
+            att, boost = self.boost.pop(0), True                   # its agent just finished a task: the signature super opens
+        elif self.comeback_for is not None and k == 1:
+            att, comeback = self.comeback_for, True                # lost the last round: one exchange where everything lands
+            self.comeback_for = None
+        elif self.last_att is not None and self.last_hit and self.rng.random() < 0.45:
             att = self.last_att                                    # pressure: the winner of the last exchange keeps coming
         else:
             att = 'a' if self.rng.random() < self.p_left else 'b'
         dfn = 'b' if att == 'a' else 'a'
         A = self.f[att].atlas
-        k = self.k_round
-        air = (not self.air_done) and ((k >= 1 and self.rng.random() < 0.35) or k >= 3)
-        drama = choreo.dramatic(self.wins[att], self.f[att].hp, self.f[dfn].hp, k) and now - self.round_t0 > 4.0
+        air = (not self.air_done) and ((k >= 1 and self.rng.random() < 0.35) or k >= 3) and not (boost or comeback)
+        drama = (choreo.dramatic(self.wins[att], self.f[att].hp, self.f[dfn].hp, k) and now - self.round_t0 > 4.0
+                 and not any(self.used_ult.values()) and not self.ult_rolled and not (boost or comeback))
+        if drama:                                                  # V6: ONE roll per match, the first time anyone qualifies
+            self.ult_rolled = True
+            drama = self.rng.random() < choreo.ULT_CHANCE
         dist = abs(self.f[att].x - self.f[dfn].x)
         reach = self._reach(att, A.ultimate()) if A.ultimate() else 0.0
-        sit = dict(range='far' if dist > REACH_PX * 1.6 else 'close', meter=self.meter[att], ult_ok=not self.used_ult[att], dramatic=drama,
-                   friendly=False, air=air, k=k, ult_reaches=reach >= dist - 20)
+        sit = dict(range='far' if dist > REACH_PX * 1.6 else 'close', meter=self.meter[att], ult_ok=not any(self.used_ult.values()), dramatic=drama,
+                   ult_sure=drama, friendly=False, air=air, k=k, ult_reaches=reach >= dist - 20, boost=boost, comeback=comeback,
+                   edge=choreo.edge_for(self.f[att].hp, self.f[dfn].hp, self.wins[att], self.wins[dfn]))
         ex = choreo.plan_exchange(self.rng, self.pick[att], self.pick[dfn], sit)
         beats = [bt for bt in ex['beats'] if not (bt['kind'] == 'move' and bt['dx'] > 0)]   # openers are played by the approach
         if air:
@@ -420,7 +479,7 @@ class Arena:
                 f.target, f.hover, f.fly_until = (f.x, y), True, now + 6.0
                 f.play('jump', now, loop=False, hold='idle')
             self.note('air', now)
-        elif self.rng.random() < 0.5:                             # DBZ: the defender takes to a window ledge first
+        elif self.rng.random() < LEDGE_P:                         # DBZ: the defender takes to a window ledge first
             plats = self.stage.platforms()
             cur = [p for p in plats if abs(p[2] - self.f[dfn].y) < 2]
             choice = [p for p in plats if p not in cur] or plats
@@ -429,7 +488,7 @@ class Arena:
             self.f[dfn].fly_until = now + 1.6
             self.f[dfn].play('jump', now, loop=False, hold='idle')
             self.note('fly', now, who=dfn)
-        self.exchange = dict(att=att, dfn=dfn, beats=beats, i=0, state='approach', t=now, deadline=now + 6.0, air=air, kind=ex['kind'],
+        self.exchange = dict(att=att, dfn=dfn, beats=beats, i=0, state='approach', t=now, deadline=now + APPROACH_S + 2.0, air=air, kind=ex['kind'],
                              opener=ex['opener'], range_after=ex['range_after'], hit=False)
         self.k_round += 1
 
@@ -440,8 +499,8 @@ class Arena:
             return
         ex = self.exchange
         if ex is None:
-            if now < self.cooldown_until:
-                return
+            if now < self.cooldown_until or any(self.f[x].down for x in 'ab'):
+                return                                             # nobody starts an exchange while someone is on the floor
             self._new_exchange(now)
             return
         if ex['air']:
@@ -473,7 +532,8 @@ class Arena:
             return
         want = self._range_for(ex['att'], first)
         dx = dfn.x - att.x
-        att.facing = 1 if dx >= 0 else -1
+        if abs(dx) > 8:                                            # on top of each other: keep the facing (V5 flipped it every frame)
+            att.facing = 1 if dx >= 0 else -1
         want_x = dfn.x - att.facing * want
         if ex['air']:
             ty = att.target[1] if att.target else att.y
@@ -490,7 +550,7 @@ class Arena:
             if far and first['kind'] != 'special':
                 att.target = (want_x, dfn.y)
                 dist = math.hypot(att.x - want_x, att.y - dfn.y)
-                if dist > 300 or now > ex['deadline'] - 2.0 or ex['opener'] == 'dash':
+                if dist > DASH_PX or abs(att.y - dfn.y) > 36 or now > ex['deadline'] - 2.0 or ex['opener'] == 'dash':   # a ledge: fly up
                     att.fly_until = now + 0.6                   # air dash: straight line, afterimages
                     if att.anim not in ('dash', 'jump'):
                         att.play('dash', now, loop=False, hold='idle')
@@ -536,7 +596,8 @@ class Arena:
         if move not in W.atlas.anim or T.down and kind != 'ultimate':
             ex['i'] += 1
             return
-        if kind != 'counter' and not ex['air'] and abs(W.x - T.x) > self._range_for(who, bt) * 1.4 + 30 and now < ex['deadline']:
+        if kind not in ('counter', 'special') and not ex['air'] and abs(W.x - T.x) > self._range_for(who, bt) * 1.4 + 30 and now < ex['deadline']:
+            # (a projectile flies to its target: V5 bounced a far special between approach and beat until the deadline)
             ex['state'] = 'approach'                               # the defender moved (knockback, reset): close in again
             ex['att'], ex['dfn'] = who, tgt
             return
@@ -545,6 +606,13 @@ class Arena:
         if not T.down:
             T.facing = -W.facing
         W.target, W.vx = None, 0.0
+        sig = W.atlas.signature()['strike']                        # V6: a plain strike that would KO becomes the signature strike
+        if (bt['outcome'] == 'hit' and kind in ('strike', 'counter') and T.hp - arena_dmg(bt) <= 0 and sig and move != sig
+                and not bt.get('juggle') and self.pick[who].used[sig] < choreo.MAX_PER_ROUND):
+            move = sig
+            bt = dict(bt, anim=move, dmg=max(bt['dmg'], choreo.damage_of(W.atlas, move, 'strike')), hitstop=choreo.hitstop_ms(W.atlas, move, 'strike'))
+            ex['beats'][ex['i']] = bt
+            self.pick[who].note(move)
         t_c = now + rounds._contact_s(W.atlas, move)
         fx_list = []
         name = self._main_fx(W.atlas, move)
@@ -573,6 +641,12 @@ class Arena:
                 t_c = max(t_c, spawn + max(0.0, dist - 40.0) / speed)
                 ex['proj'] = proj
         W.play(move, now, loop=False, hold='idle')
+        if (kind in ('super', 'ultimate', 'special') and t_c - now >= rounds.BRACE_MIN_S and bt['outcome'] != 'whiff'
+                and bt.get('pre') != 'block' and not T.down):          # V6: a long wind-up: guard up (low guard when hurt)
+            brace = 'crouch_block' if T.hp - (bt['dmg'] if bt['outcome'] == 'hit' else 0) < rounds.WORRIED_HP and 'crouch_block' in T.atlas.anim else 'block'
+            if brace in T.atlas.anim:
+                T.play(brace, now + 0.12)
+                self.note('brace', now, who=tgt, move=brace)
         hs = bt['hitstop'] / 1000.0
         ex.update(state='strike', who=who, tgt=tgt, beat=bt, contact=t_c, end=max(now + W.atlas.total_ms(move) / 1000.0, t_c + 0.25) + hs,
                   hit_done=False, fx_list=fx_list, pre_done=False, main=name)
@@ -629,6 +703,12 @@ class Arena:
         if outcome == 'whiff' or T.down and kind != 'ultimate':
             self.note('whiff', now, who=ex['who'], move=move)
             return
+        final = (outcome == 'hit' and T.hp - arena_dmg(bt) <= 0 and self.wins[ex['who']] + 1 >= rounds.ROUNDS_TO_WIN)
+        if final:                                                  # the finisher: a long freeze, then the fall in slow motion
+            hs = max(hs, rounds.KO_HITSTOP_MS / 1000.0)
+            for f in (W, T):
+                f.slow = (now + hs, now + hs + rounds.SLOW_S, rounds.SLOW_K)
+            self.final_ko = (now, ex['tgt'])
         if hs:
             for f in (W, T):
                 f.stop = (now, now + hs)
@@ -639,7 +719,7 @@ class Arena:
             T.vx = W.facing * (160.0 if outcome != 'parry' else 0.0)
             self.note('block' if outcome != 'parry' else 'parry', now, who=ex['tgt'])
             return
-        dmg = bt['dmg']
+        dmg = arena_dmg(bt)
         T.hp = max(0, T.hp - dmg)
         self.meter[ex['who']] += dmg
         self.meter[ex['tgt']] += dmg / 2.0
@@ -657,7 +737,7 @@ class Arena:
             T.vx, T.vy = W.facing * (950.0 if beam else 820.0), (0.0 if beam else -620.0)      # a beam carries it straight along itself
             T.knocked_until = now + 1.2
             if T.hp > 0:
-                T.getup_at = now + hs + T.atlas.total_ms('knockdown') / 1000.0 + 0.3
+                T.getup_at = now + hs + T.atlas.total_ms('knockdown') / 1000.0     # V6: springs up the moment the fall ends
             self.note('knockdown', now, who=ex['tgt'], ko=T.hp <= 0)
         else:
             T.play('hit_heavy' if heavy else 'hit', now, loop=False, hold='idle')
@@ -679,15 +759,43 @@ class Arena:
             self.fxp.spawn_at(imp, now, ix, cy, W.facing)
             if imp != 'explosion':
                 self.fxp.spawn_at('explosion', now, ix, cy, W.facing)
-            self.fxp.flash_at(now)
+            if self.flashes_on(now):
+                self.fxp.flash_at(now, seconds=rounds.FLASH_MS / 1000.0)
             self.explosions += 1
             self.note('explosion', now)
             self.note('flash', now)
+        if kind in ('super', 'ultimate') or T.hp <= 0 or dmg >= 3 * choreo.DMG_PER_POWER:
+            self._impact(now, ex['tgt'], cx, cy, W.facing)
         if ex['who'] == ex['att']:
             ex['hit'] = True
         self.note('hit', now, who=ex['tgt'], dmg=dmg, hp=T.hp, air=ex['air'])
         if T.hp <= 0:
             self._end_round(now, ex['tgt'])
+
+    def flashes_on(self, now):
+        """control.json `flashes` (impact frames and white flashes), default on; read at most every 2 s, so the arena
+        loop no longer has to override the effect player from outside on every frame."""
+        if self.flashes is not None:
+            return bool(self.flashes)
+        if now - self._flash_read >= 2.0 or now < self._flash_read:
+            self._flash_read = now
+            try:
+                from . import control
+                self._flash_cache = bool(control.flashes_on(default=self.cfg.get('flashes', True)))
+            except Exception:
+                self._flash_cache = True
+        return self._flash_cache
+
+    def _impact(self, now, tgt, cx, cy, facing):
+        """V6 impact frames for IMPACT_S: the fx `impact` on the struck fighter when the sheet has it, and both fighters drawn
+        as silhouettes (struck = white, striker = dark).  Only the two sprite rects change, never a full-screen frame, so
+        it stays inside the arena's CPU budget.  Nothing at all with flashes off."""
+        if not self.flashes_on(now):
+            return
+        self.impact = (now, now + IMPACT_S, tgt)
+        if self.fx.has_art('impact'):
+            self.fxp.spawn_at('impact', now, cx, cy, facing)                  # the art's own 100-160 ms
+        self.note('impact', now, who=tgt)
 
     def _end_exchange(self, ex, now):
         self.exchange = None
@@ -698,7 +806,7 @@ class Arena:
             if ex['air']:
                 f.fly_until = 0.0
                 f.target = None
-        self.cooldown_until = now + (self.rng.uniform(0.25, 0.5) if ex['range_after'] == 'close' else self.rng.uniform(0.5, 0.9))
+        self.cooldown_until = now + (self.rng.uniform(*COOLDOWN_CLOSE) if ex['range_after'] == 'close' else self.rng.uniform(*COOLDOWN_FAR))
 
     def _resolve(self, ex, now):
         """Compatibility shim for the V4 tests: resolve a bare exchange dict as a landed strike beat."""
@@ -715,12 +823,20 @@ class Arena:
         else:
             ha, hb = self.f['a'].hp, self.f['b'].hp
             winner = ('a' if self.rng.random() < 0.5 else 'b') if ha == hb else ('a' if ha > hb else 'b')
+            self.banner = ('time', now + 1.2, None)                # V6: called on time, and the loser slumps
+            L = self.f['b' if winner == 'a' else 'a']
+            sl = next((n for n in rounds.SLUMP if n in L.atlas.anim), None)
+            if sl and not L.down:
+                L.target, L.vx = None, 0.0
+                L.play(sl, now + 0.3, loop=False, hold=HOLD_LAST)
+        self.comeback_for = 'b' if winner == 'a' else 'a'
         self.wins[winner] += 1
         self.rounds.append(dict(n=self.round, winner=winner, ko=ko_loser is not None, hp={s: self.f[s].hp for s in 'ab'}, dur=round(now - self.round_t0, 2)))
         self.exchange = None
         w = self.f[winner]
         w.target, w.vx = None, 0.0
-        w.play('taunt', now + 0.3, loop=False, hold='idle')
+        if not (ko_loser is not None and self.wins[winner] >= rounds.ROUNDS_TO_WIN):   # the final KO goes straight to the pose
+            w.play('taunt', now + 0.3, loop=False, hold='idle')
         self.ko_loser = ko_loser
         self.note('round', now, n=self.round, winner=winner, ko=ko_loser is not None)
         self._enter('round_end', now)
@@ -729,6 +845,7 @@ class Arena:
     def _move(self, b, now, dt):
         if dt <= 0 or b.stopped(now):
             return                                                 # hitstop: the whole body stands still
+        dt *= b.speed(now)                                         # V6: the finisher's fall plays in slow motion
         if now < b.move_until and b.target is None and not b.down:
             b.x += b.vx * dt                                       # a reset step keeps its velocity for the anim's length
             b.x = max(40.0, min(self.stage.w - 40.0, b.x))
@@ -753,7 +870,7 @@ class Arena:
                 sp = FLY if dist > 200 else max(260.0, dist * 4.0)
                 b.vx, b.vy = dx / dist * sp, dy / dist * sp
                 b.grounded = False
-                if sp > 700:
+                if sp > 700 and (not b.trail or now - b.trail[-1][0] >= TRAIL_EVERY_S):
                     b.trail.append((now, b.anim, b.frame(now)[0], b.facing, b.x, b.y))
             else:
                 b.vx = math.copysign(min(WALK, abs(dx) / max(dt, 1e-3)), dx) if abs(dx) > 2 else 0.0
@@ -774,7 +891,7 @@ class Arena:
         y_prev = b.y
         b.x += b.vx * dt
         b.y += b.vy * dt
-        if abs(b.vx) > 650 and not flying:
+        if abs(b.vx) > 650 and not flying and (not b.trail or now - b.trail[-1][0] >= TRAIL_EVERY_S):
             b.trail.append((now, b.anim, b.frame(now)[0], b.facing, b.x, b.y))
         # walls (and the ceiling: nobody leaves through the HUD)
         if self.phase != 'exit':
@@ -888,19 +1005,21 @@ class Arena:
                 age = (now - t) / AFTERIMAGE_S
                 if age >= 1.0:
                     continue
-                im = self._sprite(b.atlas, anim, fr, facing, alpha=int(110 * (1.0 - age)))
+                im = self._sprite(b.atlas, anim, fr, facing, alpha=int(110 * (1.0 - int(age * 4) / 4.0)))   # 4 steps: cacheable
                 out.append((im, int(x - b.atlas.anchor(facing) * SCALE), int(y - b.atlas.ground_y * SCALE)))
+        imp = self.impact if (self.impact and self.impact[0] <= now < self.impact[1]) else None
         for s in 'ab':
             b = self.f[s]
             idx, _ = b.frame(now)
-            im = self._sprite(b.atlas, b.anim, idx, b.facing)
+            sil = None if imp is None else ('white' if s == imp[2] else 'dark')
+            im = self._sprite(b.atlas, b.anim, idx, b.facing, silhouette=sil)
             l, t, r, bt = b.sprite_rect()
             out.append((im, l, t))
         for im, lx, ty, layer, inst in self.fxp.placements(now, layer='front'):
             out.append((im, lx, ty))
         if self.banner:
-            kind, until, x = self.banner
-            im = self.fx.banner(kind)
+            kind, until, x = self.banner[:3]
+            im = self.fx.banner(kind, name=self.banner[3] if len(self.banner) > 3 else None)
             cx = self.stage.w / 2.0 if x is None else x
             out.append((im, int(cx - im.width / 2), int(self.stage.h * 0.28 - im.height / 2)))
         if self.phase not in ('entry', 'exit', 'done'):
@@ -911,17 +1030,22 @@ class Arena:
 
     _sprite_cache = {}
 
-    def _sprite(self, atlas, anim, idx, facing, alpha=None):
-        key = (id(atlas), anim, idx, facing >= 0, alpha)
+    def _sprite(self, atlas, anim, idx, facing, alpha=None, silhouette=None):
+        key = (id(atlas), anim, idx, facing >= 0, alpha, silhouette)
         im = self._sprite_cache.get(key)
         if im is None:
-            if len(self._sprite_cache) > 160:
+            if len(self._sprite_cache) > 480:                # V6: 160 thrashed (two fighters x trails x impact silhouettes)
                 self._sprite_cache.clear()
             fr = atlas.frame_image(anim, idx, facing)
             im = fr.resize((fr.width * SCALE, fr.height * SCALE), Image.NEAREST)
             if alpha is not None:
                 im = im.copy()
                 im.putalpha(im.getchannel('A').point(lambda v: v * alpha // 255))
+            if silhouette is not None:                         # impact frames: the flat silhouette of the pose
+                col = (255, 255, 255, 255) if silhouette == 'white' else (16, 12, 20, 255)
+                flat = Image.new('RGBA', im.size, col)
+                flat.putalpha(im.getchannel('A').point(lambda v: 255 if v > 0 else 0))
+                im = flat
             self._sprite_cache[key] = im
         return im
 
@@ -1022,7 +1146,7 @@ class Compositor:
 
     def render(self, now):
         a = self.arena
-        flash = a.fxp.flash(now)
+        flash = a.fxp.flash(now) if a.flashes_on(now) else 0.0
         if flash <= 0 and not self.flashed:
             return self._render(now)
         W, H = a.stage.w, a.stage.h          # V5: a white screen flash is one full frame (and the frame after it clears it)

@@ -1,22 +1,31 @@
 """The right-side taskbar widget (scoreboard): pure layout + rendering + hit-testing.  The director process hosts it
 in a third layered window (minis.py Scoreboard) just left of the centred icon cluster.
 
-Shows "A W-L  vs  B W-L", the mode (taskbar / arena / paused), round HP bars during a bout, and three buttons:
-Pause/Resume, Arena, Bout now.  Only the buttons are solid to the mouse (hit()); everything else is click-through.
-Numbers, names of programs and enums only: never window titles or content.
+Row 1  "Claude 3-1  vs  Codex 1-3": short program labels (never truncated with a dot) and W-L per PROGRAM; a click on a
+       name opens the fighter-select screen for that side (the small caret says so).
+Row 2  during a bout: two readable HP bars and the round score; for a few seconds after a match a plain result line
+       ("CLAUDE WINS 2-1"); otherwise the 7-day context sparkline and one status word (paused / arena / hidden 52m + show).
+Row 3  three 20 px buttons: Pause/Resume, Arena/Exit arena, Bout now.
+Only the names, the buttons and a visible "show" are solid to the mouse (hit()); everything else is click-through.
+Numbers, short program names and enums only: never window titles or content.
 """
 from __future__ import annotations
 from PIL import Image, ImageDraw
 
-from . import config as cfgmod
 from .render import font, text, TRACK, AMBER, RED
 
-W, H = 190, 40
-BTN_Y0, BTN_Y1 = 26, 38
+W, H = 190, 44
+BTN_Y0, BTN_Y1 = 23, 42                                   # 20 px tall at scale 1 (a 48 px taskbar band)
 BUTTONS = (('pause', (3, BTN_Y0, 63, BTN_Y1)), ('arena', (66, BTN_Y0, 124, BTN_Y1)), ('bout', (127, BTN_Y0, 187, BTN_Y1)))
-BG, EDGE, INK, DIM = (18, 18, 22, 205), (90, 90, 104, 190), (230, 230, 240), (160, 160, 175)
+NAMES = (('name_a', (2, 0, 90, 13)), ('name_b', (100, 0, 188, 13)))
+SHOW = (150, 12, 188, 21)                                  # the "show" link next to "hidden 52m" (solid only while shown)
+ROW2_Y0, ROW2_Y1 = 14, 21                                  # HP bars: 8 px tall
+BAR_W = 78
+SPARK_X, SPARK_PITCH = 40, 5                              # the 7-day sparkline: first bar x, bar pitch
+BG, EDGE, INK, DIM = (18, 18, 22, 215), (90, 90, 104, 190), (230, 230, 240), (160, 160, 175)
 BTN_BG, BTN_EDGE, BTN_ON = (40, 40, 48, 255), (120, 120, 136, 255), (70, 70, 84, 255)
-MODE_COLOR = {'taskbar': (150, 220, 150), 'arena': (255, 196, 80), 'paused': (255, 120, 110)}
+GREEN, GOLD, LINK = (150, 220, 150), (255, 214, 92), (140, 190, 255)
+MODE_COLOR = {'taskbar': GREEN, 'arena': (255, 196, 80), 'paused': (255, 120, 110)}
 
 
 def left_x(cfg) -> int:
@@ -31,11 +40,18 @@ def enabled(cfg) -> bool:
     return bool(cfg.get('scoreboard', True))
 
 
-def hit(x, y):
-    """-> button name under client point (x, y) in logical px, or None (click-through)."""
-    for name, (x0, y0, x1, y1) in BUTTONS:
-        if x0 <= x <= x1 and y0 <= y <= y1:
+def _in(r, x, y):
+    return r[0] <= x <= r[2] and r[1] <= y <= r[3]
+
+
+def hit(x, y, state=None):
+    """-> 'pause' | 'arena' | 'bout' | 'name_a' | 'name_b' | 'show' under client point (x, y) in logical px, or None
+    (click-through).  'show' only exists while a fighter is hidden (needs `state`)."""
+    for name, r in BUTTONS + NAMES:
+        if _in(r, x, y):
             return name
+    if state and state.get('hidden') and _in(SHOW, x, y) and state.get('hp') is None and not state.get('result'):
+        return 'show'
     return None
 
 
@@ -45,12 +61,23 @@ def labels(state):
 
 
 def _fit(d, s, maxw, size, bold=True):
+    """Last resort only (labels are short by design): cut whole characters, no trailing dot."""
     f = font(size, bold)
-    if d.textlength(s, font=f) <= maxw:
-        return s
-    while len(s) > 1 and d.textlength(s + '.', font=f) > maxw:
+    while len(s) > 1 and d.textlength(s, font=f) > maxw:
         s = s[:-1]
-    return s + '.'
+    return s
+
+
+def hidden_text(hidden) -> str:
+    """{'b': 3120.0} -> 'B hidden 52m'; inf -> 'hidden'; both -> 'both hidden'."""
+    if not hidden:
+        return ''
+    who = 'both' if len(hidden) == 2 else next(iter(hidden)).upper()
+    left = min(hidden.values())
+    if left == float('inf'):
+        return f'{who} hidden'
+    m = max(1, int(left // 60 + (1 if left % 60 else 0)))
+    return f'{who} hidden {m // 60}h{m % 60:02d}' if m >= 60 else f'{who} hidden {m}m'
 
 
 _cache = {}
@@ -58,14 +85,16 @@ _cache = {}
 
 def signature(state):
     hp = state.get('hp') or {}
+    hid = tuple(sorted((k, -1 if v == float('inf') else int(v // 60)) for k, v in (state.get('hidden') or {}).items()))
     return (tuple(state.get('names', {}).get(s) for s in 'ab'), tuple(tuple(state.get('records', {}).get(s, (0, 0))) for s in 'ab'),
             state.get('mode'), bool(state.get('arena')), bool(state.get('paused')), hp.get('a'), hp.get('b'),
-            tuple(sorted((state.get('wins') or {}).items())), state.get('winners'), state.get('pressed'),
+            tuple(sorted((state.get('wins') or {}).items())), state.get('pressed'), state.get('result'), hid,
             tuple(None if v is None else int(v) for v in (state.get('spark') or ())))
 
 
 def render(state) -> Image.Image:
-    """state: names {a,b}, records {a: (w, l), b: (w, l)}, mode, arena, paused, hp {a, b} | None, wins {a, b}, winners, pressed."""
+    """state: names {a,b}, records {a: (w, l), b: (w, l)}, mode, arena, paused, hp {a, b} | None, wins {a, b}, pressed,
+    result (str | None), hidden {slot: seconds left | inf}, spark [7 values | None]."""
     key = signature(state)
     im = _cache.get(key)
     if im is None:
@@ -73,6 +102,10 @@ def render(state) -> Image.Image:
             _cache.clear()
         im = _cache[key] = _render(state)
     return im
+
+
+def _caret(d, x, y, col):
+    d.polygon([(x, y), (x + 4, y), (x + 2, y + 2)], fill=col)
 
 
 def _render(state):
@@ -83,54 +116,72 @@ def _render(state):
     recs = state.get('records') or {}
     hp = state.get('hp') or {}
     wins = state.get('wins') or {}
-    # line 1: records
-    a, b = names.get('a') or '-', names.get('b') or '-'
-    ra, rb = recs.get('a', (0, 0)), recs.get('b', (0, 0))
-    sa = f'{_fit(d, a, 44, 9)} {ra[0]}-{ra[1]}'
-    sb = f'{_fit(d, b, 44, 9)} {rb[0]}-{rb[1]}'
-    text(d, (5, 2), sa, INK, 9)
+    fb, fr = font(10, True), font(9, False)
+    # row 1: clickable names + records
+    for slot, (x0, _, x1, _) in (('a', NAMES[0][1]), ('b', NAMES[1][1])):
+        nm = names.get(slot) or '-'
+        w, l = recs.get(slot, (0, 0))
+        rec = f' {w}-{l}'
+        room = x1 - x0 - 8 - int(d.textlength(rec, font=fr))
+        nm = _fit(d, nm, room, 10, True)
+        nw = int(d.textlength(nm, font=fb))
+        total = nw + int(d.textlength(rec, font=fr)) + 7
+        sx = x0 + 2 if slot == 'a' else x1 - total
+        text(d, (sx, 0), nm, INK, 10)
+        text(d, (sx + nw, 1), rec, DIM, 9, False)
+        _caret(d, sx + total - 5, 6, DIM + (255,))
     vs = 'vs'
-    text(d, (W // 2 - int(d.textlength(vs, font=font(9, False))) // 2, 2), vs, DIM, 9, False)
-    text(d, (W - 5 - int(d.textlength(sb, font=font(9, True))), 2), sb, INK, 9)
-    # line 2: mode, or HP bars during a bout
+    text(d, (W // 2 - int(d.textlength(vs, font=fr)) // 2, 1), vs, DIM, 9, False)
+    # row 2
     mode = state.get('mode') or 'taskbar'
     if hp.get('a') is not None or hp.get('b') is not None:
-        for slot, x0, flip in (('a', 5, False), ('b', W - 5 - 70, True)):
+        for slot, x0, flip in (('a', 4, False), ('b', W - 4 - BAR_W, True)):
             v = hp.get(slot)
             v = 0 if v is None else max(0, min(100, int(v)))
-            fill = (150, 220, 150) if v > 50 else (AMBER if v > 25 else RED)
-            d.rectangle([x0, 15, x0 + 70, 21], fill=TRACK + (255,))
-            w = int(70 * v / 100.0)
+            fill = GREEN if v > 50 else (AMBER if v > 25 else RED)
+            d.rectangle([x0, ROW2_Y0, x0 + BAR_W, ROW2_Y1], fill=TRACK + (255,), outline=(90, 90, 104, 255))
+            w = int((BAR_W - 1) * v / 100.0)
             if w:
                 if flip:
-                    d.rectangle([x0 + 70 - w, 15, x0 + 70, 21], fill=fill + (255,))
+                    d.rectangle([x0 + BAR_W - w, ROW2_Y0 + 1, x0 + BAR_W - 1, ROW2_Y1 - 1], fill=fill + (255,))
                 else:
-                    d.rectangle([x0, 15, x0 + w, 21], fill=fill + (255,))
-        rnd = f"{wins.get('a', 0)}:{wins.get('b', 0)}"
-        text(d, (W // 2 - int(d.textlength(rnd, font=font(9, True))) // 2, 13), rnd, MODE_COLOR['arena'], 9)
+                    d.rectangle([x0 + 1, ROW2_Y0 + 1, x0 + w, ROW2_Y1 - 1], fill=fill + (255,))
+        rnd = f"{wins.get('a', 0)}-{wins.get('b', 0)}"
+        text(d, (W // 2 - int(d.textlength(rnd, font=fb)) // 2, 11), rnd, MODE_COLOR['arena'], 10)
+    elif state.get('result'):
+        s = _fit(d, state['result'], W - 10, 10, True)
+        text(d, (W // 2 - int(d.textlength(s, font=fb)) // 2, 11), s, GOLD, 10)
     else:
-        word = {'taskbar': 'taskbar', 'arena': 'ARENA', 'paused': 'PAUSED'}.get(mode, mode)
-        text(d, (5, 13), word, MODE_COLOR.get(mode, DIM), 9, False)
-        win = 'dec' if state.get('winners') != 'random' else 'rnd'
-        s = f'win: {win}'
-        text(d, (W - 5 - int(d.textlength(s, font=font(9, False))), 13), s, DIM, 9, False)
         spark = list(state.get('spark') or [])
+        x = 5
         if spark:                                              # 7-day context sparkline (history.json: numbers + dates only)
-            x0 = 72
+            text(d, (x, 12), '7 days', DIM, 9, False)
             for i, v in enumerate(spark[-7:]):
-                x = x0 + i * 6
-                d.rectangle([x, 14, x + 4, 23], fill=TRACK + (255,))
+                bx = SPARK_X + i * SPARK_PITCH
+                d.rectangle([bx, 14, bx + 3, 21], fill=TRACK + (255,))
                 if v is not None:
-                    h = max(1, int(round(9 * max(0.0, min(100.0, float(v))) / 100.0)))
-                    col = (150, 220, 150) if v < 70 else (AMBER if v < 90 else RED)
-                    d.rectangle([x, 23 - h, x + 4, 23], fill=col + (255,))
-    # buttons
+                    h = max(1, int(round(8 * max(0.0, min(100.0, float(v))) / 100.0)))
+                    col = GREEN if v < 70 else (AMBER if v < 90 else RED)
+                    d.rectangle([bx, 22 - h, bx + 3, 21], fill=col + (255,))
+        hid = state.get('hidden') or {}
+        if hid:
+            word = hidden_text(hid)
+            text(d, (SHOW[0] - 4 - int(d.textlength(word, font=fr)), 12), word, DIM, 9, False)
+            d.rounded_rectangle([SHOW[0], SHOW[1] + 1, SHOW[2], SHOW[3]], 2, outline=LINK + (255,))
+            text(d, (SHOW[0] + (SHOW[2] - SHOW[0] - int(d.textlength('show', font=font(9, True)))) // 2 + 1, 12), 'show', LINK, 9, True)
+        elif mode in ('paused', 'arena'):
+            word = {'paused': 'paused', 'arena': 'arena on'}[mode]
+            text(d, (W - 6 - int(d.textlength(word, font=fb)), 11), word, MODE_COLOR[mode], 10)
+        else:
+            hint = 'click a name to pick'
+            text(d, (W - 6 - int(d.textlength(hint, font=fr)), 12), hint, (120, 120, 134), 9, False)
+    # row 3: buttons
     lab = labels(state)
     for name, (x0, y0, x1, y1) in BUTTONS:
         on = state.get('pressed') == name
-        d.rounded_rectangle([x0, y0, x1, y1], 3, fill=BTN_ON if on else BTN_BG, outline=BTN_EDGE)
-        s = _fit(d, lab[name], x1 - x0 - 6, 9)
-        text(d, (x0 + (x1 - x0 - int(d.textlength(s, font=font(9, True)))) // 2, y0 + 1), s, INK, 9)
+        d.rounded_rectangle([x0, y0, x1, y1], 4, fill=BTN_ON if on else BTN_BG, outline=BTN_EDGE)
+        s = _fit(d, lab[name], x1 - x0 - 6, 10)
+        text(d, (x0 + (x1 - x0 - int(d.textlength(s, font=fb))) // 2, y0 + 3), s, INK, 10)
     return im
 
 
@@ -142,21 +193,32 @@ class Model:
 
     @staticmethod
     def names_from(assign, lib=None):
+        from .sources import short_label
         out = {}
         for s in 'ab':
             a = (assign or {}).get(s) if isinstance(assign, dict) else None
-            if isinstance(a, dict):
-                out[s] = str(a.get('program') or a.get('character') or '-')[:12]
-            else:
-                out[s] = None
+            out[s] = short_label(a.get('source'), a.get('program')) if isinstance(a, dict) and a.get('source') else None
         return out
 
     @staticmethod
-    def state(assign, buses, record, paused, arena, winners, pressed=None, spark=None):
-        from .rounds import record_for
+    def result_line(assign, record, now):
+        """'CLAUDE WINS 2-1' for a match that ended in the last few seconds, else None."""
+        from . import records
+        from .sources import short_label
+        last = records.last_result(record, now) if now is not None else None
+        if not last:
+            return None
+        sc = last.get('score')
+        tail = f' {sc[0]}-{sc[1]}' if isinstance(sc, list) and len(sc) == 2 else ''
+        return f"{short_label(last['winner']).upper()} WINS{tail}"
+
+    @staticmethod
+    def state(assign, buses, record, paused, arena, winners, pressed=None, spark=None, now=None, hidden=None):
+        from . import records
         names = Model.names_from(assign)
-        chars = {s: ((assign or {}).get(s) or {}).get('character') if isinstance((assign or {}).get(s), dict) else None for s in 'ab'}
-        records = {s: record_for(record, chars[s]) if chars[s] else (0, 0) for s in 'ab'}
+        rec = record if isinstance((record or {}).get('programs'), dict) else dict(record or {}, programs=records.migrate((record or {}).get('characters')))
+        srcs = {s: ((assign or {}).get(s) or {}).get('source') if isinstance((assign or {}).get(s), dict) else None for s in 'ab'}
+        recs = {s: records.for_program(rec, srcs[s]) if srcs[s] else (0, 0) for s in 'ab'}
         hp = {}
         wins = {}
         for s in 'ab':
@@ -166,5 +228,6 @@ class Model:
             if isinstance(b.get('wins'), dict):
                 wins = {k: int(v) for k, v in b['wins'].items() if k in 'ab'}
         mode = 'paused' if paused else ('arena' if arena else 'taskbar')
-        return dict(names=names, records=records, mode=mode, arena=bool(arena), paused=bool(paused), hp=hp or None, wins=wins,
-                    winners=winners, pressed=pressed, spark=list(spark) if spark else None)
+        return dict(names=names, records=recs, mode=mode, arena=bool(arena), paused=bool(paused), hp=hp or None, wins=wins,
+                    winners=winners, pressed=pressed, spark=list(spark) if spark else None,
+                    result=None if hp else Model.result_line(assign, rec, now), hidden=dict(hidden or {}))

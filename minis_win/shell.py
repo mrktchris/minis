@@ -61,6 +61,8 @@ user32.TrackPopupMenu.argtypes = [wt.HMENU, wt.UINT, ctypes.c_int, ctypes.c_int,
 user32.CreatePopupMenu.restype = wt.HMENU
 user32.AppendMenuW.argtypes = [wt.HMENU, wt.UINT, ctypes.c_size_t, wt.LPCWSTR]
 user32.SetForegroundWindow.argtypes = [wt.HWND]
+user32.CheckMenuRadioItem.argtypes = [wt.HMENU, wt.UINT, wt.UINT, wt.UINT, wt.UINT]
+user32.SetFocus.argtypes = [wt.HWND]
 gdi32.CreateCompatibleDC.argtypes = [wt.HDC]
 gdi32.CreateCompatibleDC.restype = wt.HDC
 gdi32.CreateDIBSection.argtypes = [wt.HDC, ctypes.POINTER(BITMAPINFOHEADER), wt.UINT, ctypes.POINTER(ctypes.c_void_p), wt.HANDLE, wt.DWORD]
@@ -101,6 +103,8 @@ WM_TIMER, WM_CAPTURECHANGED = 0x113, 0x215
 WM_NCHITTEST, WM_KEYDOWN, WM_KILLFOCUS = 0x84, 0x100, 0x8
 HTTRANSPARENT, HTCLIENT = -1, 1
 MA_ACTIVATE, MA_NOACTIVATE = 1, 3
+WM_ACTIVATE, WM_MOUSEWHEEL, WA_INACTIVE = 0x6, 0x20A, 0
+MF_STRING, MF_GRAYED, MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_BYCOMMAND = 0x0, 0x1, 0x8, 0x10, 0x800, 0x0
 TICK_TIMER_ID = 0x4D49
 CS_DBLCLKS = 0x8
 CLASS_NAME = 'MinisFighter'
@@ -122,6 +126,18 @@ def _wndproc(hwnd, msg, wparam, lparam):
         except Exception:
             solid = False
         return HTCLIENT if solid else HTTRANSPARENT
+    if msg == WM_ACTIVATE and ov and ov.on_blur and (wparam & 0xFFFF) == WA_INACTIVE:
+        try:
+            ov.on_blur()                                 # the select screen cancels when another window takes the focus
+        except Exception:
+            pass
+        return 0
+    if msg == WM_MOUSEWHEEL and ov and ov.on_event:
+        try:
+            ov.on_event('wheel', ctypes.c_short((wparam >> 16) & 0xFFFF).value, 0)
+        except Exception:
+            pass
+        return 0
     if msg == WM_KEYDOWN and ov and ov.on_key:
         try:
             ov.on_key(int(wparam))
@@ -180,10 +196,11 @@ class Overlay:
     """on_hittest(cx, cy) -> bool makes the window click-through except where it answers True (WM_NCHITTEST).
     activatable=True + on_key(vk) lets a window take focus on a click and read keys (the arena's ESC); fighters never do."""
 
-    def __init__(self, title, x, y, w, h, scale=1, on_event=None, on_timer=None, on_hittest=None, on_key=None, activatable=False):
+    def __init__(self, title, x, y, w, h, scale=1, on_event=None, on_timer=None, on_hittest=None, on_key=None, activatable=False,
+                 on_blur=None):
         _register()
         self.scale, self.on_event, self.on_timer = scale, on_event, on_timer
-        self.on_hittest, self.on_key, self.activatable = on_hittest, on_key, bool(activatable)
+        self.on_hittest, self.on_key, self.activatable, self.on_blur = on_hittest, on_key, bool(activatable), on_blur
         self._dragging = False
         self._w = self._h = 0
         self.x, self.y, self.w, self.h = x, y, w * scale, h * scale
@@ -266,13 +283,37 @@ class Overlay:
             user32.ShowWindow(self.hwnd, 4 if visible else 0)      # SW_SHOWNOACTIVATE / SW_HIDE
             self.visible = visible
 
+    def focus(self):
+        """Take the keyboard focus (only the select screen does, and only while it is open)."""
+        if self.hwnd and self.activatable:
+            user32.SetForegroundWindow(self.hwnd)
+            user32.SetFocus(self.hwnd)
+
+    @staticmethod
+    def build_menu(items):
+        """A real Win32 popup menu from a spec (see menu()).  Submenus are owned by their parent: DestroyMenu on the
+        returned handle frees them all."""
+        hm = user32.CreatePopupMenu()
+        for it in menu_entries(items):
+            kind = it[0]
+            if kind == 'sep':
+                user32.AppendMenuW(hm, MF_SEPARATOR, 0, None)
+            elif kind == 'sub':
+                user32.AppendMenuW(hm, MF_POPUP, Overlay.build_menu(it[2]), it[1])
+            else:
+                _, mid, label, opt = it
+                flags = MF_STRING | (MF_GRAYED if opt.get('disabled') else 0) | (MF_CHECKED if opt.get('checked') and not opt.get('radio') else 0)
+                user32.AppendMenuW(hm, flags, mid, label)
+                if opt.get('radio') and opt.get('checked'):
+                    user32.CheckMenuRadioItem(hm, mid, mid, mid, MF_BYCOMMAND)      # a bullet instead of a tick
+        return hm
+
     def menu(self, items):
-        """items: [(id, label)] -> chosen id or 0"""
+        """items: (id, label) | (id, label, {'checked', 'radio', 'disabled'}) | None (separator) | (label, [items]) (submenu)
+        -> chosen id or 0."""
         pt = wt.POINT()
         user32.GetCursorPos(ctypes.byref(pt))
-        hm = user32.CreatePopupMenu()
-        for i, label in items:
-            user32.AppendMenuW(hm, 0, i, label)
+        hm = self.build_menu(items)
         user32.SetForegroundWindow(self.hwnd)
         ticking = self.on_timer is not None and self.start_timer(250)          # heartbeat + keep-on-top while the menu is up
         try:
@@ -299,6 +340,20 @@ class Overlay:
             user32.DestroyWindow(self.hwnd)
             self.hwnd = None
         self._free()
+
+
+def menu_entries(items):
+    """Normalise a menu spec: -> [('sep',) | ('sub', label, items) | ('item', id, label, opts)].  Pure (tested headless)."""
+    out = []
+    for it in items or ():
+        if it is None or it == '-':
+            out.append(('sep',))
+        elif len(it) >= 2 and isinstance(it[1], (list, tuple)) and not isinstance(it[0], int):
+            out.append(('sub', str(it[0]), list(it[1])))
+        else:
+            opt = it[2] if len(it) > 2 and isinstance(it[2], dict) else {}
+            out.append(('item', int(it[0]), str(it[1]), opt))
+    return out
 
 
 # ---------------------------------------------------------------- taskbar + desktop helpers

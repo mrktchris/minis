@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 
 HAND_DX, HAND_DY, CENTER_DY = 12, 24, 24          # art/fx.py contract: center = ground - (0, 24*res); hand = ground + anim.hand
-FLASH_S = 0.06                                     # one frame at the active rates: the white flash lasts this long
+FLASH_S = 0.10                                     # V6: >= 3 redraws at the 30 fps fight rate (60 ms was often never drawn)
 FLASH_ALPHA = 0.6
 
 

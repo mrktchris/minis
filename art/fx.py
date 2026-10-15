@@ -1221,6 +1221,10 @@ FX_SCHEMA_NOTES = {                              # V5.1 keys (every effect carri
             'appearing whole; null = draw the frames as authored.',
     'flash': 'bool: frame 0 is a one-frame release flash (white-hot); the engine may whiten the owner sprite / flash the '
              'scene for that frame\'s ms.  Never true on a looping effect.',
+    'impact': 'V6 effect id (every character sheet): the 2D impact-frame sequence for a heavy hit (power 3) or an ultimate\'s '
+              'contact - dark silhouette with white rays and rim, the white inverse with speed lines, outline strokes, a '
+              'white silhouette (40/40/40/30 ms, one cell each, transparent outside the figure - never an opaque box).  '
+              'Play it once on the contact frame, never on light hits.',
 }
 
 
@@ -1305,16 +1309,116 @@ def generic_effects():
 
 
 def character_effects(ch, hands=None):
-    """Generic set + this character's upgraded special / super effects + its ultimate effects."""
+    """Generic set + this character's upgraded special / super effects + its ultimate effects + its impact frames.
+
+    The ultimate's effects come from its TEMPLATE (ch.sig_moves[ult][0]); a character whose ultimate move has another
+    name (the V6 extras reuse the seven templates) also gets the main effect under its own move name."""
     pal = ch.body.palette
     eff = generic_effects()
     special, sup, ult = ch.signature['special'], ch.signature['super'], ch.signature.get('ultimate')
     eff[f'{special}_proj'] = fx_big_proj(ch)
     eff[f'{special}_impact'] = dict(frames=fx_impact(pal, 28, 5), anchor='center', offset=(0, 0), hit_frame=1, shake=dict(frames=2, amp=1))
     eff[f'{sup}_burst'] = fx_super_burst(pal)
-    if ult and ult in ULT_FX:
-        eff.update(ULT_FX[ult](ch, hands or {}))
+    tpl = ch.sig_moves[ult][0] if ult and ult in ch.sig_moves else ult
+    if tpl and tpl in ULT_FX:
+        h = dict(hands or {})
+        if tpl != ult:                                  # the template's hand lookups use the template's move name
+            for (name, i), m in list(h.items()):
+                if name == ult:
+                    h[(tpl, i)] = m
+        h['_name'] = ch.name
+        eff.update(ULT_FX[tpl](ch, h))
+        if tpl != ult:
+            main = tpl if tpl in eff else ULT_ALIASES.get(tpl)
+            eff[ult] = dict(eff[main])
+    eff['impact'] = fx_impact_frames(ch)
     return eff
+
+
+def fx_impact_frames(ch):
+    """The 2D impact-frame sequence for heavy hits and ultimates (docs/ANIMATION-NOTES.md section 6): the fighter's
+    ultimate contact pose as a dark silhouette with white radial lines and a white rim, the white inverse with longer,
+    chaotic speed lines, broken outline strokes, then a white silhouette; transparent outside the figure.  One cell per frame,
+    centred on the `center` anchor; 40 / 40 / 40 / 30 ms."""
+    import moves
+    S = rig.RES
+    cw = rig.cell_px()
+    ult = ch.signature.get('ultimate')
+    mv = moves.build_moves(ch)[ult]
+    pose = mv['frames'][mv.get('hit_frame', len(mv['frames']) - 2)][0]
+    from dataclasses import replace
+    pose = replace(pose, fx=(), ghost=(), flash=False, aura=0)
+    buf, _ = rig.render_parts(ch.body, pose, None)
+    bp = buf.load()
+    sil = Image.new('L', (cw, cw), 0)
+    sp = sil.load()
+    xs, ys = [], []
+    for y in range(cw):
+        for x in range(cw):
+            n = bp[x, y]
+            if n and rig.NAME[n] not in rig.NOLINE:
+                sp[x, y] = 255
+                xs.append(x)
+                ys.append(y)
+    cx, cy = (sum(xs) / len(xs), sum(ys) / len(ys)) if xs else (cw / 2, cw / 2)
+    rng = random.Random(sum(map(ord, ch.name)))
+
+    def rays(d, n, r0, r1, jitter, width, col):
+        for k in range(n):
+            a = 2 * math.pi * k / n + rng.uniform(-jitter, jitter)
+            ra, rb = r0 * rng.uniform(0.6, 1.0), r1 * rng.uniform(0.7, 1.15)
+            d.line([(cx + math.cos(a) * ra, cy + math.sin(a) * ra), (cx + math.cos(a) * rb, cy + math.sin(a) * rb)], fill=col, width=width)
+
+    white, black = W_ + (255,), INK + (255,)
+    out = []
+    # 1: silhouette on white, radial white lines clipped inside it
+    f = Image.new('RGBA', (cw, cw), white)
+    f.paste(black, (0, 0), sil)
+    lines = Image.new('L', (cw, cw), 0)
+    rays(ImageDraw.Draw(lines), 14, 2 * S, 30 * S, 0.08, S, 255)
+    lp = lines.load()
+    fp = f.load()
+    for y in range(cw):
+        for x in range(cw):
+            if lp[x, y] and sp[x, y]:
+                fp[x, y] = white
+    out.append((f, 40))
+    # 2: inverse, longer chaotic lines across the whole frame
+    f = Image.new('RGBA', (cw, cw), black)
+    f.paste(white, (0, 0), sil)
+    lines = Image.new('L', (cw, cw), 0)
+    rays(ImageDraw.Draw(lines), 22, 6 * S, 46 * S, 0.25, S, 255)
+    lp, fp = lines.load(), f.load()
+    for y in range(cw):
+        for x in range(cw):
+            if lp[x, y]:
+                fp[x, y] = black if sp[x, y] else white
+    out.append((f, 40))
+    # 3: short broken outline strokes on white
+    f = Image.new('RGBA', (cw, cw), white)
+    fp = f.load()
+    for y in range(1, cw - 1):
+        for x in range(1, cw - 1):
+            if sp[x, y] and not (sp[x - 1, y] and sp[x + 1, y] and sp[x, y - 1] and sp[x, y + 1]):
+                if ((x // S) * 3 + (y // S) * 5) % 7 < 4:
+                    fp[x, y] = black
+    out.append((f, 40))
+    # 4: a white silhouette (a full blank cell drew an opaque white box over the taskbar)
+    f = Image.new('RGBA', (cw, cw), (0, 0, 0, 0))
+    f.paste(white, (0, 0), sil)
+    out.append((f, 30))
+    # Owner saw the opaque cells as a glitch box on the live strip: keep only the silhouette, a thin rim and the
+    # radial lines; everything else is transparent.
+    from PIL import ImageFilter
+    rim = sil.filter(ImageFilter.MaxFilter(2 * S + 1)).load()
+    for i, (f, ms) in enumerate(out[:3]):
+        fp = f.load()
+        for y in range(cw):
+            for x in range(cw):
+                if not rim[x, y] and not (i == 1 and fp[x, y] == white):     # frame 2 keeps its white speed lines
+                    fp[x, y] = (0, 0, 0, 0)
+    off = (rig.W // 2 - rig.HIP_X, rig.W // 2 - (rig.GROUND - CENTER_DY))
+    return dict(frames=out, anchor='center', offset=off, hit_frame=0, layer='front')
 
 
 def build_character(ch, out_dir, res, cap, hands=None, anims=None):

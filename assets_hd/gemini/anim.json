@@ -35,43 +35,49 @@
   "style": "star"
  },
  "palette": [
-  "#08070C",
-  "#0E1018",
-  "#120F1A",
-  "#141420",
-  "#142A5C",
+  "#0B0A11",
+  "#0F0D19",
+  "#0F1585",
+  "#101057",
+  "#131222",
+  "#162CB3",
+  "#1A1620",
   "#1B1F30",
-  "#1E1A2A",
-  "#2A2F45",
-  "#2A55A8",
-  "#3A3450",
-  "#3E2418",
-  "#3F4560",
+  "#394863",
+  "#3C1C1C",
   "#3F7BE0",
-  "#4A4A55",
-  "#5A4710",
-  "#73472E",
-  "#7FA8F2",
-  "#9A6444",
-  "#A9A9B4",
-  "#B08E2E",
+  "#592725",
+  "#5E5951",
+  "#5E7898",
+  "#643010",
+  "#783C33",
+  "#83B9E8",
+  "#898272",
+  "#99490E",
+  "#A86E4C",
+  "#A9B0C4",
   "#B8BCD0",
-  "#B98260",
-  "#E0B898",
+  "#C7A988",
+  "#CCE5F3",
+  "#CD7415",
+  "#E5DCCD",
   "#E8718C",
   "#E8C55A",
+  "#EDE694",
   "#F4F4F2",
+  "#F5F5D3",
+  "#F8F8F6",
+  "#FCFCFB",
   "#FFE27A",
-  "#FFF4C2",
   "#FFFFFF"
  ],
- "colors": 29,
+ "colors": 35,
  "anims": {
   "idle": {
    "row": 0,
    "loop": true,
    "cat": "locomotion",
-   "desc": "Ronin stance: upright, hand on hip; flicks the ponytails.",
+   "desc": "Dancer stance: one blade forward, one back; crosses them and opens.",
    "frames": [
     {
      "i": 0,
@@ -90,7 +96,7 @@
     },
     {
      "i": 3,
-     "ms": 160,
+     "ms": 180,
      "dx": 0
     },
     {
@@ -100,17 +106,17 @@
     },
     {
      "i": 5,
-     "ms": 110,
+     "ms": 120,
      "dx": 0
     },
     {
      "i": 6,
-     "ms": 180,
+     "ms": 200,
      "dx": 0
     },
     {
      "i": 7,
-     "ms": 150,
+     "ms": 140,
      "dx": 0
     }
    ]
@@ -235,7 +241,7 @@
    "row": 4,
    "loop": false,
    "cat": "locomotion",
-   "desc": "Hop-step forward to close distance.",
+   "desc": "Low dash forward that covers real ground, with dust and speed lines.",
    "frames": [
     {
      "i": 0,
@@ -244,22 +250,22 @@
     },
     {
      "i": 1,
-     "ms": 60,
-     "dx": 20
+     "ms": 50,
+     "dx": 28
     },
     {
      "i": 2,
      "ms": 60,
-     "dx": 20
+     "dx": 28
     },
     {
      "i": 3,
      "ms": 80,
-     "dx": 12
+     "dx": 16
     },
     {
      "i": 4,
-     "ms": 90,
+     "ms": 110,
      "dx": 4
     }
    ]
@@ -278,21 +284,21 @@
     {
      "i": 1,
      "ms": 60,
-     "dx": -18
+     "dx": -24
     },
     {
      "i": 2,
-     "ms": 60,
-     "dx": -18
+     "ms": 50,
+     "dx": -24
     },
     {
      "i": 3,
-     "ms": 70,
-     "dx": -10
+     "ms": 80,
+     "dx": -12
     },
     {
      "i": 4,
-     "ms": 100,
+     "ms": 110,
      "dx": -2
     }
    ]
@@ -389,22 +395,22 @@
    "row": 9,
    "loop": false,
    "cat": "strike",
-   "desc": "Fast lead-hand strike. Light hit, small hit-stop.",
+   "desc": "Fast lead-hand thrust. Light hit, small hit-stop.",
    "frames": [
     {
      "i": 0,
-     "ms": 70,
+     "ms": 110,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 50,
+     "ms": 70,
      "dx": 0
     },
     {
      "i": 2,
      "ms": 40,
-     "dx": 6
+     "dx": 10
     },
     {
      "i": 3,
@@ -413,12 +419,162 @@
     },
     {
      "i": 4,
-     "ms": 60,
+     "ms": 70,
      "dx": 0
     },
     {
      "i": 5,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 90,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 1,
+   "hitstop_ms": 150,
+   "smear_frames": [
+    2
+   ],
+   "reach": 52
+  },
+  "cross": {
+   "row": 10,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Big diagonal power slash. Medium hit, forces a block-stagger.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 10
+    },
+    {
+     "i": 3,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 230,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 80,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 2,
+   "hitstop_ms": 180,
+   "smear_frames": [
+    2
+   ],
+   "reach": 57
+  },
+  "uppercut": {
+   "row": 11,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Rising launcher slash. Pops the opponent up.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 4
+    },
+    {
+     "i": 3,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 220,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 90,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 2,
+   "hitstop_ms": 180,
+   "smear_frames": [
+    2
+   ],
+   "reach": 25
+  },
+  "low_kick": {
+   "row": 12,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Sweep along the ground with a hip turn. Trips guard-high opponents.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 1,
      "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 8
+    },
+    {
+     "i": 3,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 180,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 90,
      "dx": 0
     },
     {
@@ -433,22 +589,22 @@
    "smear_frames": [
     2
    ],
-   "reach": 42
+   "reach": 51
   },
-  "cross": {
-   "row": 10,
+  "roundhouse": {
+   "row": 13,
    "loop": false,
    "cat": "strike",
-   "desc": "Rear-hand power punch. Medium hit, forces a block-stagger.",
+   "desc": "High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through.",
    "frames": [
     {
      "i": 0,
-     "ms": 90,
+     "ms": 140,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 60,
+     "ms": 90,
      "dx": 0
     },
     {
@@ -463,162 +619,12 @@
     },
     {
      "i": 4,
-     "ms": 60,
+     "ms": 260,
      "dx": 0
     },
     {
      "i": 5,
-     "ms": 80,
-     "dx": 0
-    },
-    {
-     "i": 6,
-     "ms": 100,
-     "dx": 0
-    }
-   ],
-   "hit_frame": 3,
-   "power": 2,
-   "hitstop_ms": 180,
-   "smear_frames": [
-    2
-   ],
-   "reach": 36
-  },
-  "uppercut": {
-   "row": 11,
-   "loop": false,
-   "cat": "strike",
-   "desc": "Rising launcher. Pops the opponent up.",
-   "frames": [
-    {
-     "i": 0,
-     "ms": 90,
-     "dx": 0
-    },
-    {
-     "i": 1,
-     "ms": 70,
-     "dx": 0
-    },
-    {
-     "i": 2,
-     "ms": 40,
-     "dx": 4
-    },
-    {
-     "i": 3,
-     "ms": 150,
-     "dx": 0
-    },
-    {
-     "i": 4,
-     "ms": 60,
-     "dx": 0
-    },
-    {
-     "i": 5,
-     "ms": 90,
-     "dx": 0
-    },
-    {
-     "i": 6,
-     "ms": 100,
-     "dx": 0
-    }
-   ],
-   "hit_frame": 3,
-   "power": 2,
-   "hitstop_ms": 180,
-   "smear_frames": [
-    2
-   ],
-   "reach": 26
-  },
-  "low_kick": {
-   "row": 12,
-   "loop": false,
-   "cat": "strike",
-   "desc": "Sweep along the ground. Trips guard-high opponents.",
-   "frames": [
-    {
-     "i": 0,
-     "ms": 80,
-     "dx": 0
-    },
-    {
-     "i": 1,
-     "ms": 60,
-     "dx": 0
-    },
-    {
-     "i": 2,
-     "ms": 40,
-     "dx": 6
-    },
-    {
-     "i": 3,
-     "ms": 140,
-     "dx": 0
-    },
-    {
-     "i": 4,
-     "ms": 60,
-     "dx": 0
-    },
-    {
-     "i": 5,
-     "ms": 90,
-     "dx": 0
-    },
-    {
-     "i": 6,
-     "ms": 100,
-     "dx": 0
-    }
-   ],
-   "hit_frame": 3,
-   "power": 1,
-   "hitstop_ms": 150,
-   "smear_frames": [
-    2
-   ],
-   "reach": 39
-  },
-  "roundhouse": {
-   "row": 13,
-   "loop": false,
-   "cat": "strike",
-   "desc": "High kick. Heavy hit, big hit-stop.",
-   "frames": [
-    {
-     "i": 0,
-     "ms": 100,
-     "dx": 0
-    },
-    {
-     "i": 1,
-     "ms": 70,
-     "dx": 0
-    },
-    {
-     "i": 2,
-     "ms": 40,
-     "dx": 4
-    },
-    {
-     "i": 3,
-     "ms": 160,
-     "dx": 0
-    },
-    {
-     "i": 4,
-     "ms": 60,
-     "dx": 0
-    },
-    {
-     "i": 5,
-     "ms": 80,
+     "ms": 110,
      "dx": 0
     },
     {
@@ -628,7 +634,7 @@
     },
     {
      "i": 7,
-     "ms": 100,
+     "ms": 120,
      "dx": 0
     }
    ],
@@ -638,22 +644,22 @@
    "smear_frames": [
     2
    ],
-   "reach": 40
+   "reach": 53
   },
   "spin_kick": {
    "row": 14,
    "loop": false,
    "cat": "strike",
-   "desc": "Gemini's spinning kick, ponytail whipping round.",
+   "desc": "Gemini's spinning kick, both blades whipping round.",
    "frames": [
     {
      "i": 0,
-     "ms": 100,
+     "ms": 140,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 70,
+     "ms": 80,
      "dx": 0
     },
     {
@@ -664,26 +670,26 @@
     {
      "i": 3,
      "ms": 40,
-     "dx": 4
+     "dx": 8
     },
     {
      "i": 4,
-     "ms": 150,
+     "ms": 160,
      "dx": 0
     },
     {
      "i": 5,
-     "ms": 60,
+     "ms": 260,
      "dx": 0
     },
     {
      "i": 6,
-     "ms": 90,
+     "ms": 100,
      "dx": 0
     },
     {
      "i": 7,
-     "ms": 100,
+     "ms": 90,
      "dx": 0
     }
    ],
@@ -693,7 +699,7 @@
    "smear_frames": [
     3
    ],
-   "reach": 40
+   "reach": 51
   },
   "star_shot": {
    "row": 15,
@@ -703,18 +709,18 @@
    "frames": [
     {
      "i": 0,
-     "ms": 110,
+     "ms": 140,
      "dx": 0
     },
     {
      "i": 1,
-     "ms": 90,
+     "ms": 110,
      "dx": 0
     },
     {
      "i": 2,
      "ms": 40,
-     "dx": 4
+     "dx": 8
     },
     {
      "i": 3,
@@ -723,7 +729,7 @@
     },
     {
      "i": 4,
-     "ms": 60,
+     "ms": 230,
      "dx": 0
     },
     {
@@ -733,7 +739,7 @@
     },
     {
      "i": 6,
-     "ms": 100,
+     "ms": 110,
      "dx": 0
     }
    ],
@@ -743,11 +749,11 @@
     2
    ],
    "proj_from": [
-    34.4,
-    -20.0
+    41.3,
+    -17.1
    ],
    "hand": [
-    34,
+    41,
     -50
    ]
   },
@@ -769,7 +775,7 @@
     },
     {
      "i": 2,
-     "ms": 120,
+     "ms": 110,
      "dx": 0
     },
     {
@@ -792,7 +798,7 @@
     {
      "i": 0,
      "ms": 50,
-     "dx": -4
+     "dx": -6
     },
     {
      "i": 1,
@@ -801,7 +807,7 @@
     },
     {
      "i": 2,
-     "ms": 90,
+     "ms": 100,
      "dx": 0
     }
    ]
@@ -836,7 +842,7 @@
    "frames": [
     {
      "i": 0,
-     "ms": 50,
+     "ms": 70,
      "dx": 0
     },
     {
@@ -846,7 +852,7 @@
     },
     {
      "i": 2,
-     "ms": 60,
+     "ms": 160,
      "dx": 0
     },
     {
@@ -860,7 +866,7 @@
    "smear_frames": [
     1
    ],
-   "reach": 39
+   "reach": 56
   },
   "hit": {
    "row": 20,
@@ -1262,7 +1268,7 @@
    "smear_frames": [
     1
    ],
-   "reach": 40
+   "reach": 51
   },
   "highfive": {
    "row": 31,
@@ -1298,7 +1304,7 @@
    ],
    "hit_frame": 2,
    "hitstop_ms": 150,
-   "reach": 29
+   "reach": 38
   },
   "wave": {
    "row": 32,
@@ -1688,7 +1694,7 @@
    "frames": [
     {
      "i": 0,
-     "ms": 140,
+     "ms": 160,
      "dx": 0
     },
     {
@@ -1699,12 +1705,12 @@
     {
      "i": 2,
      "ms": 60,
-     "dx": -20
+     "dx": -24
     },
     {
      "i": 3,
      "ms": 70,
-     "dx": -20
+     "dx": -24
     },
     {
      "i": 4,
@@ -1713,12 +1719,12 @@
     },
     {
      "i": 5,
-     "ms": 90,
+     "ms": 100,
      "dx": -8
     },
     {
      "i": 6,
-     "ms": 200,
+     "ms": 260,
      "dx": 0
     }
    ]
@@ -1886,10 +1892,10 @@
    "smear_frames": [
     4
    ],
-   "reach": 43,
+   "reach": 58,
    "proj_from": [
-    35.5,
-    -11.4
+    42.0,
+    -16.6
    ],
    "fx": [
     {
@@ -1903,8 +1909,8 @@
     }
    ],
    "hand": [
-    35,
-    -41
+    42,
+    -52
    ]
   }
  },

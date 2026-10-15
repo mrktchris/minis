@@ -57,8 +57,19 @@ def make(seed=1, cfg=None, t0=1000.0, tele=None, chars=None):
     cfg = dict(cfgmod.DEFAULTS if cfg is None else cfg)
     chars = dict(DEFAULT_CHARS, **(chars or {}))
     atl = {w: _LIB[chars[w]] for w in (LEFT, RIGHT)}
-    brains = {w: Brain(w, atl[w], _LIB, cfg, random.Random(seed + (1 if w == RIGHT else 0)), t0, run=f'sim{w}') for w in (LEFT, RIGHT)}
+    brains = {w: Brain(w, atl[w], _LIB, cfg, random.Random(seed + (1 if w == RIGHT else 0)), t0, run=f'sim{w}', record=no_record) for w in (LEFT, RIGHT)}
+    for b in brains.values():
+        b.flashes = True                                         # the simulator never reads this machine's control.json
     return cfg, atl, brains
+
+
+def no_record(*a, **k):
+    """The simulator never writes the real record.json under %LOCALAPPDATA% (a preview match is not a real result)."""
+    no_record.calls.append(a)
+    return True
+
+
+no_record.calls = []
 
 
 def step(brains, tele, now, bus):

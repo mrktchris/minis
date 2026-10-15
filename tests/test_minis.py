@@ -6,7 +6,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import ROOT, CFG, Isolated  # noqa: E402
 import minis  # noqa: E402
-from minis_core import bus, control, director  # noqa: E402
+from minis_core import bus, control, director, lineup as L  # noqa: E402
 from minis_core.sources import Activity  # noqa: E402
 
 PY = r'C:\Python314\pythonw.exe'
@@ -163,11 +163,18 @@ class Commands(Isolated):
 
 # ---------------------------------------------------------------------------------------- the fighter loop, headless
 class FakeOverlay:
-    def __init__(self, title, x, y, w, h, scale=1, on_event=None, on_timer=None, on_hittest=None, on_key=None, activatable=False):
-        self.x, self.y, self.scale, self.on_event, self.on_timer = x, y, scale, on_event, on_timer
-        self.on_hittest, self.on_key, self.activatable = on_hittest, on_key, activatable
+    def __init__(self, title, x, y, w, h, scale=1, on_event=None, on_timer=None, on_hittest=None, on_key=None, activatable=False,
+                 on_blur=None):
+        self.title, self.x, self.y, self.w, self.h, self.scale, self.on_event, self.on_timer = title, x, y, w, h, scale, on_event, on_timer
+        self.on_hittest, self.on_key, self.activatable, self.on_blur = on_hittest, on_key, activatable, on_blur
         self.visible = True
-        self.presented, self.menu_choice, self.tops = [], 0, 0
+        self.presented, self.menu_choice, self.tops, self.items, self.focused, self.closed = [], 0, 0, [], False, False
+        FakeOverlay.made.append(self)
+
+    made = []
+
+    def focus(self):
+        self.focused = True
 
     def pump(self):
         return True
@@ -195,7 +202,7 @@ class FakeOverlay:
         return self.menu_choice
 
     def close(self):
-        pass
+        self.closed = True
 
 
 class FakeShell:
@@ -335,10 +342,14 @@ class FighterLoop(Isolated):
         self.go(0.1)
         self.assertTrue(control.paused())
         self.assertGreater(self.f.ov.tops, tops)
-        self.assertIn('Pause all animations', [label for _, label in self.f.ov.items])
-        self.f.ov.menu_choice = 1
-        self.f.st['menu'] = True
-        self.assertIsNone(self.go(0.1))                          # Quit
+        self.assertIn('Pause all animations', L.labels_of(self.f.ov.items))
+        quits = []
+        with mock.patch.object(minis, 'quit_all', lambda: quits.append(1) or True):
+            self.f.ov.menu_choice = L.QUIT_ALL                   # "Quit minis" stops everything (a detached `stop`)
+            self.f.st['menu'] = True
+            self.go(0.1)
+        self.assertEqual(quits, [1])
+        self.assertIn('Quit minis (stops everything)', L.labels_of(self.f.ov.items))
 
     def test_plate_is_a_fixed_window_at_the_left_named_after_the_program(self):
         from minis_core import config as cfgmod
@@ -387,7 +398,7 @@ class FighterLoop(Isolated):
         self.f.ov.menu_choice = 5                                  # "Start a bout now"
         self.f.st['menu'] = True
         self.go(0.6)
-        self.assertIn('Start a bout now', [label for _, label in self.f.ov.items])
+        self.assertIn('Start a bout now', L.labels_of(self.f.ov.items))
         self.assertIsNotNone(control.demo(now=self.t['wall']))
         self.assertEqual(self.f.brain.demo['kind'], 'spar')
         self.f.brain.demo = None
@@ -425,12 +436,13 @@ class FighterLoop(Isolated):
     def test_menu_has_match_winners_and_arena_entries(self):
         self.f.setup()
         self.go(0.5)
-        self.f.ov.menu_choice = 7                                  # winners toggle
+        self.f.ov.menu_choice = L.WIN_RANDOM                       # "Who wins" > "Coin flip"
         self.f.st['menu'] = True
         self.go(0.2)
-        labels = [label for _, label in self.f.ov.items]
-        self.assertTrue(any(label.startswith('Winners: decided') for label in labels), labels)
-        self.assertIn('Arena mode...', labels)
+        labels = L.labels_of(self.f.ov.items)
+        self.assertIn('Who wins', labels)
+        self.assertTrue(L.find_item(self.f.ov.items, 'Healthier program usually wins')[2]['checked'])
+        self.assertIn('Arena mode', labels)                         # no "..." on a toggle
         self.assertIn('Start a match now (best of 3)', labels)
         self.assertEqual(control.winners(), 'random')
         self.go(0.6)
@@ -455,15 +467,14 @@ class FighterLoop(Isolated):
         self.f.ov.menu_choice = 9
         self.f.st['menu'] = True
         self.go(0.2)
-        labels = [label for _, label in self.f.ov.items]
-        self.assertIn('Rival mode: on -> off', labels)
+        self.assertTrue(L.find_item(self.f.ov.items, 'Rival mode')[2]['checked'])
         self.assertFalse(control.rival_on(default=True))
         self.go(0.6)
         self.assertFalse(self.f.brain.rival)
         self.f.ov.menu_choice = 9
         self.f.st['menu'] = True
         self.go(0.2)
-        self.assertIn('Rival mode: off -> on', [label for _, label in self.f.ov.items])
+        self.assertFalse(L.find_item(self.f.ov.items, 'Rival mode')[2]['checked'])
         self.go(0.6)
         self.assertTrue(self.f.brain.rival)
 
@@ -481,10 +492,17 @@ class FighterLoop(Isolated):
 
     def test_arena_cli_requires_a_monitor_and_stop_asks_first(self):
         from minis_win import shell
-        with redirect_stdout(io.StringIO()) as out:
+        one = [{'index': 1, 'rect': (0, 0, 1, 1), 'work': (0, 0, 1, 1), 'primary': True}]
+        two = one + [{'index': 2, 'rect': (1, 0, 2, 1), 'work': (1, 0, 2, 1), 'primary': False}]
+        with mock.patch.object(shell, 'monitors', lambda: one), redirect_stdout(io.StringIO()) as out:
             rc = minis.main(['arena'])
         self.assertEqual(rc, 2)
-        self.assertIn('--monitor N is required', out.getvalue())
+        self.assertIn('no default monitor', out.getvalue())
+        started = []
+        with mock.patch.object(shell, 'monitors', lambda: two), \
+                mock.patch.object(minis, 'start_arena', lambda mon, *a: started.append(mon) or ('ok', 0)), redirect_stdout(io.StringIO()):
+            self.assertEqual(minis.main(['arena']), 0)
+        self.assertEqual(started, [2])                                       # the same pick as the Arena button
         with mock.patch.object(shell, 'monitors', lambda: [{'index': 1, 'rect': (0, 0, 1, 1), 'work': (0, 0, 1, 1), 'primary': True}]), \
                 redirect_stdout(io.StringIO()) as out:
             rc = minis.main(['arena', '--monitor', '7'])

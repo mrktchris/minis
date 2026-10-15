@@ -13,10 +13,15 @@ Timeline entries are (t, anim, opts) like every other bout; entries whose "anim"
   @banner  {'banner': round1|round2|round3|fight|ko|winner, 'until': t, 'over': slot|None}   (left side only)
   @record  {'winner': slot, 'loser': slot, 'score': {slot: n}}        write record.json (left side only)
   @shake   {'frames': n, 'amp': px}                                   the move's own screen shake on its hit frame (V5)
-  @flash   {'alpha': a}                                               one-frame white flash (an ultimate landing) (V5)
+  @flash   {'alpha': a, 'ms': n}                                      white flash (an ultimate landing) (V5; V6 >= 100 ms)
+  @impact  {'ms': n, 'on': slot}                                      V6 impact frames on a heavy hit / ultimate / KO (fx `impact` on the
+                                                                      struck fighter, a strong flash when that art is missing; nothing
+                                                                      at all when control.json `flashes` is off)
   @whiff   {'react_to': move}                                         the attack missed: logged like a reaction, nothing plays (V5)
 Move entries may carry 'to' + 'slide_ms' (the fighter slides to that x while the move plays: dash-ins, backdashes,
-knockback) and 'hitstop' (ms both fighters freeze from the contact instant).
+knockback; V6: the slide pauses during hitstop), 'hitstop' (ms both fighters freeze from the contact instant),
+'slow' [t0, t1, k] (V6 slow motion: the animation clock runs at k between t0 and t1) and 'hold' (a one-shot keeps its
+last frame instead of returning to idle: a brace, a slump).
 
 V5 choreography (choreo.py): a seeded no-repeat picker weighted by category and situation; openers (dash-in jab, jump-in
 kick, sweep), defender answers (block, crouch block vs highs, parry -> counter, backdash whiff, getting hit), combos with
@@ -41,7 +46,7 @@ DMG_ULTIMATE = 40
 ROUND_CAP_S = 25.0
 ROUNDS_TO_WIN = 2
 MODES = ('decided', 'random')
-BANNER_S = {'round': 1.2, 'fight': 0.7, 'ko': 1.5, 'winner': 2.6}
+BANNER_S = {'round': 1.2, 'fight': 0.7, 'ko': 1.5, 'winner': 2.6, 'time': 1.2}
 NEEDS = ('block', 'block_hit', 'hit', 'hit_heavy', 'knockdown', 'ko', 'getup', 'taunt', 'victory', 'idle')
 STRIKES = ('jab', 'cross', 'uppercut', 'low_kick', 'roundhouse')
 
@@ -100,8 +105,40 @@ def _contact_s(atlas, move):
 # ---------------------------------------------------------------- shared bout machinery (V5: choreo.py drives both the match and spar / clash)
 CLOSE_EXTRA, FAR_EXTRA = 14, 40       # hip distance beyond gap_px that counts as "far"; where a spacing reset puts them
 KNOCK_SLIDE_MS = 180
-SPAN_PX = 90                          # a bout never drifts further than this from its centre (the zone is not in the plan)
-MIN_APART = 12
+KNOCK_SLIDE_MS_BIG = 300              # V6: a heavy hit / knockdown slides further, so it takes longer (skid + dust)
+SPAN_PX = 110                         # a bout never drifts further than this from its centre (the zone is not in the plan)
+MIN_APART = 22                        # V6: hips closer than this overlap the bodies (idle sprites are ~24 px wide; was 12)
+BODY_FRONT = 9                        # V6: px from a defender's hip to the front of its body: a strike stands at reach + this
+LUNGE_FRAC = 0.85                     # a lunge slides in over this share of the move's wind-up
+IMPACT_MS = 130                       # V6 impact frames (heavy hits, ultimates, KOs): 100-160 ms
+FLASH_MS = 120                        # V6 white flash on an ultimate landing (was 60 ms: shorter than one redraw)
+KO_HITSTOP_MS = 280                   # the match-deciding blow freezes longer...
+SLOW_S, SLOW_K = 0.55, 0.35           # ...then plays the fall in slow motion: SLOW_S wall seconds at SLOW_K speed
+POST_KO_S = 3.4                       # final KO contact -> end of the match (finisher beat: freeze, fall, dust, pose, slump up)
+POST_KO_MAX_S = 3.5
+GETUP_SLOW_K = 0.6                    # the beaten fighter's get-up after the final KO plays at this speed (a slump, not a kip-up)
+SLUMP = ('facepalm', 'shrug', 'dizzy')    # a fighter that lost on time slumps instead of falling over
+BRACE_MIN_S = 0.45                    # a wind-up at least this long gets a guard / worried pose from the defender
+WORRIED_HP = 30
+STAND_OVERLAP = 8                     # two idle silhouettes (weapons included) may overlap by this much, never more
+
+
+def body_front(atlas):
+    """px (RES 1) from the hip to the front edge of the idle silhouette, weapon included: how much room a fighter takes up
+    toward its opponent.  Read from the art, so a redrawn or new character spaces itself."""
+    key = '_v6_front'
+    v = getattr(atlas, key, None)
+    if v is None:
+        try:
+            bb = atlas.frame_image('idle', 0, 1).getbbox()
+            v = max(8.0, (bb[2] - atlas.anchor(1)) / float(max(1, atlas.res))) if bb else 14.0
+        except Exception:
+            v = 14.0
+        try:
+            setattr(atlas, key, v)
+        except Exception:
+            pass
+    return v
 
 
 class _Emitter:
@@ -153,7 +190,9 @@ class Bout:
         self.friendly = friendly
         self.pos = {s: float(plan['pos'][s]) for s in (self.left, self.right)}
         self.mid = (self.pos[self.left] + self.pos[self.right]) / 2.0
-        self.gap = max(MIN_APART, abs(self.pos[self.right] - self.pos[self.left])) or 24.0
+        # V6: the pair's own room: idle silhouettes (weapons included) overlap by at most STAND_OVERLAP
+        self.apart = max(MIN_APART, body_front(self.A[self.left]) + body_front(self.A[self.right]) - STAND_OVERLAP)
+        self.gap = max(self.apart, abs(self.pos[self.right] - self.pos[self.left])) or 24.0
         self.span = float(plan.get('span', SPAN_PX))
         self.facing = {self.left: 1, self.right: -1}
         self.pick = {s: choreo.Picker(self.rng, self.A[s]) for s in (self.left, self.right)}
@@ -161,6 +200,11 @@ class Bout:
         self.hp = {self.left: HP_MAX, self.right: HP_MAX}
         self.meter = {self.left: 0.0, self.right: 0.0}
         self.used_ult = {self.left: False, self.right: False}
+        self.ult_used = False                               # V6: one ultimate per MATCH between both fighters
+        self.boost = [s for s in (plan.get('boost') or []) if s in (self.left, self.right)]     # finished a task: super first
+        self.final = False                                  # set by make_match: a KO in this exchange ends the match
+        self.ko_info = None                                 # (tc, hitstop s, slow window) of the last KO hit
+        self.down_until = {}                                # slot -> when its get-up ends (no hits on a fighter on the floor)
         self.wins = {self.left: 0, self.right: 0}
         self.projs = []
         self.beats = {self.left: [], self.right: []}        # every beat played, by the fighter that played it (tests, previews)
@@ -186,9 +230,9 @@ class Bout:
         x = max(lo, min(hi, x))
         o = self.other(s)
         if s == self.left:
-            x = min(x, self.pos[o] - MIN_APART)
+            x = min(x, self.pos[o] - self.apart)
         else:
-            x = max(x, self.pos[o] + MIN_APART)
+            x = max(x, self.pos[o] + self.apart)
         return x
 
     def fx_reach(self, name):
@@ -208,14 +252,17 @@ class Bout:
         return sched[-1][1] if sched else None
 
     # ---- one exchange
-    def exchange(self, att, t, k, dramatic=False, air=False):
+    def exchange(self, att, t, k, dramatic=False, air=False, comeback=False, boost=False, ult_sure=False):
         """Plays one exchange starting at `t`.  -> (t_next, ko_loser, played) ; `played` False when nothing fits."""
         dfn = self.other(att)
         A, D = self.A[att], self.A[dfn]
         ult = A.ultimate()
         reach = self.fx_reach(self.main_fx(att, ult)) if ult else 0.0
-        sit = dict(range=self.range(), meter=self.meter[att], ult_ok=(not self.friendly and not self.used_ult[att]), dramatic=dramatic,
-                   friendly=self.friendly, air=air, k=k, ult_reaches=reach >= self.dist() - 10)
+        edge = 0.0 if self.friendly else choreo.edge_for(self.hp[att], self.hp[dfn], self.wins[att], self.wins[dfn])
+        sit = dict(range=self.range(), meter=self.meter[att], ult_ok=(not self.friendly and not self.ult_used), dramatic=dramatic,
+                   friendly=self.friendly, air=air and not boost, k=k, ult_reaches=reach >= self.dist() - 10, edge=edge,
+                   comeback=comeback and not self.friendly, boost=boost, ult_sure=ult_sure)
+        air = sit['air']
         ex = choreo.plan_exchange(self.rng, self.pick[att], self.pick[dfn], sit)
         if air:
             self.n_air += 1
@@ -232,6 +279,8 @@ class Bout:
                 dur = tot(who, b['anim'])
                 if b['dx'] > 0:
                     x = self.pos[tgt] - self.facing[who] * self.gap
+                elif b['dx'] == 0:                             # a juggle jump: straight up after the launched defender
+                    x = self.pos[who]
                 else:
                     x = self.pos[who] - self.facing[who] * (FAR_EXTRA if b['anim'] == 'backdash' else FAR_EXTRA * 0.75)
                 x = self.clamp(who, x)
@@ -250,9 +299,21 @@ class Bout:
             # ---- an attack beat (strike / special / super / ultimate / counter)
             kind, move = b['kind'], b['anim']
             t = max(t, em.free[who])
+            if self.down_until.get(tgt, 0.0) > t:
+                t = self.down_until[tgt]                       # never hit a fighter who is still on the floor / getting up
             if kind == 'special' and not choreo.has_projectile(self.A[who], move):
                 continue
-            if self.dist() > self.gap + CLOSE_EXTRA and kind in ('strike', 'counter', 'super') and 'dash' in self.A[who].anim and not air:
+            # finish KOs with a signature move: a plain strike that would empty the bar becomes the signature strike
+            sig_strike = self.A[who].signature()['strike']
+            if (b['outcome'] == 'hit' and not self.friendly and kind in ('strike', 'counter') and self.hp[tgt] - b['dmg'] <= 0
+                    and sig_strike and move != sig_strike and not b.get('juggle') and self.pick[who].used[sig_strike] < choreo.MAX_PER_ROUND):
+                move = sig_strike
+                b = dict(b, anim=move, dmg=max(b['dmg'], choreo.damage_of(self.A[who], move, 'strike')),
+                         hitstop=choreo.hitstop_ms(self.A[who], move, 'strike'), finisher=True)
+                self.pick[who].note(move)
+            lunge = bool(b.get('lunge')) and kind == 'strike' and not air
+            if (not lunge and self.dist() > self.gap + CLOSE_EXTRA and kind in ('strike', 'counter', 'super')
+                    and 'dash' in self.A[who].anim and not air and not b.get('juggle')):
                 dur = tot(who, 'dash')                         # never swing at the air: close in first
                 x = self.clamp(who, self.pos[tgt] - self.facing[who] * self.gap)
                 em.play(who, t, 'dash', {'to': x, 'slide_ms': int(dur * 1000)}, dur)
@@ -260,6 +321,14 @@ class Bout:
                 t += dur + 0.03
             cont = _contact_s(self.A[who], move)
             tc = t + cont
+            step = None                                        # V6: stand at the move's own reach (no overlap, no air swings)
+            if kind in ('strike', 'counter') and not air and not b.get('juggle'):
+                want = max(self.apart, choreo.reach_of(self.A[who], move) + BODY_FRONT)
+                if lunge or abs(self.dist() - want) > 3:
+                    x = self.clamp(who, self.pos[tgt] - self.facing[who] * want)
+                    if abs(x - self.pos[who]) > 1:
+                        step = {'to': x, 'slide_ms': int(max(60, cont * (LUNGE_FRAC if lunge else 0.6)) * 1000)}
+                        self.pos[who] = x
             proj = None
             if kind == 'special':
                 a = self.A[who].anim[move]
@@ -288,12 +357,27 @@ class Bout:
                 self.meter[who] = 0.0
             if kind == 'ultimate':
                 self.used_ult[who] = True
+                self.ult_used = True
             react = b['react']
             if outcome == 'hit' and not self.friendly and self.hp[tgt] <= 0:
                 react, ko = 'knockdown', tgt
-            hs = b['hitstop'] / 1000.0
-            opts = {'contact': tc, 'kind': kind, 'damage': dmg, 'hitstop': b['hitstop'], 'outcome': outcome}
-            em.play(who, t, move, opts, tot(who, move) + hs)
+            hitstop = b['hitstop']
+            slow = None
+            final_ko = ko is not None and self.final and self.wins[who] + 1 >= ROUNDS_TO_WIN
+            if final_ko:                                       # the finisher: a long freeze, then the fall in slow motion
+                hitstop = max(hitstop, KO_HITSTOP_MS)
+                ts = tc + hitstop / 1000.0
+                slow = [round(ts, 4), round(ts + SLOW_S, 4), SLOW_K]
+            hs = hitstop / 1000.0
+            slow_extra = (SLOW_S * (1.0 - SLOW_K)) if slow else 0.0
+            opts = {'contact': tc, 'kind': kind, 'damage': dmg, 'hitstop': hitstop, 'outcome': outcome}
+            if step:
+                opts.update(step)
+            if slow:
+                opts['slow'] = slow
+            em.play(who, t, move, opts, tot(who, move) + hs + slow_extra)
+            if lunge and self.fx is not None:
+                em.directive(who, t, '@fx', {'fx': 'dust', 'anchor': 'ground'})
             if kind in ('ultimate', 'super') or (kind == 'special' and self.fx is not None):
                 for off, fx_name, until in self.A[who].move_fx(move):
                     if kind == 'special' and fx_name == move:
@@ -302,7 +386,15 @@ class Bout:
                     em.directive(who, max(t, t + off - lead), '@fx', {'fx': fx_name, 'kind': kind, 'move': move, 'until': (t + until) if until else None})
             if proj is not None:
                 self.projs.append(proj)
-            # the defender
+            # the defender: a long wind-up (super, ultimate, charged special) gets a guard pose, or a worried one on low HP
+            charged = kind in ('super', 'ultimate', 'special') and cont >= BRACE_MIN_S
+            if charged and b.get('pre') != 'block':
+                low = (not self.friendly) and self.hp[tgt] + (dmg if outcome == 'hit' else 0) < WORRIED_HP
+                brace = 'crouch_block' if low and 'crouch_block' in self.A[tgt].anim else ('block' if 'block' in self.A[tgt].anim else None)
+                tb = max(em.free[tgt], t + 0.12)
+                t_brace_end = tc - (0.15 if b.get('pre') == 'backdash' else 0.0)
+                if brace and t_brace_end - tb > 0.1:
+                    em.play(tgt, tb, brace, {'hold': True, 'brace': True}, t_brace_end - tb, then=None)
             if b.get('pre'):
                 if b['pre'] == 'backdash':                     # whiff: gone before the hit frame
                     x = self.clamp(tgt, self.pos[tgt] - self.facing[tgt] * FAR_EXTRA)
@@ -310,42 +402,57 @@ class Bout:
                     em.play(tgt, max(em.free[tgt], tc - 0.15), 'backdash', {'to': x, 'slide_ms': int(dur * 1000)}, dur)
                     self.pos[tgt] = x
                 else:
-                    em.play(tgt, max(em.free[tgt], tc - 0.25), b['pre'], {}, max(0.0, tc - max(em.free[tgt], tc - 0.25)), then=None)
+                    tp = min(max(em.free[tgt], tc - 0.25), tc) if not charged else min(max(em.free[tgt], t + 0.12), tc)
+                    em.play(tgt, tp, b['pre'], {'hold': True}, max(0.0, tc - tp), then=None)
             sh = choreo.move_shake(self.A[who], move)
             if react is None:
                 em.directive(tgt, tc, '@whiff', {'react_to': move})
             else:
-                ropts = {'react_to': move, 'damage': dmg, 'hitstop': b['hitstop'], 'outcome': outcome}
+                ropts = {'react_to': move, 'damage': dmg, 'hitstop': hitstop, 'outcome': outcome}
+                if slow:
+                    ropts['slow'] = slow
                 if not self.friendly:
                     ropts['hp'] = dict(self.hp)
                 knock = b['knock']
+                if react == 'knockdown' and ko:
+                    knock = max(knock, choreo.KNOCK_PX['knockdown'])
                 if knock:
                     x = self.clamp(tgt, self.pos[tgt] + self.facing[who] * knock)
-                    ropts.update(to=x, slide_ms=KNOCK_SLIDE_MS)
+                    big = react in ('hit_heavy', 'knockdown')
+                    ropts.update(to=x, slide_ms=KNOCK_SLIDE_MS_BIG if big else KNOCK_SLIDE_MS)    # clock time: waits out hitstop, slows in slow-mo
                     self.pos[tgt] = x
-                rdur = tot(tgt, react) + hs
-                em.play(tgt, tc, react, ropts, rdur, then=('ko' if react == 'knockdown' and ko else 'idle'))
+                rdur = tot(tgt, react) + hs + slow_extra
+                # a knockdown that is not a KO stays on the floor (no return to idle) until the get-up starts
+                then = ('ko' if ko else None) if react == 'knockdown' else 'idle'
+                em.play(tgt, tc, react, ropts, rdur, then=then)
                 if outcome in ('block', 'crouch_block', 'parry'):
                     em.directive(tgt, tc, '@fx', {'fx': 'block_spark'})
                 elif outcome == 'hit':
                     em.directive(tgt, tc, '@fx', {'fx': 'hit_heavy' if react in ('hit_heavy', 'knockdown') else 'hit_light'})
+                    if react == 'hit_heavy':
+                        em.directive(tgt, tc + 0.05, '@fx', {'fx': 'dust', 'anchor': 'ground'})       # the skid
                     if kind == 'ultimate':
                         name = self.main_fx(who, move)
                         imp = f'{move}_impact' if self.fx is not None and self.fx.has_art(f'{move}_impact') else 'explosion'
                         em.directive(tgt, tc, '@fx', {'fx': imp, 'kind': kind, 'impact': True})
                         for s in (who, tgt):
-                            em.directive(s, tc, '@flash', {'alpha': 0.6})
+                            em.directive(s, tc, '@flash', {'alpha': 0.7, 'ms': FLASH_MS})
+                    if kind in ('ultimate', 'super') or ko is not None or dmg >= 3 * choreo.DMG_PER_POWER:
+                        for s in (who, tgt):                   # impact frames: heavy hits, ultimates and KOs only, never every hit
+                            em.directive(s, tc, '@impact', {'ms': IMPACT_MS, 'on': tgt})
                 if sh and outcome == 'hit':
                     for s in (who, tgt):
                         em.directive(s, tc, '@shake', dict(sh))
                 if react == 'knockdown':
                     em.directive(tgt, tc + 0.15, '@fx', {'fx': 'dust', 'anchor': 'ground'})
                     if ko:
-                        t_stars = tc + tot(tgt, 'knockdown') + hs
-                        em.directive(tgt, t_stars, '@fx', {'fx': 'ko_stars', 'until': t_stars + 3.2})    # fades before the next round
+                        t_stars = tc + rdur
+                        em.directive(tgt, t_stars, '@fx', {'fx': 'ko_stars', 'until': t_stars + (1.8 if final_ko else 2.4)})
+                        em.directive(tgt, t_stars - 0.05, '@fx', {'fx': 'dust', 'anchor': 'ground'})       # lands
+                        self.ko_info = dict(tc=tc, hs=hs, slow=slow, down=tc + rdur)
                     elif 'getup' in self.A[tgt].anim:
-                        tg = tc + rdur + 0.25
-                        em.play(tgt, tg, 'getup', {}, tot(tgt, 'getup'))
+                        em.play(tgt, tc + rdur, 'getup', {}, tot(tgt, 'getup'))      # springs up the moment the fall ends
+                        self.down_until[tgt] = tc + rdur + tot(tgt, 'getup')
             self.beats[who].append(dict(b, react=react))
             t = tc + hs + 0.12 if kind != 'counter' else em.free[who]
             if ko:
@@ -366,8 +473,13 @@ def _fx_player_res(atlas):
 
 def make_match(plan, atlases, fx=None):
     """-> (timeline {slot: [(t, anim, opts)]}, t_end, summary).  Deterministic in `plan` (+ the atlases / fx on disk).
-    summary carries winner, loser, wins, rounds, mode, p_left, projs (projectiles for the brain), beats (per slot)."""
+    summary carries winner, loser, wins, rounds, mode, p_left, projs (projectiles for the brain), beats (per slot).
+    V6 story: the trailing fighter's odds tilt up (choreo.edge_for), whoever lost a round gets one comeback exchange
+    in the next, a slot in plan['boost'] (its agent just finished a task) opens with its signature super, and the
+    match-deciding KO plays a finisher beat (freeze + impact, slow-motion fall, dust, the winner's pose under the name
+    banner, the loser slumping up) inside POST_KO_S.  A round that runs out of time shows TIME and the loser slumps."""
     bout = Bout(plan, atlases, fx, friendly=False)
+    bout.final = True
     left, right = bout.left, bout.right
     A, rng, em, tot = bout.A, bout.rng, bout.em, bout.tot
     mode = plan.get('mode') if plan.get('mode') in MODES else 'decided'
@@ -375,15 +487,21 @@ def make_match(plan, atlases, fx=None):
     other = bout.other
     tl = em.tl
 
-    def banner(t, kind, over=None):
+    def banner(t, kind, over=None, until=None, **kw):
         dur = BANNER_S.get(kind, BANNER_S['round'])
-        em.directive(left, t, '@banner', {'banner': kind, 'until': t + dur, 'over': over})
+        em.directive(left, t, '@banner', dict({'banner': kind, 'until': until if until is not None else t + dur, 'over': over}, **kw))
+
+    def slump_of(s):
+        return next((n for n in SLUMP if n in A[s].anim), None)
 
     wins = bout.wins
     rounds = []
     t = plan['t0']
     n_round = 0
     ko_loser = None
+    comeback_for = None
+    story = dict(comebacks=0, boosts=0)
+    ult_rolled = False
     while max(wins.values()) < ROUNDS_TO_WIN:
         n_round += 1
         bout.hp = hp = {left: HP_MAX, right: HP_MAX}
@@ -400,27 +518,46 @@ def make_match(plan, atlases, fx=None):
         t = t_round
         k = 0
         ko_loser = None
+        bout.ko_info = None
         air_done = False
-        tc_last = t
+        comeback_due = comeback_for
         while True:
-            if bout.last_att is not None and bout.last_hit and rng.random() < 0.45:
+            boost = comeback = False
+            if bout.boost and k < 2:
+                att, boost = bout.boost[0], True                   # its agent just finished a task: the signature super opens
+            elif comeback_due is not None and k == 1:
+                att, comeback = comeback_due, True                 # lost the last round: one exchange where everything lands
+            elif bout.last_att is not None and bout.last_hit and rng.random() < 0.45:
                 att = bout.last_att                                # pressure: the winner of the last exchange keeps coming
             else:
                 att = left if rng.random() < pl else right
             dfn = other(att)
             air = (not air_done and k >= 1 and rng.random() < 0.3) or (not air_done and k >= 4)
-            drama = choreo.dramatic(wins[att], hp[att], hp[dfn], k)
+            air = air and not (boost or comeback)
+            drama = choreo.dramatic(wins[att], hp[att], hp[dfn], k) and not bout.ult_used and not ult_rolled and not (boost or comeback)
+            if drama:                                              # ONE roll per match, the first time anyone qualifies (~0.35 / match)
+                ult_rolled = True
+                drama = rng.random() < choreo.ULT_CHANCE
             mark = em.mark()
-            saved = (dict(bout.pos), dict(bout.meter), dict(bout.used_ult), dict(hp), list(bout.projs), {s: list(v) for s, v in bout.beats.items()}, bout.n_air)
-            t_next, ko, ex = bout.exchange(att, t, k, dramatic=drama, air=air)
+            saved = (dict(bout.pos), dict(bout.meter), dict(bout.used_ult), dict(hp), list(bout.projs), {s: list(v) for s, v in bout.beats.items()},
+                     bout.n_air, bout.ult_used, dict((s, (p.last, dict(p.used), dict(p.counts))) for s, p in bout.pick.items()))
+            t_next, ko, ex = bout.exchange(att, t, k, dramatic=drama, air=air, comeback=comeback, boost=boost, ult_sure=drama)
             if t_next - t_round > ROUND_CAP_S and k > 0:
                 em.rollback(mark)                                  # time: the round is called on HP
-                bout.pos, bout.meter, bout.used_ult, hp, bout.projs, bout.beats, bout.n_air = saved[0], saved[1], saved[2], saved[3], saved[4], saved[5], saved[6]
+                bout.pos, bout.meter, bout.used_ult, hp, bout.projs, bout.beats, bout.n_air, bout.ult_used = saved[:8]
+                for s, (last, used, counts) in saved[8].items():
+                    p = bout.pick[s]
+                    p.last, p.used, p.counts = last, choreo.Counter(used), choreo.Counter(counts)
                 bout.hp = hp
                 break
+            if boost:
+                bout.boost.pop(0)
+                story['boosts'] += 1
+            if comeback:
+                comeback_due = None
+                story['comebacks'] += 1
             if air:
                 air_done = True
-            tc_last = max(em.free[att], em.free[dfn])
             t = t_next
             k += 1
             if ko is not None:
@@ -429,37 +566,66 @@ def make_match(plan, atlases, fx=None):
         # ---- round result
         if ko_loser is not None:
             winner = other(ko_loser)
-            tc = em.free[ko_loser] - tot(ko_loser, 'knockdown')
-            banner(tc, 'ko')
-            em.play(winner, max(em.free[winner], tc + 0.6), 'taunt', {}, tot(winner, 'taunt'))
-            t_end_round = em.free[winner]
+            ki = bout.ko_info
+            banner(ki['tc'], 'ko')
+            if wins[winner] + 1 >= ROUNDS_TO_WIN:
+                t_end_round = ki['tc']                             # the finisher beat below takes over
+            else:
+                em.play(winner, max(em.free[winner], ki['down'] + 0.1), 'taunt', {}, tot(winner, 'taunt'))
+                t_end_round = em.free[winner]
         else:
             if hp[left] == hp[right]:
                 winner = left if rng.random() < 0.5 else right
             else:
                 winner = left if hp[left] > hp[right] else right
             tw = max(em.free[left], em.free[right])
-            em.play(winner, tw, 'taunt', {}, tot(winner, 'taunt'))
-            t_end_round = em.free[winner]
+            banner(tw, 'time')                                     # called on time: say so, and nobody falls over unprovoked
+            loser_r = other(winner)
+            sl = slump_of(loser_r)
+            if sl:
+                em.play(loser_r, tw + 0.3, sl, {'hold': True}, tot(loser_r, sl), then=None)
+            if wins[winner] + 1 >= ROUNDS_TO_WIN:
+                t_end_round = tw + 0.3
+            else:
+                em.play(winner, tw + 0.3, 'taunt', {}, tot(winner, 'taunt'))
+                t_end_round = max(em.free[winner], em.free[loser_r])
         wins[winner] += 1
         rounds.append(dict(n=n_round, winner=winner, hp=dict(hp), ko=ko_loser is not None, t0=t_round, t1=t_end_round, exchanges=k))
         for w in (left, right):
             em.directive(w, t_end_round, '@hp', {'hp': dict(hp), 'round': n_round, 'wins': dict(wins)})
-        t = t_end_round + 2.2
+        comeback_for = other(winner)
+        t = t_end_round + 1.4
     # ---- match result
     champ = left if wins[left] > wins[right] else right
     loser = other(champ)
-    t_fin = t - 2.2 + 1.6
-    banner(t_fin, 'winner', over=champ)
-    em.play(champ, t_fin, 'victory2' if wins[loser] == 0 and 'victory2' in A[champ].anim else 'victory', {}, tot(champ, 'victory'))
-    if ko_loser is None:                                           # lost on time: still goes down
-        em.play(loser, t_fin, 'knockdown', {}, tot(loser, 'knockdown'), then='ko')
-    t_end = t_fin + 3.0
+    vic = 'victory2' if wins[loser] == 0 and 'victory2' in A[champ].anim else 'victory'
+    name = getattr(A[champ], 'display', None) or A[champ].character
+    if ko_loser is not None and bout.ko_info:
+        ki = bout.ko_info
+        tc = ki['tc']
+        t_end = tc + POST_KO_S
+        tv = max(em.free[champ], tc + ki['hs'] + 0.45)             # the winner turns to its pose while the loser still falls
+        em.play(champ, tv, vic, {'hold': True}, tot(champ, vic), then=None)
+        tt = tv + tot(champ, vic) + 0.05
+        if 'taunt' in A[champ].anim and tt + tot(champ, 'taunt') <= t_end - 0.1:
+            em.play(champ, tt, 'taunt', {}, tot(champ, 'taunt'))
+        banner(max(tv, tc + 1.0), 'winner', over=champ, until=t_end, name=name)
+        if 'getup' in A[loser].anim:                              # stays down, then slumps up (a slowed, heavy get-up)
+            gu = tot(loser, 'getup') / GETUP_SLOW_K
+            tg = max(ki['down'] + 0.6, t_end - 0.1 - gu)
+            em.play(loser, tg, 'getup', {'slow': [round(tg, 4), round(tg + gu, 4), GETUP_SLOW_K]}, gu)
+            t_end = min(tc + POST_KO_MAX_S, max(t_end, tg + gu + 0.1))
+    else:
+        t_fin = max(em.free[left], em.free[right], t - 1.4)
+        banner(t_fin, 'winner', over=champ, name=name)
+        em.play(champ, t_fin, vic, {'hold': True}, tot(champ, vic), then=None)
+        t_end = t_fin + max(2.4, tot(champ, vic) + 0.5)
     em.finish()
     em.directive(left, t_end - 0.2, '@record', {'winner': champ, 'loser': loser, 'score': dict(wins), 'chars': {s: A[s].character for s in (left, right)}})
     for w in tl:
         tl[w].sort(key=lambda s: s[0])
-    summary = dict(winner=champ, loser=loser, wins=dict(wins), rounds=rounds, mode=mode, p_left=pl, projs=bout.projs, beats=bout.beats, air=bout.n_air)
+    summary = dict(winner=champ, loser=loser, wins=dict(wins), rounds=rounds, mode=mode, p_left=pl, projs=bout.projs, beats=bout.beats, air=bout.n_air,
+                   story=story, final_ko=bout.ko_info if ko_loser is not None else None)
     return tl, t_end, summary
 
 
@@ -473,12 +639,15 @@ def make_friendly(plan, atlases, fx=None, exchanges=4):
     for p in bout.pick.values():
         p.new_round()
     for k in range(exchanges):
-        if bout.last_att is not None and bout.last_hit and rng.random() < 0.4:
+        boost = bool(bout.boost)
+        if boost:
+            att = bout.boost.pop(0)                                # its agent just finished a task: the signature super opens
+        elif bout.last_att is not None and bout.last_hit and rng.random() < 0.4:
             att = bout.last_att
         else:
             att = (left, right)[k % 2] if k < 2 else (left if rng.random() < 0.5 else right)
-        air = k == exchanges - 1 and rng.random() < 0.35
-        t, ko, ex = bout.exchange(att, t, k, dramatic=False, air=air)
+        air = k == exchanges - 1 and rng.random() < 0.35 and not boost
+        t, ko, ex = bout.exchange(att, t, k, dramatic=False, air=air, boost=boost)
     em.finish()
     t_end = max(em.free.values()) + 0.2
     for w in em.tl:

@@ -14,8 +14,16 @@ Rules
 - Sparring bot (V5.1, `sparring_bot`): one fighter alone and no dormant candidate: the pseudo-source `sparring`
   (generic skin, plate 'Sparring bot', no numbers) takes the empty slot, and gives it back to any real source.
 
+- Lineup (V6, control.json `lineup`): a slot with a picked program keeps it whatever the rules above say - live, or asleep
+  (dormant) when it is not detected, even past `dormant_hours`.  'auto' slots follow the rules, never taking a picked
+  program.  `skins` draw a program as another character (the slot entry carries "skin": true; the plate then names the
+  program).  The picked program 'sparring' is the bot.
+
 Output (assign.json, written atomically):
-  {"a": {"source": id, "character": c, "program": name[, "dormant": true][, "bot": true]} | null, "b": ..., "ts": seconds}
+  {"a": {"source": id, "character": c, "program": name[, "dormant": true][, "bot": true][, "skin": true][, "picked": true]}
+        | null, "b": ...,
+   "programs": [{"source", "program", "label", "character" (its own), "state"}],   every program one could pick
+   "ts": seconds}
 """
 from __future__ import annotations
 import json, time
@@ -71,6 +79,9 @@ class Director:
                 except (TypeError, ValueError):
                     pass
         self.dormant = {s: False for s in SLOTS}
+        self.picked = {s: None for s in SLOTS}          # slot -> program pinned by the lineup, or None (auto)
+        self.skins = {}
+        self.live = {}                                 # source id -> its Activity this step (for the programs list)
 
     def _remember(self, acts, now):
         for a in acts:
@@ -93,20 +104,56 @@ class Director:
             out[sid] = _Dormant(sid, rec)
         return out
 
-    def step(self, acts, now):
-        """-> {slot: source id | None}"""
+    def _picks(self, lineup):
+        lu = lineup if isinstance(lineup, dict) else {}
+        out = {}
+        for s in SLOTS:
+            v = lu.get(s)
+            out[s] = v if isinstance(v, str) and v and v != 'auto' else None
+        if out['a'] and out['a'] == out['b']:
+            out['b'] = None
+        sk = lu.get('skins')
+        self.skins = {k: v for k, v in sk.items() if isinstance(k, str) and isinstance(v, str)} if isinstance(sk, dict) else {}
+        return out
+
+    def _info_for(self, sid):
+        """(character, program) of a picked program nobody reports: memory, else the static tables."""
+        if sid in self.info:
+            return self.info[sid]
+        rec = self.seen.get(sid)
+        if rec:
+            return rec['character'], rec['program']
+        from . import sources
+        return sources.CHARACTER.get(sid, 'generic'), sources.PROGRAM.get(sid, sid)
+
+    def step(self, acts, now, lineup=None):
+        """-> {slot: source id | None}.  `lineup` is control.lineup() (None: everything auto, the V5.1 behaviour)."""
         idle_s, grace = self.cfg['director_idle_s'], self.cfg['director_grace_s']
         live = {}
         for a in acts:
             if a.source_id != SPARRING:
                 live.setdefault(a.source_id, a)
+        self.live = live
         self._remember(live.values(), now)
         pool = dict(live)
         pool.update(self._dormant_pool(live, now))
         for a in pool.values():
             self.info[a.source_id] = (a.character, a.program)
+        self.picked = self._picks(lineup)
+        pinned = {v for v in self.picked.values() if v}
+        for s in SLOTS:
+            if self.picked[s]:
+                self.slots[s] = self.picked[s]
+                self.missing_since.pop(self.picked[s], None)
+                if self.picked[s] != SPARRING and self.picked[s] not in self.info:
+                    self.info[self.picked[s]] = self._info_for(self.picked[s])
+        for s in SLOTS:
+            if not self.picked[s] and self.slots[s] in pinned:
+                self.slots[s] = None                    # the other side pinned this program: this side chooses again
         for s in SLOTS:
             sid = self.slots[s]
+            if self.picked[s]:
+                continue
             if sid == SPARRING:                         # the bot is the last resort: every step re-decides it
                 self.slots[s] = None
                 continue
@@ -118,7 +165,7 @@ class Director:
                 self.slots[s] = None
                 self.missing_since.pop(sid, None)
         assigned = {v for v in self.slots.values() if v}
-        free = sorted((a for a in pool.values() if a.source_id not in assigned),
+        free = sorted((a for a in pool.values() if a.source_id not in assigned and a.source_id not in pinned),
                       key=lambda a: (idle_for(a, now), -(a.last_active or 0.0), a.source_id))
         for s in SLOTS:
             if self.slots[s] is None and free:
@@ -126,14 +173,15 @@ class Director:
         for cand in list(free):
             if idle_for(cand, now) > idle_s:
                 break                                   # sorted: nobody after this one is active either
-            victims = [(idle_for(pool[sid], now), s) for s, sid in self.slots.items() if sid in pool and idle_for(pool[sid], now) > idle_s]
+            victims = [(idle_for(pool[sid], now), s) for s, sid in self.slots.items()
+                       if not self.picked[s] and sid in pool and idle_for(pool[sid], now) > idle_s]
             if not victims:
                 break
             _, s = max(victims)
             self.slots[s] = cand.source_id
         if self.cfg.get('sparring_bot', True):
             filled = [s for s in SLOTS if self.slots[s] is not None]
-            if len(filled) == 1:
+            if len(filled) == 1 and not self.picked[SLOTS[1 - SLOTS.index(filled[0])]]:
                 self.slots[SLOTS[1 - SLOTS.index(filled[0])]] = SPARRING
         for s in SLOTS:
             sid = self.slots[s]
@@ -146,15 +194,47 @@ class Director:
             sid = self.slots[s]
             if sid is None:
                 out[s] = None
-            elif sid == SPARRING:
+                continue
+            if sid == SPARRING:
                 out[s] = dict(SPARRING_ASSIGN, character=self.resolve(SPARRING_ASSIGN['character']))
+                own = SPARRING_ASSIGN['character']
             else:
-                ch, prog = self.info.get(sid, (sid, sid))
-                out[s] = {'source': sid, 'character': self.resolve(ch), 'program': prog}
+                own, prog = self.info.get(sid, (sid, sid))
+                out[s] = {'source': sid, 'character': self.resolve(own), 'program': prog}
                 if self.dormant.get(s):
                     out[s]['dormant'] = True
+            skin = self.skins.get(sid)
+            if skin and skin != own:
+                out[s]['character'] = self.resolve(skin)
+                out[s]['skin'] = True
+            if self.picked.get(s):
+                out[s]['picked'] = True
+        out['programs'] = self.programs(now)
         out['ts'] = now
         return out
+
+    def programs(self, now):
+        """Every program one could pick, with what the director knows about it right now (names, ids and enums only)."""
+        from . import sources
+        horizon = float(self.cfg.get('dormant_hours', 24)) * 3600.0
+        ids = list(sources.known_programs())
+        for sid in self.seen:
+            if sid not in ids:
+                ids.insert(len(ids) - 1, sid)            # remembered extras go before the bot
+        rows = []
+        for sid in ids:
+            if sid == SPARRING:
+                rows.append(dict(source=sid, program=SPARRING_ASSIGN['program'], label=sources.short_label(sid), character='generic', state='bot'))
+                continue
+            a = self.live.get(sid)
+            rec = self.seen.get(sid)
+            if a is not None:
+                state, ch, prog = a.state, a.character, a.program
+            else:
+                ch, prog = (rec['character'], rec['program']) if rec else (sources.CHARACTER.get(sid, 'generic'), sources.PROGRAM.get(sid, sid))
+                state = 'asleep' if rec and rec['last_active'] > 0 and now - rec['last_active'] <= horizon else 'not seen'
+            rows.append(dict(source=sid, program=prog, label=sources.short_label(sid, prog), character=ch, state=state))
+        return rows
 
 
 def write_assign(data, path=None) -> bool:
@@ -211,8 +291,12 @@ class Runner:
     """The director loop body: poll sources, step, write assign.json when it changes (and as a heartbeat every 10 s);
     persist what was seen (seen.json) when it changed, at most every `seen_every_s`."""
 
-    def __init__(self, cfg, sources, director=None, path=None, clock=time.time, seen_path=None, seen_every_s=30.0):
+    def __init__(self, cfg, sources, director=None, path=None, clock=time.time, seen_path=None, seen_every_s=30.0, lineup=None):
         self.cfg, self.sources, self.clock = cfg, sources, clock
+        if lineup is None:
+            from . import control
+            lineup = control.lineup
+        self.lineup = lineup                           # () -> control.lineup(); read every step (stat-cached)
         self.seen_path, self.seen_every_s = seen_path, seen_every_s
         self.director = director or Director(cfg, seen=read_seen(seen_path))
         self.path = path
@@ -224,7 +308,11 @@ class Runner:
     def step(self, now=None):
         now = self.clock() if now is None else now
         acts = self.sources.poll(now)
-        self.director.step(acts, now)
+        try:
+            lu = self.lineup()
+        except Exception:
+            lu = None
+        self.director.step(acts, now, lu)
         data = self.director.assignment(now)
         body = {k: v for k, v in data.items() if k != 'ts'}
         if body != self.last_written or now - self.last_ts >= 10.0:
