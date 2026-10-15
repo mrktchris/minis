@@ -44,10 +44,10 @@ def _g5(base, hi, sh, ol, hi2):
     return g
 
 
-# Claude: terracotta street-monk.  Hood down, a long two-tone cream scarf (trim over paper), wrapped forearms,
+# Claude: terracotta street-monk.  Hood down, no scarf (owner: the trailing scarf read as a cape), wrapped forearms,
 # hoodie drawstrings, the reversed cap with '/'.  Warm rim light.
 CLAUDE = Body('claude', thigh=8, shin=8, torso=12, torso_w=10, upper=6, fore=6, limb=3, head_w=13, head_h=13,
-              foot_len=6, sigil='/', scarf=True, hood=True, ghost_group='cloth', tail_seg=(5, 2.6), scarf_group='paper',
+              foot_len=6, sigil='/', scarf=False, hood=True, ghost_group='cloth', tail_seg=(5, 2.6), scarf_group='paper',
               wraps=True, drawstring=True, palette={
     'skin': _g5('E9B88F', 'F6D6B6', 'C48A66', '7A4A34', 'FFEBD6'),
     'hair': _g('2B2420', '4A3E36', '1A1512', '100C0A'),
@@ -137,7 +137,7 @@ OLLAMA = Body('ollama', thigh=7, shin=7, torso=11, torso_w=14, upper=5.5, fore=5
 # LM Studio: the cyber-samurai direction (white armour plates, neon teal edge light, magenta soles) - an original
 # pixel costume inspired by DullMesh's "Cyber White Samurai" look (docs/CREDITS.md, visual inspiration only).
 LMSTUDIO = Body('lmstudio', thigh=9, shin=8, torso=12, torso_w=9, upper=6.5, fore=6, limb=3, head_w=12, head_h=13,
-                foot_len=6, sigil='L', scarf=True, hood=False, ghost_group='trim', ghost_style='holo', palette={
+                foot_len=6, sigil='L', scarf=False, hood=False, ghost_group='trim', ghost_style='holo', palette={
     'skin': _g('C68B63', 'DFAA84', 'A0694A', '5A3626'),
     'hair': _g('6B3A22', '8E5434', '4A2716', '26130A'),
     'cloth': _g('E4ECF4', 'FFFFFF', 'A9B8C8', '3E5064'),

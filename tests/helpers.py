@@ -2,11 +2,12 @@
 - config.data_dir() -> a fresh temp dir (the real %LOCALAPPDATA%\\minis holds a live feed, bus files and pid files)
 - CFG = config.DEFAULTS (a real minis.json is ignored)
 """
-import shutil, sys, tempfile, unittest
+import os, shutil, sys, tempfile, unittest
 from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
+os.environ.setdefault("MINIS_TESTING", "1")                         # minis.start_arena refuses: no test may launch a real arena
 sys.path.insert(0, str(ROOT))
 from minis_core import config as cfgmod  # noqa: E402
 

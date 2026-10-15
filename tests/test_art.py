@@ -218,7 +218,7 @@ class Scarf(unittest.TestCase):
     TAILS = [ch for ch in CHARS if roster.get(ch).body.has_tail]
 
     def test_some_characters_have_a_tail(self):
-        self.assertIn('claude', self.TAILS)
+        self.assertNotIn('claude', self.TAILS)        # owner 2026-10-14: the trailing scarf read as a cape, removed
         self.assertIn('gemini', self.TAILS)          # ponytail
 
     def test_segment_lengths_stay_bounded_in_every_frame(self):

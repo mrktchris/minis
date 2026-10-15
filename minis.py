@@ -324,6 +324,8 @@ def pick_arena_monitor(cfg, mons):
 def start_arena(monitor, freeze=False, seconds=None, seed=None):
     """Launch the arena as its own detached process (a crash never takes the taskbar fighters down).
     `seed` fixes the choreography (previews, captures); without it the wall clock seeds the match."""
+    if os.environ.get('MINIS_TESTING'):                                    # a test run must never put a real arena on the screen
+        return 'arena: refused under tests (MINIS_TESTING)', 1
     st, pid = proc_state(ARENA)
     if st == 'running':
         return f'arena: already running (pid {pid})', 1

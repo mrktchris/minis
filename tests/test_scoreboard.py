@@ -117,7 +117,8 @@ class Hosted(Isolated):
             b.on_event('up', 90, 30)
         self.assertEqual(started, [2])                                       # the one non-primary monitor
         control.write_arena_state({'active': True, 'pid': 1, 'monitor': 2}, now=self.t['wall'])
-        with mock.patch.object(minis, 'stop_arena', lambda: ('stopped', 0)) as st:
+        # pid 1 is not a live arena, so arena_active() alone would read False and fall through to a real start_arena
+        with mock.patch.object(control, 'arena_active', lambda *a, **k: True),                 mock.patch.object(minis, 'start_arena', lambda *a, **k: self.fail('started a real arena')),                 mock.patch.object(minis, 'stop_arena', lambda: ('stopped', 0)) as st:
             b.on_event('down', 90, 30)
             b.on_event('up', 90, 30)
         self.assertEqual([c[0] for c in b.clicks], ['pause', 'pause', 'bout', 'arena', 'arena'])
