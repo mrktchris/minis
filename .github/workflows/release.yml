@@ -161,25 +161,20 @@ jobs:
             artifacts/python/dist/*
             artifacts/python/*.zip
 
-  # ---------------------------------------------------------------- PyPI (OFF until the owner sets it up)
-  # Trusted publishing, no API token.  To turn it on:
-  #   1. Sign in at https://pypi.org (the owner's account) -> Your account -> Publishing -> "Add a new pending publisher":
-  #        PyPI project name: taskbar-fighters   Owner: mrktchris   Repository: taskbar-fighters
-  #        Workflow name: release.yml           Environment: pypi
-  #   2. GitHub repo -> Settings -> Environments -> New environment "pypi" (optionally require a reviewer).
-  #   3. Read docs/PACKAGING.md "Before PyPI" (assets should move under a package first), then uncomment the job below.
-  #
-  # pypi:
-  #   needs: release
-  #   runs-on: ubuntu-latest
-  #   environment: pypi
-  #   permissions:
-  #     id-token: write
-  #   steps:
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: python
-  #         path: artifacts
-  #     - uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         packages-dir: artifacts/dist/
+  # ---------------------------------------------------------------- PyPI (trusted publishing; owner set up the
+  # pending publisher on pypi.org: project taskbar-fighters, repo mrktchris/taskbar-fighters, workflow release.yml,
+  # environment pypi).  Runs only on a v* tag, after the GitHub Release job.
+  pypi:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python
+          path: artifacts
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: artifacts/dist/

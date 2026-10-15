@@ -66,7 +66,7 @@ def read(who: str, root=None, now=None, stale_s=5.0, raw=False):
     try:
         p = bus_dir(root) / f'{who}.json'
         st = p.stat()
-        sig = (st.st_mtime_ns, st.st_size)
+        sig = (st.st_mtime_ns, st.st_size, st.st_ino, st.st_ctime_ns)   # os.replace makes a new file: a same-size rewrite in one mtime tick still misses
         hit = _read_cache.get(str(p))
         if hit and hit[0] == sig:
             data = hit[1]
