@@ -17,11 +17,11 @@ ROOT = os.path.dirname(HERE)
 QA = os.path.join(ROOT, 'qa', 'v5')
 BG = (28, 28, 36)
 ORDER = ['claude', 'codex', 'gemini', 'cursor', 'ollama', 'lmstudio', 'generic']
-BEAMS = [('claude', 'kamehameha'), ('gemini', 'getsuga'), ('ollama', 'wind_scar'), ('generic', 'spirit_bomb'),
-         ('lmstudio', 'bankai_aura'), ('codex', 'rasengan_burst'), ('cursor', 'odm_slash'), ('cursor', 'odm_lines'),
+BEAMS = [('claude', 'radiant_beam'), ('gemini', 'crescent_fang'), ('ollama', 'gale_rend'), ('generic', 'star_core'),
+         ('lmstudio', 'awakening_aura'), ('codex', 'spiral_orb_burst'), ('cursor', 'grapple_slash'), ('cursor', 'grapple_lines'),
          ('claude', 'slash_wave_proj'), ('codex', 'deploy_proj'), ('gemini', 'star_shot_proj'), ('cursor', 'tab_bolt_proj'),
          ('ollama', 'pull_shot_proj'), ('lmstudio', 'load_wave_proj'), ('generic', 'energy_bolt_proj'),
-         ('claude', 'kamehameha_charge'), ('generic', 'spirit_bomb_orb'), ('gemini', 'getsuga_impact')]
+         ('claude', 'radiant_beam_charge'), ('generic', 'star_core_orb'), ('gemini', 'crescent_fang_impact')]
 
 
 def font(sz):

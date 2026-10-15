@@ -4,21 +4,21 @@ Generated from `assets/*/anim.json` by `tools/gen_movelist.py`; every number bel
 
 ## At a glance
 
-- **13 characters**: Claude, Codex, Gemini, Cursor, Ollama, LM Studio, Agent, Barbarian, Knight, Kunoichi, Monk, Nomad, Oni. Each has the same **45 shared moves** plus **three signature moves** (49 moves, 263 frames for Claude).
-- 43 of 45 shared moves are triggered by the planner today, and every signature move is; 2 shared moves are built and waiting for a trigger (listed at the end).
+- **13 characters**: Claude, Codex, Gemini, Cursor, Ollama, LM Studio, Agent, Barbarian, Knight, Kunoichi, Monk, Nomad, Oni. Each has the same **56 shared moves**, its **signature moves**, and **its weapon family's moves** (V7: 8-10 per character; 68 moves, 388 frames for Claude).
+- 55 of 56 shared moves are triggered by the planner today, and every signature move is; 1 shared moves are built and waiting for a trigger (listed at the end).
 - Which character appears is decided by the **director** from what is running (at most two at a time, slot `a` left and slot `b` right).
 
 ## The roster
 
 | character | plate tag | accent | strike | special (projectile) | super | ultimate (40 dmg) | shown for |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Claude | `/reverse` | #F0A184 | `spin_kick` | `slash_wave` | `reverse` | `kamehameha` | Claude Code transcripts |
-| Codex | `$reverse` | #A99DFF | `ground_pound` | `deploy` | `sudo` | `rasengan` | Codex transcripts (CLI, Emdash, desktop app) |
-| Gemini | `*gemini` | #7FA8F2 | `spin_kick` | `star_shot` | `twin_flash` | `getsuga` | Gemini |
-| Cursor | `>cursor` | #5FD3F3 | `ground_pound` | `tab_bolt` | `autocomplete` | `odm_strike` | Cursor |
-| Ollama | `ollama` | #E9E2D2 | `ground_pound` | `pull_shot` | `serve` | `wind_scar` | Ollama |
-| LM Studio | `lmstudio` | #7CF8EA | `spin_kick` | `load_wave` | `hot_swap` | `bankai` | LM Studio |
-| Agent | `agent` | #E0C46C | `spin_kick` | `energy_bolt` | `overclock` | `spirit_bomb` | Windsurf, aider, opencode, Copilot CLI, Qwen Code, Perplexity, Grok (and any character whose art is missing) |
+| Claude | `/reverse` | #F0A184 | `spin_kick` | `slash_wave` | `reverse` | `radiant_beam` | Claude Code transcripts |
+| Codex | `$reverse` | #A99DFF | `ground_pound` | `deploy` | `sudo` | `spiral_orb` | Codex transcripts (CLI, Emdash, desktop app) |
+| Gemini | `*gemini` | #7FA8F2 | `spin_kick` | `star_shot` | `twin_flash` | `crescent_fang` | Gemini |
+| Cursor | `>cursor` | #5FD3F3 | `ground_pound` | `tab_bolt` | `autocomplete` | `grapple_strike` | Cursor |
+| Ollama | `ollama` | #E9E2D2 | `ground_pound` | `pull_shot` | `serve` | `gale_rend` | Ollama |
+| LM Studio | `lmstudio` | #7CF8EA | `spin_kick` | `load_wave` | `hot_swap` | `awakening` | LM Studio |
+| Agent | `agent` | #E0C46C | `spin_kick` | `energy_bolt` | `overclock` | `star_core` | Windsurf, aider, opencode, Copilot CLI, Qwen Code, Perplexity, Grok (and any character whose art is missing) |
 | Barbarian | `barbarian` | #FF8A4A | `axe_spin` | `axe_toss` | `berserk` | `earthsplitter` | - |
 | Knight | `knight` | #7FA8FF | `crusher` | `sword_wave` | `valor` | `holy_crescent` | - |
 | Kunoichi | `kunoichi` | #FF5A7A | `fan_whirl` | `petal_shot` | `vanish` | `petal_dance` | - |
@@ -33,55 +33,424 @@ Generated from `assets/*/anim.json` by `tools/gen_movelist.py`; every number bel
 | Claude | `spin_kick` | strike | 8 | 920 ms | Claude's signature spinning kick. · reach 26 px, contact at frame 4 |
 | Claude | `slash_wave` | special | 7 | 900 ms | Throws a "/" slash wave across the taskbar. Costs nothing; looks cool. |
 | Claude | `reverse` | super | 7 | 760 ms | "/reverse": rewinds to where it stood a second ago, dodging everything. Afterimage trail. |
-| Claude | `kamehameha` | ultimate | 8 | 2060 ms | Cups both hands at the hip, charges for a full second, then fires a horizontal beam the width of the taskbar. · reach 30 px, contact at frame 6 · 40 damage · effects: `kamehameha_charge`, `kamehameha` |
+| Claude | `radiant_beam` | ultimate | 8 | 2060 ms | Cups both hands at the hip, charges for a full second, then fires a horizontal beam the width of the taskbar. · reach 30 px, contact at frame 6 · 40 damage · effects: `radiant_beam_charge`, `radiant_beam` |
 | Codex | `ground_pound` | strike | 8 | 1110 ms | Codex's heavy leaping slam with a ground shockwave. · reach 19 px, contact at frame 4 |
 | Codex | `deploy` | special | 8 | 1010 ms | Types a command and hits ENTER: fires a ">_" bolt across the taskbar. |
 | Codex | `sudo` | super | 7 | 890 ms | "$reverse": raises a giant $ and powers up with elevated permissions. |
-| Codex | `rasengan` | ultimate | 8 | 1280 ms | Spins a sphere of energy in one hand, dashes in with afterimages and drives it home in a spiral burst. · reach 27 px, contact at frame 6 · 40 damage · effects: `rasengan_orb`, `rasengan_burst` |
+| Codex | `spiral_orb` | ultimate | 8 | 1280 ms | Spins a sphere of energy in one hand, dashes in with afterimages and drives it home in a spiral burst. · reach 27 px, contact at frame 6 · 40 damage · effects: `spiral_orb_core`, `spiral_orb_burst` |
 | Gemini | `spin_kick` | strike | 8 | 920 ms | Gemini's spinning kick, both blades whipping round. · reach 26 px, contact at frame 4 |
 | Gemini | `star_shot` | special | 7 | 900 ms | Two-handed push that fires a "*" sparkle along the taskbar. |
 | Gemini | `twin_flash` | super | 7 | 760 ms | Flash-steps back a second in time, leaving a sparkle and an afterimage trail. |
-| Gemini | `getsuga` | ultimate | 8 | 1440 ms | Raises an arm, gathers energy and swings down a giant crescent slash wave. · reach 30 px, contact at frame 5 · 40 damage · effects: `getsuga_charge`, `getsuga` |
+| Gemini | `crescent_fang` | ultimate | 8 | 1440 ms | Raises an arm, gathers energy and swings down a giant crescent slash wave. · reach 30 px, contact at frame 5 · 40 damage · effects: `crescent_fang_charge`, `crescent_fang` |
 | Cursor | `ground_pound` | strike | 8 | 1110 ms | Cursor's leaping slam with a ground shockwave. · reach 19 px, contact at frame 4 |
 | Cursor | `tab_bolt` | special | 8 | 1010 ms | Accepts a suggestion and hits TAB: fires a ">|" caret bolt across the taskbar. |
 | Cursor | `autocomplete` | super | 7 | 890 ms | Raises a giant ">" and powers up: the whole line completes itself. |
-| Cursor | `odm_strike` | ultimate | 8 | 1010 ms | Fires two grapple lines, zips across them and finishes with a spinning cross slash. · reach 28 px, contact at frame 6 · 40 damage · effects: `odm_lines`, `odm_slash` |
+| Cursor | `grapple_strike` | ultimate | 8 | 1010 ms | Fires two grapple lines, zips across them and finishes with a spinning cross slash. · reach 28 px, contact at frame 6 · 40 damage · effects: `grapple_lines`, `grapple_slash` |
 | Ollama | `ground_pound` | strike | 8 | 1110 ms | Ollama's llama stomp with a ground shockwave. · reach 19 px, contact at frame 4 |
 | Ollama | `pull_shot` | special | 8 | 1010 ms | "ollama pull": hurls a wool-white orb across the taskbar. |
 | Ollama | `serve` | super | 7 | 890 ms | "ollama serve": raises a giant "o" and powers up, local and unstoppable. |
-| Ollama | `wind_scar` | ultimate | 8 | 1540 ms | Raises both arms, then slams down and rips three claws of energy along the ground. · reach 26 px, contact at frame 5 · 40 damage · effects: `wind_scar_charge`, `wind_scar` |
+| Ollama | `gale_rend` | ultimate | 8 | 1540 ms | Raises both arms, then slams down and rips three claws of energy along the ground. · reach 26 px, contact at frame 5 · 40 damage · effects: `gale_rend_charge`, `gale_rend` |
 | LM Studio | `spin_kick` | strike | 8 | 920 ms | LM Studio's spinning kick, the energy blade trailing. · reach 26 px, contact at frame 4 |
 | LM Studio | `load_wave` | special | 7 | 900 ms | Loads a model and throws it as a teal-and-magenta wave across the taskbar. |
 | LM Studio | `hot_swap` | super | 7 | 760 ms | Hot-swaps back to where it stood a second ago, afterimage trail and a giant "L". |
-| LM Studio | `bankai` | ultimate | 8 | 1270 ms | Releases a pillar of aura, then lands three flash-step strikes faster than the eye. · reach 30 px, contact at frame 4 · 40 damage · effects: `bankai_aura`, `bankai_slash` |
+| LM Studio | `awakening` | ultimate | 8 | 1270 ms | Releases a pillar of aura, then lands three flash-step strikes faster than the eye. · reach 30 px, contact at frame 4 · 40 damage · effects: `awakening_aura`, `awakening_slash` |
 | Agent | `spin_kick` | strike | 8 | 920 ms | A spinning kick: every agent learns this one. · reach 26 px, contact at frame 4 |
 | Agent | `energy_bolt` | special | 8 | 1010 ms | Types a command and fires an energy orb across the taskbar. |
 | Agent | `overclock` | super | 7 | 890 ms | Raises a giant "+" and powers up: everything runs faster. |
-| Agent | `spirit_bomb` | ultimate | 8 | 1760 ms | Raises both hands, gathers a huge slow ball of energy overhead and hurls it. · reach 24 px, contact at frame 5 · 40 damage · effects: `spirit_bomb_orb`, `spirit_bomb` |
+| Agent | `star_core` | ultimate | 8 | 1760 ms | Raises both hands, gathers a huge slow ball of energy overhead and hurls it. · reach 24 px, contact at frame 5 · 40 damage · effects: `star_core_orb`, `star_core` |
 | Barbarian | `axe_spin` | strike | 8 | 920 ms | A wild spinning kick, axe swinging round with it. · reach 27 px, contact at frame 4 |
 | Barbarian | `axe_toss` | special | 8 | 1010 ms | Hurls a spinning hand-axe across the taskbar. |
 | Barbarian | `berserk` | super | 7 | 890 ms | Roars under a giant "V" and goes berserk. |
-| Barbarian | `earthsplitter` | ultimate | 8 | 1540 ms | Raises the axe, then splits the ground with three tearing shock claws. · reach 26 px, contact at frame 5 · 40 damage · effects: `wind_scar_charge`, `wind_scar` |
+| Barbarian | `earthsplitter` | ultimate | 8 | 1540 ms | Raises the axe, then splits the ground with three tearing shock claws. · reach 26 px, contact at frame 5 · 40 damage · effects: `gale_rend_charge`, `gale_rend` |
 | Knight | `crusher` | strike | 8 | 1110 ms | Leaps and brings the greatsword down with a ground-shaking crash. · reach 19 px, contact at frame 4 |
 | Knight | `sword_wave` | special | 7 | 900 ms | A two-handed sweep that sends a steel wave across the taskbar. |
 | Knight | `valor` | super | 7 | 890 ms | Raises the greatsword under a giant "T" and steels itself. |
-| Knight | `holy_crescent` | ultimate | 8 | 1440 ms | Raises the greatsword, gathers light and cleaves a giant crescent down the taskbar. · reach 31 px, contact at frame 5 · 40 damage · effects: `getsuga_charge`, `getsuga` |
+| Knight | `holy_crescent` | ultimate | 8 | 1440 ms | Raises the greatsword, gathers light and cleaves a giant crescent down the taskbar. · reach 31 px, contact at frame 5 · 40 damage · effects: `crescent_fang_charge`, `crescent_fang` |
 | Kunoichi | `fan_whirl` | strike | 8 | 920 ms | A spinning kick with both fans snapping open. · reach 26 px, contact at frame 4 |
 | Kunoichi | `petal_shot` | special | 7 | 900 ms | Sweeps a fan and sends a spinning blade-petal across the taskbar. |
 | Kunoichi | `vanish` | super | 7 | 760 ms | Vanishes back a second in a swirl of petals, a giant "x" where she stood. |
-| Kunoichi | `petal_dance` | ultimate | 8 | 1270 ms | A burst of crimson aura, then three flash-step fan cuts faster than the eye. · reach 29 px, contact at frame 4 · 40 damage · effects: `bankai_aura`, `bankai_slash` |
+| Kunoichi | `petal_dance` | ultimate | 8 | 1270 ms | A burst of crimson aura, then three flash-step fan cuts faster than the eye. · reach 29 px, contact at frame 4 · 40 damage · effects: `awakening_aura`, `awakening_slash` |
 | Monk | `palm_crash` | strike | 8 | 1110 ms | Leaps and drives both tonfa into the ground. · reach 19 px, contact at frame 4 |
 | Monk | `chi_bolt` | special | 8 | 1010 ms | Thrusts a tonfa and fires a ball of chi across the taskbar. |
 | Monk | `meditate` | super | 7 | 890 ms | Centres itself under a giant "O"; the aura flares. |
-| Monk | `chi_sphere` | ultimate | 8 | 1760 ms | Raises both tonfa, gathers a huge sphere of chi overhead and hurls it. · reach 28 px, contact at frame 5 · 40 damage · effects: `spirit_bomb_orb`, `spirit_bomb` |
+| Monk | `chi_sphere` | ultimate | 8 | 1760 ms | Raises both tonfa, gathers a huge sphere of chi overhead and hurls it. · reach 28 px, contact at frame 5 · 40 damage · effects: `star_core_orb`, `star_core` |
 | Nomad | `ring_spin` | strike | 8 | 920 ms | A spinning kick, both chakrams whirling. · reach 26 px, contact at frame 4 |
 | Nomad | `chakram_throw` | special | 7 | 900 ms | Whips a chakram across the taskbar. |
 | Nomad | `mirage` | super | 7 | 760 ms | Slips back a second like a heat mirage, a giant "Y" left behind. |
-| Nomad | `ring_storm` | ultimate | 8 | 1010 ms | Throws two chakrams on lines, zips after them and finishes with a spinning cross cut. · reach 22 px, contact at frame 6 · 40 damage · effects: `odm_lines`, `odm_slash` |
+| Nomad | `ring_storm` | ultimate | 8 | 1010 ms | Throws two chakrams on lines, zips after them and finishes with a spinning cross cut. · reach 22 px, contact at frame 6 · 40 damage · effects: `grapple_lines`, `grapple_slash` |
 | Oni | `club_slam` | strike | 8 | 1110 ms | Leaps and smashes the kanabo into the ground. · reach 19 px, contact at frame 4 |
 | Oni | `oni_fire` | special | 8 | 1010 ms | Spits a ball of oni-fire across the taskbar. |
 | Oni | `rampage` | super | 7 | 890 ms | Swells under a giant "H", eyes blazing. |
-| Oni | `oni_roar` | ultimate | 8 | 2060 ms | Plants the kanabo, draws a breath for a full second and roars a beam of fire across the taskbar. · reach 32 px, contact at frame 6 · 40 damage · effects: `kamehameha_charge`, `kamehameha` |
+| Oni | `oni_roar` | ultimate | 8 | 2060 ms | Plants the kanabo, draws a breath for a full second and roars a beam of fire across the taskbar. · reach 32 px, contact at frame 6 · 40 damage · effects: `radiant_beam_charge`, `radiant_beam` |
+
+## Every fighter, move by move (V7)
+
+Each fighter fights like its weapon: the shared strikes are swung with it, and every character has its weapon family's own moves plus the shared move *types* (air juggle, throw, dash-through, guard break, riposte, a taunt variant).  The input labels are fighting-game notation for reading the list (→ forward, ← back, ↓ down, ↑ up); nothing reads them as input - the choreographer picks every move itself.  Damage tiers: light 12, medium 24, heavy 36, super 24, ultimate 40.  "Frames" and "length" are read from the real sheet; contact-frame and reach notes come from the art.
+
+### Claude - blade (katana)
+
+3-hit string: `riposte` → `iai_slash` → `cross_cut` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `spin_kick` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 920 ms | Claude's signature spinning kick. · contact frame 4, reach 26 px; blunt hit, high |
+| `slash_wave` | ↓ → + Special | signature special | projectile (24) | 7 | 900 ms | Throws a "/" slash wave across the taskbar. Costs nothing; looks cool. |
+| `reverse` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 760 ms | "/reverse": rewinds to where it stood a second ago, dodging everything. Afterimage trail. |
+| `radiant_beam` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 2060 ms | Cups both hands at the hip, charges for a full second, then fires a horizontal beam the width of the taskbar. · contact frame 6, reach 30 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 29 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 30 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 14 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `iai_slash` | ↓ → + Strike | weapon strike | medium (24) | 8 | 1090 ms | Iai: crouches with the blade low at the hip, then draws and cuts in one flash. · contact frame 3, reach 28 px; slash hit, mid |
+| `cross_cut` | → → + Strike | weapon strike | heavy (36) | 8 | 900 ms | Two strokes that cross in an X: a falling diagonal, then the rising back-cut. · contact frame 5, reach 17 px; slash hit, high |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 650 ms | Riposte: a straight lunging stab, the answer to a parry. · contact frame 2, reach 29 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 29 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 25 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 26 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 31 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 26 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls the blade, flicks it and sheathes it at the hip. |
+
+### Codex - chain and kunai
+
+3-hit string: `riposte` → `kunai_toss` → `guard_break` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `ground_pound` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 1110 ms | Codex's heavy leaping slam with a ground shockwave. · contact frame 4, reach 19 px; blunt hit, high |
+| `deploy` | ↓ → + Special | signature special | projectile (24) | 8 | 1010 ms | Types a command and hits ENTER: fires a ">_" bolt across the taskbar. |
+| `sudo` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 890 ms | "$reverse": raises a giant $ and powers up with elevated permissions. |
+| `spiral_orb` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1280 ms | Spins a sphere of energy in one hand, dashes in with afterimages and drives it home in a spiral burst. · contact frame 6, reach 27 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 22 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 26 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 11 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `chain_pull` | ← + Grab | chain pull | light (12) | 8 | 880 ms | Slings the rear kunai out on its chain, then yanks the opponent in. · contact frame 3, reach 33 px; pierce hit, mid |
+| `kunai_toss` | → + Strike (throw) | weapon strike | light (12) | 7 | 830 ms | Cocks a kunai behind the ear and flings it across the gap. · contact frame 3, reach 33 px; pierce hit, mid |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 650 ms | Riposte: a reverse-grip stab with the rear kunai. · contact frame 2, reach 21 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 25 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 24 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 24 px; blunt hit, mid |
+| `shadow_step` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 23 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 25 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Spins a kunai round one finger and points it at the opponent. |
+
+### Gemini - dual weapons
+
+3-hit string: `riposte` → `flurry` → `scissor_cut` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `spin_kick` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 920 ms | Gemini's spinning kick, both blades whipping round. · contact frame 4, reach 26 px; blunt hit, high |
+| `star_shot` | ↓ → + Special | signature special | projectile (24) | 7 | 900 ms | Two-handed push that fires a "*" sparkle along the taskbar. |
+| `twin_flash` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 760 ms | Flash-steps back a second in time, leaving a sparkle and an afterimage trail. |
+| `crescent_fang` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1440 ms | Raises an arm, gathers energy and swings down a giant crescent slash wave. · contact frame 5, reach 30 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 26 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 28 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 13 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `flurry` | Strike Strike Strike | weapon strike | medium (24) | 8 | 780 ms | Three alternating cuts, lead, rear, lead rising; the third one lands. · contact frame 6, reach 18 px; slash hit, mid |
+| `scissor_cut` | ← → + Strike | weapon strike | heavy (36) | 7 | 970 ms | Both weapons thrown wide, then snapped shut across the opponent like scissors. · contact frame 3, reach 27 px; slash hit, high |
+| `blade_dance` | ↓ ← + Strike | weapon strike | medium (24) | 8 | 920 ms | A full spin with both weapons held out; the lead one sweeps through. · contact frame 4, reach 28 px; slash hit, mid |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 650 ms | Riposte: the rear weapon snaps out in a straight stab. · contact frame 2, reach 25 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 28 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 25 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 25 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 27 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 26 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Spins one weapon, then crosses both in front of the face. |
+
+### Cursor - polearm (spear)
+
+3-hit string: `riposte` → `long_thrust` → `pole_spin` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `ground_pound` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 1110 ms | Cursor's leaping slam with a ground shockwave. · contact frame 4, reach 19 px; blunt hit, high |
+| `tab_bolt` | ↓ → + Special | signature special | projectile (24) | 8 | 1010 ms | Accepts a suggestion and hits TAB: fires a ">|" caret bolt across the taskbar. |
+| `autocomplete` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 890 ms | Raises a giant ">" and powers up: the whole line completes itself. |
+| `grapple_strike` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1010 ms | Fires two grapple lines, zips across them and finishes with a spinning cross slash. · contact frame 6, reach 28 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 31 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 31 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 23 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `long_thrust` | → + Strike (hold) | weapon strike | medium (24) | 7 | 950 ms | Draws the spear all the way back, then lunges to its full length. · contact frame 3, reach 28 px; pierce hit, mid |
+| `pole_sweep` | ↓ + Strike | weapon strike | light (12) | 7 | 770 ms | Drops low and sweeps the spear flat along the ankles. · contact frame 3, reach 31 px; slash hit, low |
+| `vault_kick` | → ↑ + Kick | weapon strike | heavy (36) | 8 | 950 ms | Plants the spear, rides up it and whips a flying kick off the top. · contact frame 4, reach 27 px; blunt hit, high |
+| `pole_spin` | Strike (hold) release | weapon strike | medium (24) | 8 | 850 ms | Whirls the spear overhead, faster each turn, then brings it down. · contact frame 5, reach 29 px; slash hit, high |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 640 ms | Riposte: chokes up and snaps the shaft forward. · contact frame 2, reach 28 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 31 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 27 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 26 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 31 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 31 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls the spear and plants it upright with a head tilt. |
+
+### Ollama - staff
+
+3-hit string: `riposte` → `staff_sweep` → `overhead_slam` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `ground_pound` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 1110 ms | Ollama's llama stomp with a ground shockwave. · contact frame 4, reach 19 px; blunt hit, high |
+| `pull_shot` | ↓ → + Special | signature special | projectile (24) | 8 | 1010 ms | "ollama pull": hurls a wool-white orb across the taskbar. |
+| `serve` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 890 ms | "ollama serve": raises a giant "o" and powers up, local and unstoppable. |
+| `gale_rend` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1540 ms | Raises both arms, then slams down and rips three claws of energy along the ground. · contact frame 5, reach 26 px; blunt hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 32 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 32 px; blunt hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 14 px; blunt hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 27 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 30 px; blunt hit, high |
+| `overhead_slam` | ↓ ↑ + Strike | weapon strike | heavy (36) | 8 | 1180 ms | Raises the staff, rises on the toes, then cracks it into the ground. · contact frame 4, reach 27 px; blunt hit, high |
+| `staff_sweep` | ↓ + Strike | weapon strike | light (12) | 7 | 770 ms | Drops low and sweeps the staff along the ground. · contact frame 3, reach 26 px; blunt hit, low |
+| `pole_vault` | → ↑ + Kick | weapon strike | heavy (36) | 8 | 950 ms | Plants the staff, vaults up it and kicks off the top. · contact frame 4, reach 28 px; blunt hit, high |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 640 ms | Riposte: drives the end of the staff straight out. · contact frame 2, reach 32 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 32 px; blunt hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 28 px; blunt hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 27 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 32 px; blunt hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 32 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls the staff and plants it with a head tilt. |
+
+### LM Studio - blade (katana)
+
+3-hit string: `riposte` → `iai_slash` → `cross_cut` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `spin_kick` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 920 ms | LM Studio's spinning kick, the energy blade trailing. · contact frame 4, reach 26 px; blunt hit, high |
+| `load_wave` | ↓ → + Special | signature special | projectile (24) | 7 | 900 ms | Loads a model and throws it as a teal-and-magenta wave across the taskbar. |
+| `hot_swap` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 760 ms | Hot-swaps back to where it stood a second ago, afterimage trail and a giant "L". |
+| `awakening` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1270 ms | Releases a pillar of aura, then lands three flash-step strikes faster than the eye. · contact frame 4, reach 30 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 30 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 30 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 14 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `iai_slash` | ↓ → + Strike | weapon strike | medium (24) | 8 | 1090 ms | Iai: crouches with the blade low at the hip, then draws and cuts in one flash. · contact frame 3, reach 29 px; slash hit, mid |
+| `cross_cut` | → → + Strike | weapon strike | heavy (36) | 8 | 900 ms | Two strokes that cross in an X: a falling diagonal, then the rising back-cut. · contact frame 5, reach 16 px; slash hit, high |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 650 ms | Riposte: a straight lunging stab, the answer to a parry. · contact frame 2, reach 29 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 29 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 26 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 27 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 31 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 26 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls the blade, flicks it and sheathes it at the hip. |
+
+### Agent - bow and dagger
+
+3-hit string: `riposte` → `point_blank` → `arrow_volley` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `spin_kick` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 920 ms | A spinning kick: every agent learns this one. · contact frame 4, reach 26 px; blunt hit, high |
+| `energy_bolt` | ↓ → + Special | signature special | projectile (24) | 8 | 1010 ms | Types a command and fires an energy orb across the taskbar. |
+| `overclock` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 890 ms | Raises a giant "+" and powers up: everything runs faster. |
+| `star_core` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1760 ms | Raises both hands, gathers a huge slow ball of energy overhead and hurls it. · contact frame 5, reach 24 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 21 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 28 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 19 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `point_blank` | Shoot | weapon strike | medium (24) | 7 | 920 ms | Draws to the cheek, holds, and looses an arrow at point-blank range. · contact frame 3, reach 34 px; pierce hit, mid |
+| `arrow_volley` | Shoot Shoot Shoot | weapon strike | medium (24) | 8 | 810 ms | Three arrows in quick succession; the third one lands. · contact frame 6, reach 34 px; pierce hit, mid |
+| `leap_shot` | ← ← + Shoot | weapon strike | medium (24) | 7 | 700 ms | Springs backwards and shoots from the top of the leap. · contact frame 4, reach 31 px; pierce hit, mid |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 650 ms | Riposte: a quick stab with the dagger in the rear hand. · contact frame 2, reach 22 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 27 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 31 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 31 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 22 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1170 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 30 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls the bow and raises it overhead. |
+
+### Barbarian - heavy weapon
+
+3-hit string: `riposte` → `guard_break` → `cleave` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `axe_spin` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 920 ms | A wild spinning kick, axe swinging round with it. · contact frame 4, reach 27 px; blunt hit, high |
+| `axe_toss` | ↓ → + Special | signature special | projectile (24) | 8 | 1010 ms | Hurls a spinning hand-axe across the taskbar. |
+| `berserk` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 890 ms | Roars under a giant "V" and goes berserk. |
+| `earthsplitter` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1540 ms | Raises the axe, then splits the ground with three tearing shock claws. · contact frame 5, reach 26 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 34 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 32 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 15 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 27 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 29 px; blunt hit, high |
+| `cleave` | ← + Heavy | weapon strike | heavy (36) | 8 | 1450 ms | A huge wind-up it will not flinch out of, then one cleave into the ground. · contact frame 4, reach 28 px; slash hit, high; armour: no flinch from a light hit in the wind-up |
+| `ground_slam` | ↓ ↓ + Heavy | weapon strike | heavy (36) | 8 | 1300 ms | Smashes the ground; the shock wave runs along the floor into the opponent. · contact frame 4, reach 33 px; slash hit, low |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 690 ms | Riposte: no time to swing, so the pommel is driven straight out. · contact frame 2, reach 26 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 850 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 31 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 1100 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 29 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 28 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 1060 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 31 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1360 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 28 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls the weapon and rests it on the shoulder. |
+
+### Knight - heavy weapon
+
+3-hit string: `riposte` → `guard_break` → `cleave` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `crusher` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 1110 ms | Leaps and brings the greatsword down with a ground-shaking crash. · contact frame 4, reach 19 px; blunt hit, high |
+| `sword_wave` | ↓ → + Special | signature special | projectile (24) | 7 | 900 ms | A two-handed sweep that sends a steel wave across the taskbar. |
+| `valor` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 890 ms | Raises the greatsword under a giant "T" and steels itself. |
+| `holy_crescent` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1440 ms | Raises the greatsword, gathers light and cleaves a giant crescent down the taskbar. · contact frame 5, reach 31 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 29 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 30 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 15 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 27 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 28 px; blunt hit, high |
+| `cleave` | ← + Heavy | weapon strike | heavy (36) | 8 | 1450 ms | A huge wind-up it will not flinch out of, then one cleave into the ground. · contact frame 4, reach 27 px; slash hit, high; armour: no flinch from a light hit in the wind-up |
+| `ground_slam` | ↓ ↓ + Heavy | weapon strike | heavy (36) | 8 | 1300 ms | Smashes the ground; the shock wave runs along the floor into the opponent. · contact frame 4, reach 33 px; slash hit, low |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 690 ms | Riposte: no time to swing, so the pommel is driven straight out. · contact frame 2, reach 25 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 850 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 31 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 1100 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 27 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 27 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 1060 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 31 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1360 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 27 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls the weapon and rests it on the shoulder. |
+
+### Kunoichi - fans / chakrams
+
+3-hit string: `riposte` → `fan_flurry` → `fan_cut` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `fan_whirl` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 920 ms | A spinning kick with both fans snapping open. · contact frame 4, reach 26 px; blunt hit, high |
+| `petal_shot` | ↓ → + Special | signature special | projectile (24) | 7 | 900 ms | Sweeps a fan and sends a spinning blade-petal across the taskbar. |
+| `vanish` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 760 ms | Vanishes back a second in a swirl of petals, a giant "x" where she stood. |
+| `petal_dance` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1270 ms | A burst of crimson aura, then three flash-step fan cuts faster than the eye. · contact frame 4, reach 29 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 25 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 29 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 12 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `fan_gust` | ← → + Strike | wind gust | medium (24) | 7 | 930 ms | Sweeps both fans back, then fans a gust of wind across the gap. · contact frame 3, reach 34 px; slash hit, mid |
+| `fan_cut` | ← → + Strike | weapon strike | heavy (36) | 7 | 970 ms | Both fans thrown wide, then snapped shut across the opponent. · contact frame 3, reach 28 px; slash hit, high |
+| `fan_flurry` | Strike Strike Strike | weapon strike | medium (24) | 8 | 780 ms | Three alternating fan cuts; the third one lands. · contact frame 6, reach 22 px; slash hit, mid |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 650 ms | Riposte: the rear fan snaps out edge-first. · contact frame 2, reach 24 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 29 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 28 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 28 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 25 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 23 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls a fan and hides a smile behind it. |
+
+### Monk - dual weapons
+
+3-hit string: `riposte` → `tonfa_flurry` → `tonfa_crush` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `palm_crash` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 1110 ms | Leaps and drives both tonfa into the ground. · contact frame 4, reach 19 px; blunt hit, high |
+| `chi_bolt` | ↓ → + Special | signature special | projectile (24) | 8 | 1010 ms | Thrusts a tonfa and fires a ball of chi across the taskbar. |
+| `meditate` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 890 ms | Centres itself under a giant "O"; the aura flares. |
+| `chi_sphere` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1760 ms | Raises both tonfa, gathers a huge sphere of chi overhead and hurls it. · contact frame 5, reach 28 px; blunt hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 23 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 26 px; blunt hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 12 px; blunt hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `tonfa_flurry` | Strike Strike Strike | weapon strike | medium (24) | 8 | 780 ms | Three alternating tonfa strikes; the third one lands. · contact frame 6, reach 18 px; blunt hit, mid |
+| `tonfa_crush` | ← → + Strike | weapon strike | heavy (36) | 7 | 970 ms | Both tonfa thrown wide, then slammed together on the opponent. · contact frame 3, reach 28 px; blunt hit, high |
+| `tonfa_whirl` | ↓ ← + Strike | weapon strike | medium (24) | 8 | 920 ms | A full spin with both tonfa out; the lead one sweeps through. · contact frame 4, reach 26 px; blunt hit, mid |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 650 ms | Riposte: the rear weapon snaps out in a straight stab. · contact frame 2, reach 23 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 26 px; blunt hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 24 px; blunt hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 25 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 25 px; blunt hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 25 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Spins one weapon, then crosses both in front of the face. |
+
+### Nomad - fans / chakrams
+
+3-hit string: `riposte` → `ring_flurry` → `ring_slash` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `ring_spin` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 920 ms | A spinning kick, both chakrams whirling. · contact frame 4, reach 26 px; blunt hit, high |
+| `chakram_throw` | ↓ → + Special | signature special | projectile (24) | 7 | 900 ms | Whips a chakram across the taskbar. |
+| `mirage` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 760 ms | Slips back a second like a heat mirage, a giant "Y" left behind. |
+| `ring_storm` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 1010 ms | Throws two chakrams on lines, zips after them and finishes with a spinning cross cut. · contact frame 6, reach 22 px; slash hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 27 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 31 px; slash hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 11 px; slash hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 26 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 27 px; blunt hit, high |
+| `chakram_boomerang` | ↓ → + Throw | boomerang projectile | projectile (24) | 8 | 1110 ms | Whips a chakram out; it curves back and is caught. |
+| `ring_slash` | ← → + Strike | weapon strike | heavy (36) | 7 | 970 ms | Both chakrams thrown wide, then snapped shut across the opponent. · contact frame 3, reach 30 px; slash hit, high |
+| `ring_flurry` | Strike Strike Strike | weapon strike | medium (24) | 8 | 780 ms | Three alternating chakram cuts; the third one lands. · contact frame 6, reach 21 px; slash hit, mid |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 650 ms | Riposte: the rear fan snaps out edge-first. · contact frame 2, reach 26 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 750 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 31 px; slash hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 950 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 27 px; slash hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 27 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 970 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 27 px; slash hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1160 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 24 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls a fan and hides a smile behind it. |
+
+### Oni - heavy weapon
+
+3-hit string: `riposte` → `guard_break` → `cleave` (each hit cancels into the next on its cancel frame).
+
+| move | input | type | damage | frames | length | what it is |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `club_slam` | → ↓ → + Kick | signature strike | heavy (36) | 8 | 1110 ms | Leaps and smashes the kanabo into the ground. · contact frame 4, reach 19 px; blunt hit, high |
+| `oni_fire` | ↓ → + Special | signature special | projectile (24) | 8 | 1010 ms | Spits a ball of oni-fire across the taskbar. |
+| `rampage` | ↓ ↓ + Super (meter) | signature super | super (24) | 7 | 890 ms | Swells under a giant "H", eyes blazing. |
+| `oni_roar` | Super (below 30 HP, once a match) | signature ultimate | ultimate (40) | 8 | 2060 ms | Plants the kanabo, draws a breath for a full second and roars a beam of fire across the taskbar. · contact frame 6, reach 32 px; blunt hit, mid |
+| `jab` | Strike | shared strike | light (12) | 7 | 640 ms | Fast lead-hand thrust. Light hit, small hit-stop. · contact frame 3, reach 32 px; pierce hit, mid |
+| `cross` | → + Strike | shared strike | medium (24) | 7 | 830 ms | Big diagonal power slash. Medium hit, forces a block-stagger. · contact frame 3, reach 33 px; blunt hit, high |
+| `uppercut` | ↓ ↑ + Strike | shared strike (launcher) | medium (24) | 7 | 800 ms | Rising launcher slash. Pops the opponent up. · contact frame 3, reach 16 px; blunt hit, high |
+| `low_kick` | ↓ + Kick | shared strike | light (12) | 7 | 730 ms | Sweep along the ground with a hip turn. Trips guard-high opponents. · contact frame 3, reach 27 px; blunt hit, low |
+| `roundhouse` | → + Kick | shared strike | heavy (36) | 8 | 1010 ms | High kick with a full hip turn. Heavy hit, big hit-stop, held follow-through. · contact frame 3, reach 30 px; blunt hit, high |
+| `cleave` | ← + Heavy | weapon strike | heavy (36) | 8 | 1450 ms | A huge wind-up it will not flinch out of, then one cleave into the ground. · contact frame 4, reach 30 px; blunt hit, high; armour: no flinch from a light hit in the wind-up |
+| `ground_slam` | ↓ ↓ + Heavy | weapon strike | heavy (36) | 8 | 1300 ms | Smashes the ground; the shock wave runs along the floor into the opponent. · contact frame 4, reach 33 px; blunt hit, low |
+| `riposte` | (after a parry) Strike | counter (after a parry) | medium (24) | 6 | 690 ms | Riposte: no time to swing, so the pommel is driven straight out. · contact frame 2, reach 27 px; pierce hit, mid |
+| `air_slash` | ↑ + Strike (air) | air juggle | medium (24) | 8 | 850 ms | Jumps after a launched opponent and strikes down through it in mid-air. · contact frame 4, reach 32 px; blunt hit, high |
+| `spike` | (air) ↓ + Strike | air spike | heavy (36) | 8 | 1100 ms | Leaps, raises the weapon overhead and spikes the airborne opponent into the ground. · contact frame 4, reach 31 px; blunt hit, high |
+| `throw` | close: → + Grab | throw | medium (24) | 8 | 1020 ms | Grabs the opponent, hoists it overhead and slams it down. · contact frame 5, reach 30 px; blunt hit, mid |
+| `dash_slash` | → → + Strike (dash) | dash-through | medium (24) | 8 | 1060 ms | Bursts through the opponent and stops on the far side; the cut lands a beat later. · contact frame 5, reach 32 px; blunt hit, back |
+| `guard_break` | ← → + Strike (hold) | guard break | medium (24) | 8 | 1360 ms | A long heavy wind-up, then the pommel smashes the guard open. · contact frame 4, reach 30 px; blunt hit, mid |
+| `taunt2` | Taunt | taunt | - | 8 | 1130 ms | Twirls the weapon and rests it on the shoulder. |
+
+## How the fight uses them (V7)
+
+| move type | what happens on the taskbar |
+| --- | --- |
+| weapon strike | Picked by the no-repeat picker with the shared strikes (which now weigh a little less); a family strike opens, chains in combos, and is the 3-hit string's material. |
+| 3-hit string | Riposte → two family moves: each hit starts on the previous move's cancel frame (contact + hitstop), so the string flows instead of resetting to guard. |
+| air juggle | A landed launcher (`uppercut`) pops the defender up (`launched`, it hangs on its last frame), the attacker leaps after it with its `air` move (`air_hit`) and spikes it into the floor (`spiked`), then the get-up. |
+| throw | Close range only.  The defender's `thrown` row starts on the attacker's grab frame; both rows share one clock, so the flat landing falls on the attacker's slam.  The defender is hoisted in close, then slammed out in front; a slipped grab ends in a backdash. |
+| chain pull | From range: the chain bites on contact and yanks the opponent to arm's length on the pull frame - often straight into the launcher and a juggle. |
+| dash-through | From range: the attacker slides THROUGH the defender during its burst, stops on the far side with its back turned, and the cut registers on the frozen pose (`hit_back`: pitched forward).  The attacker then vaults back over to its own side. |
+| guard break | The guard is smashed open (`guard_crush`, 12 chip damage) and the next strike is free. |
+| riposte | When a strike is parried, the defender answers with its own riposte row most of the time. |
+| clash | About a third of blocked or parried weapon strikes become a weapon lock instead: both fighters play `clash` on the same instant (sparks, a straining push), then both skid apart. |
+| armour | Heavy cleaves: a light poke from the defender lands during the wind-up for 12, the attacker does not flinch and the cleave still lands. |
+| boomerang | The chakram leaves the hand on its projectile frame, flies out to the defender and back, and is caught on the catch frame. |
+| contact | Every landed hit draws a spark for its kind (slash: a thin bright arc; blunt: a shock ring and dust; pierce: a streak and spray), blocks draw deflected sparks, light hits play a high / low reaction by the move's height, and the screen shakes by power. |
+
+### Set pieces
+
+Hand-authored joint exchanges for both fighters (`minis_core/setpieces.py`), written against weapon-family slots so any pairing plays them; a match plays one to three at its dramatic moments (a round's second exchange, the comeback, match point).  Preview one with `python tools/setpiece_preview.py <piece> --a claude --b codex`.
+
+| set piece | when | what happens |
+| --- | --- | --- |
+| Blade lock (`blade_lock`) | opener, mid | The weapons meet and lock; a straining push, both skid apart, a stand-off, then the defender ripostes. |
+| Pull and launch (`pull_launch`) | mid, opener | Yanked in (or closed down), popped into the air, cut in mid-air, spiked into the floor. |
+| Cross-cut freeze (`crosscut_freeze`) | mid, finisher | A dash THROUGH the opponent; both stand frozen, back to back, then the cut lands in slow motion. |
+| Vault overhead (`vault_overhead`) | opener, mid | A vaulting attack from range, then the heavy follow-up while the opponent is still reeling. |
+| Parry, riposte (`parry_riposte`) | comeback, mid | The big swing is swatted aside with a flash; the riposte answers before the swing has finished. |
+| Guard crush (`guard_crush_combo`) | mid, opener | The guard is smashed open, and the 3-hit string goes straight through the opening. |
+| Reversal (`comeback_reversal`) | comeback | Two attacks blocked under pressure, then the grab out of nowhere: a throw that turns the round. |
+| Aerial finish (`aerial_finish`) | finisher, mid | Launched, juggled, and spiked, the last blow in slow motion. |
 
 ## What makes them move
 
@@ -128,7 +497,7 @@ A **match** is best-of-3 rounds: both fighters start a round at 100 HP; a landed
 | `walk_back` | 6 | 660 ms↻ | yes | Backing away while still facing the other fighter. |
 | `dash` | 5 | 360 ms | yes | Hop-step forward to close distance. |
 | `turn` | 2 | 120 ms | not yet | Pivot to face the other way. |
-| `crouch` | 3 | 300 ms↻ | not yet | Low stance. |
+| `crouch` | 3 | 300 ms↻ | yes | Low stance. |
 | `jump` | 7 | 600 ms | yes | Neutral jump with squash on landing. |
 
 ### Strikes
@@ -161,6 +530,16 @@ A **match** is best-of-3 rounds: both fighters start a round at 100 HP; a landed
 | `getup` | 6 | 590 ms | yes | After a KO: kip up. |
 | `dizzy` | 4 | 520 ms↻ | yes | Stagger with stars: shown while a fighter stays at its limit. |
 | `ko` | 7 | 890 ms↻ | yes | Context or plan limit reached (90%+): knocked out, stars orbit. |
+| `launched` | 5 | 590 ms | yes | Launched: popped up and hanging in the air, open for a juggle. |
+| `air_hit` | 4 | 450 ms | yes | Juggled: hit again while airborne. |
+| `spiked` | 6 | 570 ms | yes | Spiked: slammed out of the air, bounces once and lies there. |
+| `thrown` | 7 | 990 ms | yes | Thrown: grabbed, hoisted overhead and slammed flat. · reach 18 px, contact at frame 4 |
+| `pulled` | 5 | 470 ms | yes | Pulled: yanked in by a chain and stumbles forward. |
+| `guard_crush` | 6 | 700 ms | yes | Guard crushed: the guard flies open and the fighter staggers, wide open. |
+| `hit_high` | 5 | 370 ms | yes | Hit high: the head snaps back first, the arms follow. |
+| `hit_low` | 5 | 410 ms | yes | Hit low: doubles over the blow, knees buckle. |
+| `hit_back` | 5 | 440 ms | yes | Hit from behind: pitched forward, stumbles, catches itself. |
+| `clash` | 7 | 760 ms | yes | Clash: the weapons lock with a spark, a straining push, then both shove off. |
 
 ### Emotes
 
@@ -173,6 +552,7 @@ A **match** is best-of-3 rounds: both fighters start a round at 100 HP; a landed
 | `thumbs_up` | 4 | 600 ms | yes | The reviewer approves the diff. |
 | `facepalm` | 4 | 560 ms | yes | Something broke. |
 | `shrug` | 4 | 540 ms | yes | Waiting state: every 10-16 s, unsure. |
+| `taunt2` | 8 | 1130 ms | yes | Twirls the blade, flicks it and sheathes it at the hip. |
 
 ### State animations (what an agent is doing)
 
@@ -206,16 +586,15 @@ A dark pill behind each fighter (it flips to the front side only when the back s
 
 ## Built but not triggered yet
 
-`turn`, `crouch`. These have art, timing and tests; they need a trigger in `minis_core/brain.py`.
+`turn`. These have art, timing and tests; they need a trigger in `minis_core/brain.py`.
 
 ## Ideas to expand
 
 **More fighting**
 
-- **Throws and grapples** (needs a paired pose set): a shoulder toss the other fighter tumbles through.
-- **Combo counter and hit-streak** text above a fighter ("3 HIT") when exchanges chain.
+- **Combo counter and hit-streak** text above a fighter ("3 HIT") when a string or a juggle chains.
 - **Super meter** that fills from something real, e.g. the cache-hit ratio, and spends on the signature super.
-- **Parry into counter**: wire `parry`, `crouch_block`, `dash`, `backdash` into longer, less predictable bouts.
+- **More set pieces**: a projectile duel where the two specials collide mid-air; a double knockout.
 
 **Real signals instead of flair**
 

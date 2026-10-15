@@ -83,8 +83,8 @@ class PickerRules(unittest.TestCase):
                 self.assertIn(b['anim'], A.anim if b['who'] == 'att' else D.anim)
                 self.assertGreaterEqual(b['hitstop'], 0)
         self.assertEqual(kinds, {'strike', 'special', 'super', 'ultimate'})
-        self.assertEqual(openers, {None, 'dash', 'jump', 'sweep', 'lunge'})
-        self.assertEqual(outcomes, {'hit', 'block', 'crouch_block', 'parry', 'whiff'})
+        self.assertEqual(openers, {None, 'dash', 'jump', 'sweep', 'lunge', 'through'})       # V7: a dash-through opens from range
+        self.assertEqual(outcomes, {'hit', 'block', 'crouch_block', 'parry', 'whiff', 'guard_break', 'clash'})
         self.assertGreater(max(lens), 2)                         # combos: jab -> cross -> uppercut chains
         self.assertGreater(resets, 30)
         self.assertGreater(counters, 10)                         # parry -> counter

@@ -61,7 +61,8 @@ PART_ORDER = ['swoosh', 'scarf_b', 'scarf_a', 'hood', 'back_b', 'arrow',
               'head', 'ear', 'hair', 'beard', 'cap', 'visor', 'strap', 'band', 'helm', 'helm2', 'horn', 'mask', 'glow',
               'lens', 'sigil', 'eyew', 'eye', 'brow', 'mouth', 'seam',
               'arm_f_up', 'arm_f_fo', 'cuff_f', 'wpn_f', 'hilt_f', 'hand_f', 'pad_f', 'blade_hl',
-              'doc', 'doc_line', 'streak', 'fx_a', 'fx_b', 'fx_w', 'fx_c']
+              'doc', 'doc_line', 'streak', 'fx_a', 'fx_b', 'fx_w', 'fx_c',
+              'crease']                                   # V7 HD: drawn last; coloured from the material under it
 PID = {n: i + 1 for i, n in enumerate(PART_ORDER)}
 NAME = {v: k for k, v in PID.items()}
 Z = {PID[n]: i for i, n in enumerate(PART_ORDER)}
@@ -81,7 +82,8 @@ FLAT = {'eye': ('ink', None), 'brow': ('ink', None), 'mouth': ('ink', None), 'ey
         'sigil': ('trim', 'hi'), 'lens': ('trim', 'hi2'), 'glow': ('trim', 'hi2'), 'seam': ('helm', 'sh'),
         'blade_hl': ('metal', 'hi2'), 'string': ('paper', 'sh'), 'arrow': ('trim', 'hi'),
         'doc': ('paper', None), 'doc_line': ('paper', 'sh'), 'swoosh': ('fx', 'w'), 'streak': ('fx', 'c'),
-        'fx_a': ('fx', 'a'), 'fx_b': ('fx', 'b'), 'fx_w': ('fx', 'w'), 'fx_c': ('fx', 'c')}
+        'fx_a': ('fx', 'a'), 'fx_b': ('fx', 'b'), 'fx_w': ('fx', 'w'), 'fx_c': ('fx', 'c'),
+        'crease': ('ink', 'crease')}
 NOLINE = {'fx_a', 'fx_b', 'fx_w', 'fx_c', 'swoosh', 'streak'}
 TEXT_FX = ('bigsigil', 'bigglyph', 'qmark', 'zzz')   # effects that are letters: never mirrored on left-facing frames
 RIM_GROUPS = ('skin', 'hair', 'cloth', 'trim', 'pants', 'shoe', 'helm', 'metal', 'hilt')   # groups that get the HD rim tone
@@ -316,6 +318,9 @@ class Pose:
     wb: float = None        # back weapon angle
     fk: float = None        # foot-spread scale override (walks: 1.0, so the planted foot never slides)
     free_b: bool = False    # the back hand lets go of a two-handed weapon (holding a doc, gesturing)
+    # ---- V7
+    nowf: bool = False      # the front weapon has left the hand (a thrown chakram before it comes back)
+    nock: bool = False      # a bow's string is drawn back to the rear hand with an arrow nocked
 
 
 def is_smear(pose):
@@ -486,7 +491,7 @@ def skeleton(body: Body, pose: Pose):
         t = (HIP_X + pose.cx * kl + tgt[0] * fk, ANKLE_Y - tgt[1] * kl)
         knee, ank = ik2(hp, t, body.thigh, body.shin, bend, maxy=GROUND - (body.limb + 1) / 2.0 - 0.5)
         sk['hp_' + side], sk['kn_' + side], sk['f' + side] = hp, knee, ank
-    sk['wf'] = place_weapon(body.weapon, sk['hf'], sk['el_f'], pose.wa)
+    sk['wf'] = None if pose.nowf else place_weapon(body.weapon, sk['hf'], sk['el_f'], pose.wa)
     wf = sk['wf']
     if wf is not None and wf['spec'].grip2 and body.weapon_b is None and not pose.free_b and pose.doc != 'hb':
         g2 = min(wf['spec'].grip2, wf['grip'] + 0.5) if wf['spec'].kind not in ('spear', 'staff') else wf['spec'].grip2
@@ -610,7 +615,7 @@ def _add(a, b, k=1.0):
     return (a[0] + b[0] * k, a[1] + b[1] * k)
 
 
-def draw_weapon(pen, w, side):
+def draw_weapon(pen, w, side, nock=None):
     """One held weapon: metal parts in wpn_<side>, wood / grip in hilt_<side>, an HD highlight along the blade."""
     if w is None:
         return
@@ -732,7 +737,13 @@ def draw_weapon(pen, w, side):
             t = -1 + 2 * i / 8
             pts.append(_add(_add(hand, n, t * h), d, 2.6 * (1 - t * t) - 1.4))
         tips = (pts[0], pts[-1])
-        pen.line(tips[0], tips[1], 0.6, 'string')
+        if nock is not None:                                             # V7: string drawn back to the rear hand, arrow nocked
+            pen.line(tips[0], nock, 0.6, 'string')
+            pen.line(nock, tips[1], 0.6, 'string')
+            pen.line(nock, _add(hand, d, 3.0), 1.0, 'arrow')
+            pen.dot(_add(hand, d, 3.6), 'blade_hl' if RES > 1 else 'arrow')
+        else:
+            pen.line(tips[0], tips[1], 0.6, 'string')
         for a_, b_ in zip(pts, pts[1:]):
             pen.line(a_, b_, 1.5, hp)
         pen.line(_add(hand, n, -1.2), _add(hand, n, 1.2), 2.2, wp)       # leather grip
@@ -923,6 +934,40 @@ def fx_draw(d, kind, x, y, extra=0, sigil='/'):
         for k, (dx, dy) in enumerate([(-4, -6), (-6, -2), (-5, 2), (-7, 6)]):
             for i in range(4 + (k % 2) * 2):
                 P(dx - i, dy, w_ if i < 2 else c)
+    # ---- V7 in-cell missiles (they fly inside the 64 px cell, which reaches past the opponent's front edge)
+    elif kind == 'arrow':                # an arrow in flight: shaft, head, fletching and a short speed tail
+        for i in range(7):
+            P(-i, 0, b if i < 5 else a)
+        P(1, 0, w_)
+        P(0, -1, w_)
+        P(0, 1, w_)
+        P(-6, -1, a)
+        P(-6, 1, a)
+        for i in range(3):
+            P(-9 - i * 2, 0, c)
+    elif kind == 'kunai':                # a thrown kunai: blade, ring and a speed tail
+        P(1, 0, w_)
+        P(0, 0, w_)
+        P(-1, -1, b)
+        P(-1, 0, w_)
+        P(-1, 1, b)
+        P(-2, 0, b)
+        P(-3, 0, a)
+        for i in range(4):
+            P(-5 - i * 2, 0, c)
+    elif kind == 'chain':                # a chain from the anchor forward, `extra` px long, a kunai head at the end
+        n = max(2, int(extra))
+        for i in range(0, n, 2):
+            P(i, 0, b if (i // 2) % 2 else a)
+        P(n, 0, w_)
+        P(n + 1, 0, w_)
+        P(n, -1, b)
+        P(n, 1, b)
+    elif kind == 'gust':                 # a fan's wind gust: three nested arcs opening forward
+        for r in (2, 4, 6):
+            for dy in range(-r, r + 1):
+                dx = int(round((r * r - dy * dy) ** 0.5 * 0.6))
+                P(dx + r, dy, w_ if r == 2 else (b if r == 4 else c))
 
 
 
@@ -1073,8 +1118,77 @@ def draw_head(pen, body, pose, sk):
     return L
 
 
+def _face_hd(pen, body, pose, L, fc):
+    """V7 HD face (RES 2+): a real eye (white, iris, upper lid), a brow that carries the mood and a mouth that opens,
+    grits or smiles.  Pixel offsets are HD pixels from the eye / mouth anchors; the profile faces right."""
+    d = pen.d
+    f = pose.face
+    eye_part = 'lens' if body.face == 'glow' else 'eye'
+    covered = body.face in ('slit', 'visor') or body.headgear in ('greathelm', 'visor')
+
+    def P(x, y, part):
+        d.point((x, y), fill=PID[part])
+
+    def R(x0, y0, x1, y1, part):
+        d.rectangle([x0, y0, x1, y1], fill=PID[part])
+    base = FACES['n']['eye']
+    c = L(((base[0][0] + base[1][0]) / 2, (base[0][1] + base[1][1]) / 2 - 0.2))
+    x, y = rnd(c[0] * RES), rnd(c[1] * RES)
+    if not covered and f != 'back':
+        glow = eye_part == 'lens'
+        if f in ('x',):
+            for dx, dy in ((-1, -1), (1, -1), (0, 0), (-1, 1), (1, 1)):
+                P(x + dx, y + dy, 'eye')
+        elif f == 'w':                                   # happy: a closed upward arc
+            P(x - 1, y + 1, eye_part); P(x, y, eye_part); P(x + 1, y + 1, eye_part)
+        elif f == 'z':                                   # closed / bowing
+            R(x - 1, y + 1, x + 1, y + 1, eye_part)
+        elif f == 'h':                                   # hurt: squeezed shut, a ">" pointing back
+            P(x - 1, y - 1, eye_part); P(x, y, eye_part); P(x + 1, y, eye_part); P(x - 1, y + 1, eye_part)
+        else:
+            wide = f == 'o'
+            if not glow:
+                R(x - 1, y - (1 if wide else 0), x, y + 1, 'eyew')          # the white
+            R(x + 1, y - (1 if wide else 0) + (1 if f == 'b' else 0), x + 1, y + 1, eye_part)   # iris toward the front
+            if f in ('g', 'f'):                          # determined: the lid slants down toward the nose
+                P(x - 1, y - 1, 'brow'); P(x, y - 1, 'brow'); P(x + 1, y - 1, 'brow'); P(x - 2, y - 1, 'brow')
+            elif f == 'b':                               # half-lid, glancing down
+                R(x - 1, y, x + 1, y, 'brow')
+            elif not wide:
+                R(x - 1, y - 1, x + 1, y - 1, 'brow')
+        # the brow carries the mood
+        if f in ('g', 'f'):
+            P(x - 2, y - 4, 'brow'); P(x - 1, y - 3, 'brow'); P(x, y - 3, 'brow'); P(x + 1, y - 2, 'brow')
+        elif f == 'o':
+            P(x - 2, y - 3, 'brow'); P(x - 1, y - 4, 'brow'); P(x, y - 4, 'brow'); P(x + 1, y - 4, 'brow')
+        elif f == 'h':
+            P(x - 2, y - 2, 'brow'); P(x - 1, y - 3, 'brow'); P(x, y - 3, 'brow'); P(x + 1, y - 4, 'brow')
+        elif f in ('n', 'b', 'w'):
+            R(x - 1, y - 3, x + 1, y - 3, 'brow')
+    if body.face == 'mask' or body.headgear == 'greathelm' or f == 'back':
+        return
+    mp = fc['mouth'] or FACES['n']['mouth']
+    m = L((sum(q[0] for q in mp) / len(mp), sum(q[1] for q in mp) / len(mp)))
+    mx, my = rnd(m[0] * RES), rnd(m[1] * RES) + 1
+    if f == 'o':                                         # a shout: open, a row of teeth on top
+        R(mx - 1, my - 1, mx + 1, my + 2, 'mouth'); R(mx - 1, my - 1, mx + 1, my - 1, 'eyew')
+    elif f in ('g', 'h'):                                # gritted teeth
+        R(mx - 2, my - 1, mx + 1, my + 1, 'mouth'); R(mx - 1, my, mx + 1, my, 'eyew')
+    elif f == 'w':                                       # a grin
+        P(mx - 2, my - 1, 'mouth'); R(mx - 1, my, mx + 1, my, 'mouth'); P(mx + 2, my - 1, 'mouth'); P(mx, my + 1, 'mouth')
+    elif f == 'x':                                       # a wobbly line
+        P(mx - 2, my, 'mouth'); P(mx - 1, my - 1, 'mouth'); P(mx, my, 'mouth'); P(mx + 1, my - 1, 'mouth')
+    elif f == 'z':
+        R(mx - 1, my, mx, my, 'mouth')
+    else:
+        R(mx - 1, my, mx + 1, my, 'mouth')
+
+
 def draw_face(pen, body, pose, L):
     S = RES
+    if S > 1:
+        _face_hd(pen, body, pose, L, FACES.get(pose.face, FACES['n']))
+        return
     fc = FACES.get(pose.face, FACES['n'])
     covered = body.face in ('slit', 'visor') or body.headgear in ('greathelm', 'visor')
     eye_part = 'lens' if body.face == 'glow' else 'eye'
@@ -1193,6 +1307,8 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None, prev: Pose = None, hist
         if body.boots:
             pen.taper(lerp(knee, ank, 0.42), ank, limb + 1.0, limb + 0.6, f'boot_{side}')
         shoe(side, ank, ang)
+        if S > 1 and body.skirt not in ('robe',):          # V7 HD: the cloth folds behind a bent knee, a crease down the thigh
+            _crease_bend(pen, hp, knee, ank, 1.6)
 
     def arm(side, open_):
         base, el, hand = sk['sh_' + side], sk['el_' + side], sk['h' + side]
@@ -1210,7 +1326,9 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None, prev: Pose = None, hist
             pen.line(_add(hand, dir_, -2.0), _add(hand, dir_, -0.9), limb, cuff)
         w = sk['w' + side]
         if w is not None:
-            draw_weapon(pen, w, side)
+            draw_weapon(pen, w, side, sk['hb'] if (pose.nock and side == 'f') else None)
+        if S > 1:                                        # V7 HD: a crease where a bent elbow folds the sleeve
+            _crease_bend(pen, base, el, hand, 1.4)
         hx, hy = hand[0] + dir_[0] * 1.2, hand[1] + dir_[1] * 1.2
         fist = pose.fist_f if side == 'f' else pose.fist_b
         if open_ and w is None:
@@ -1220,6 +1338,9 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None, prev: Pose = None, hist
                 pen.dot((hx + dir_[0] * 2.2 + px_ * k_ * 1.1, hy + dir_[1] * 2.2 + py_ * k_ * 1.1), f'hand_{side}')
         else:
             stamp(d, hx * S, hy * S, max(3, fist) * S if w is None else 3 * S, PID[f'hand_{side}'])
+            if S > 1 and w is not None and side == 'f':  # V7 HD: knuckles across the fist that wraps the grip
+                k0 = (hx + dir_[0] * 0.9, hy + dir_[1] * 0.9)
+                pen.hdline((k0[0] - dir_[1] * 0.9, k0[1] + dir_[0] * 0.9), (k0[0] + dir_[1] * 0.9, k0[1] - dir_[0] * 0.9), 'crease')
         if body.pads:
             draw_pad(pen, body, side, base, el)
         return hand
@@ -1318,6 +1439,26 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None, prev: Pose = None, hist
         for kind, x, y, extra in text:
             fx_draw(d, kind, x, y, extra, body.sigil)
     return img, meta
+
+
+def _crease_bend(pen, a, joint, b, length):
+    """V7 HD: a short fold line on the inside of a bent joint (elbow, knee): from the joint back along the upper segment,
+    offset toward the inside of the bend.  Nothing on a straight limb."""
+    ux, uy = a[0] - joint[0], a[1] - joint[1]
+    vx, vy = b[0] - joint[0], b[1] - joint[1]
+    nu, nv = math.hypot(ux, uy), math.hypot(vx, vy)
+    if nu < 1e-6 or nv < 1e-6:
+        return
+    cosang = (ux * vx + uy * vy) / (nu * nv)
+    if cosang < -0.80:                                   # nearly straight (> ~143 deg): no fold
+        return
+    ux, uy, vx, vy = ux / nu, uy / nu, vx / nv, vy / nv
+    ix, iy = ux + vx, uy + vy                            # toward the inside of the bend
+    ni = math.hypot(ix, iy) or 1.0
+    ix, iy = ix / ni * 0.7, iy / ni * 0.7
+    p0 = (joint[0] + ix + ux * 0.6, joint[1] + iy + uy * 0.6)
+    p1 = (p0[0] + ux * length, p0[1] + uy * length)
+    pen.hdline(p0, p1, 'crease')
 
 
 def draw_pad(pen, body, side, base, el):
@@ -1462,6 +1603,11 @@ def finish(buf: Image.Image, body: Body, pose: Pose, hip_y=None):
             nm = NAME[a]
             if pose.flash and nm not in NOLINE:
                 op[x, y] = pal['flash']['fill'] + (255,)
+                continue
+            if nm == 'crease':                           # V7 HD: a fold / knuckle line = the deep shadow of the material it crosses
+                under = next((n for n in (part(x, y - 1), part(x - 1, y), part(x + 1, y), part(x, y + 1), part(x - 1, y - 1),
+                                          part(x + 1, y + 1)) if n and NAME[n] not in FLAT), None)
+                op[x, y] = (deep_tone(pal[grp_name(under)]) if under else pal['ink']['base']) + (255,)
                 continue
             if nm in FLAT:
                 g, tone = flat_of(body, nm)

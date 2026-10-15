@@ -571,6 +571,814 @@ def build_moves(character):
                        (p(lean=8, hf=(10, -2), face='n'), 160), (p(lean=8, hf=(11, -3), face='w'), 160)],
                       cat='pair', desc='Pats the other fighter on the shoulder after a KO.')
 
-    # ------------------------------------------------------------------ V4 ultimate (+ support), always the LAST rows
+    # ------------------------------------------------------------------ V4 ultimate (+ support), then the V7 weapon moves
     import ultimates
-    return ultimates.add_ultimate(mv, ch)
+    ultimates.add_ultimate(mv, ch)
+    mv.update(weapon_moves(ch))                    # V7 rows come after every older row, so no row index ever moves
+    return annotate_contact(ch, mv)
+
+
+# ====================================================================== V7: weapon move families
+# docs/ANIMATION-NOTES.md section 8.  Every fighter fights like its weapon: a family of rig-keyed weapon moves plus the
+# shared move TYPES the choreographer uses (air juggle, throw, riposte, dash-through, guard break, a taunt variant).
+# The engine never reads these names: each row carries `type` (and `family`) in anim.json and choreo.py picks by type.
+FAMILY = {'katana': 'blade', 'energy': 'blade', 'short': 'dual', 'tonfa': 'dual', 'spear': 'polearm', 'staff': 'staff',
+          'kunai': 'chain', 'bow': 'bow', 'fan': 'fans', 'chakram': 'fans', 'greatsword': 'heavy', 'axe': 'heavy',
+          'kanabo': 'heavy'}
+
+
+def family_of(ch):
+    return ch.style.get('family') or FAMILY[ch.body.weapon.kind]
+
+
+def W(frames, cat='strike', desc='', **meta):
+    """A V7 move: like M, plus `type` / `input` / `family` metadata the engine and the move list read."""
+    return M(frames, cat=cat, desc=desc, **meta)
+
+
+import rig  # noqa: E402  (V7: the weapon fit pass reads the skeleton)
+
+
+# ---------------------------------------------------------------- blade (katana, energy katana)
+def blade_iai(desc):
+    """Iai draw-slash: crouch with the blade low behind the hip, hold the tension, ONE flash cut with a lunge, a long
+    frozen follow-through with the blade level, a chiburi flick, back to guard."""
+    return W([
+        (p(dy=4, lean=16, sq=0.95, turn=0.85, hf=(-1, 7), wa=160, ff=(9, 0), fb=(-9, 0), face='g'), 130),
+        (p(dy=6, lean=22, sq=0.92, turn=0.8, hf=(-2, 8), wa=168, ff=(10, 0), fb=(-10, 0), face='g'), 170),
+        (p(dy=4, lean=26, hf=(9, 1), wa=6, ff=(14, 0), fb=(-10, 0), dx=6, face='o', smear_f=(-2, 8)), 40),
+        (p(dy=4, lean=28, hf=(9, 1), wa=4, ff=(14, 0), fb=(-10, 0), face='o', fx=(('spark', 'hf', 3, 0),)), 150),
+        (p(dy=4, lean=26, hf=(9, 0), wa=-2, ff=(14, 0), fb=(-10, 0), face='g'), 280),
+        (p(dy=3, lean=16, hf=(8, 4), wa=50, ff=(11, 0), fb=(-9, 0), face='g'), 110),
+        (p(dy=2, lean=12, hf=(8, 3), wa=-40, ff=(9, 0), fb=(-8, 0)), 90),
+        (S0, 120)],
+        desc=desc, hit_frame=3, power=2, type='string', input='down, fwd + Strike')
+
+
+def blade_cross_cut(desc):
+    """Two strokes that make an X: a falling diagonal, a short check, then the rising back-cut that lands."""
+    return W([
+        (p(dy=2, lean=-6, chest=1.04, turn=0.85, hf=(-2, -8), eb_f='up', wa=-150, ff=(8, 0), fb=(-8, 0), face='g'), 130),
+        (p(dy=3, lean=-10, sq=0.96, turn=0.85, hf=(-3, -9), eb_f='up', wa=-158, ff=(8, 0), fb=(-9, 0), face='g'), 90),
+        (p(dy=3, lean=24, hf=(11, 4), wa=44, ff=(12, 0), fb=(-9, 0), dx=4, face='o', smear_f=(-3, -9)), 40),
+        (p(dy=4, lean=26, hf=(10, 6), wa=60, ff=(12, 0), fb=(-9, 0), face='o'), 70),
+        (p(dy=1, lean=10, hf=(7, -8), wa=-70, ff=(12, 0), fb=(-9, 0), dx=2, face='o', smear_f=(10, 6)), 40),
+        (p(dy=1, lean=8, hf=(7, -8), wa=-74, ff=(12, 1), fb=(-9, 0), face='o', fx=(('spark', 'hf', 0, -3),)), 170),
+        (p(dy=1, lean=4, hf=(6, -8), wa=-84, ff=(11, 1), fb=(-9, 0), face='g'), 250),
+        (p(dy=2, lean=10, hf=(8, 0), ff=(9, 0), fb=(-8, 0)), 110)],
+        desc=desc, hit_frame=5, power=3, type='string', input='fwd, fwd + Strike')
+
+
+def blade_thrust(desc):
+    """Riposte: the fast straight stab that answers a parry.  Short draw-back, one stab with speed lines, snap back."""
+    return W([
+        (p(dy=4, lean=-6, sq=0.95, turn=0.8, hf=(-5, 2), wa=-12, ff=(8, 0), fb=(-9, 0), face='g'), 90),
+        (p(dy=3, lean=28, hf=(10, 0), wa=-2, ff=(14, 0), fb=(-9, 0), dx=6, face='o', smear_f=(-5, 2)), 40),
+        (p(dy=3, lean=30, hf=(10, 0), wa=-2, ff=(14, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 4, 0),)), 140),
+        (p(dy=3, lean=28, hf=(10, 1), wa=2, ff=(14, 0), fb=(-9, 0), face='g'), 190),
+        (p(dy=2, lean=14, hf=(8, 2), ff=(10, 0), fb=(-8, 0)), 100),
+        (S0, 90)],
+        desc=desc, hit_frame=2, power=2, type='riposte', input='(after a parry) Strike')
+
+
+# ---------------------------------------------------------------- shared move types (every family, weapon angles adapt)
+def t_air_slash(desc):
+    """Air juggle: hop after the launched opponent, wind the weapon back at the apex, one falling slash, land squashed."""
+    return W([
+        (p(dy=5, lean=14, sq=0.88, hf=(4, 3), wa=-60, ff=(8, 0), fb=(-7, 0)), 90),
+        (p(dy=-6, lean=4, sq=1.05, hf=(1, -5), eb_f='up', wa=-140, ff=(4, 5), fb=(-4, 4)), 50),
+        (p(dy=-8, lean=-6, hf=(-3, -6), eb_f='up', wa=-160, ff=(5, 8), fb=(-4, 7), face='g'), 120),
+        (p(dy=-9, lean=24, hf=(11, 3), wa=36, ff=(7, 7), fb=(-5, 6), face='o', smear_f=(-3, -6)), 40),
+        (p(dy=-9, lean=26, hf=(11, 4), wa=42, ff=(7, 6), fb=(-5, 5), face='o', fx=(('spark', 'hf', 3, 0),)), 150),
+        (p(dy=-5, lean=20, hf=(10, 6), wa=58, ff=(7, 3), fb=(-5, 3), face='g'), 80),
+        (p(dy=5, lean=14, sq=0.88, hf=(8, 5), wa=50, ff=(9, 0), fb=(-8, 0), fx=(('dust', 'ff', 4, 1), ('dust', 'fb', -5, 1))), 100),
+        (p(dy=2, lean=10, sq=1.02), 120)],
+        desc=desc, hit_frame=4, power=2, type='air', input='up + Strike (air)')
+
+
+def t_spike(desc):
+    """Air spike: leap, weapon raised in both hands at the apex (held), smash DOWN through the airborne opponent and
+    land with a ground shock."""
+    return W([
+        (p(dy=5, lean=12, sq=0.88, hf=(4, 4), wa=-80, ff=(8, 0), fb=(-7, 0)), 100),
+        (p(dy=-6, lean=0, sq=1.05, hf=(3, -6), eb_f='up', wa=-130, ff=(4, 6), fb=(-4, 5)), 60),
+        (p(dy=-8, lean=-10, hf=(1, -7), eb_f='up', wa=-150, ff=(5, 8), fb=(-4, 7), face='o'), 160),
+        (p(dy=-6, lean=36, hf=(10, 7), wa=72, ff=(6, 6), fb=(-5, 5), face='o', smear_f=(1, -7)), 40),
+        (p(dy=-3, lean=40, hf=(10, 8), wa=80, ff=(6, 4), fb=(-5, 4), face='o', fx=(('spark', 'hf', 2, 2),)), 140),
+        (p(dy=7, lean=34, sq=0.86, hf=(9, 8), wa=82, ff=(9, 0), fb=(-8, 0), face='o',
+           fx=(('shock', 'abs', 40, 56), ('dust', 'ff', 4, -1), ('dust', 'fb', -5, -1))), 240),
+        (p(dy=4, lean=18, hf=(8, 4), wa=40, ff=(9, 0), fb=(-8, 0)), 110),
+        (S0, 100)],
+        desc=desc, hit_frame=4, power=3, type='spike', input='(air) down + Strike', shake=dict(frames=3, amp=1))
+
+
+def t_dash_slash(desc):
+    """Dash-through: coil, burst THROUGH the opponent with an afterimage trail, skid to a stop on the far side with the
+    weapon out and the back turned; the cut registers on the frozen pose."""
+    return W([
+        (p(dy=5, lean=20, sq=0.92, turn=0.85, hf=(-1, 6), wa=158, ff=(9, 0), fb=(-9, 0), face='g'), 130),
+        (p(dy=6, lean=24, sq=0.90, turn=0.8, hf=(-2, 7), wa=165, ff=(10, 0), fb=(-10, 0), face='g'), 110),
+        (p(dx=22, dy=2, lean=34, sq=1.06, hf=(10, 1), wa=4, ff=(12, 3), fb=(-9, 2), ghost=(7, 14), face='o', smear_f=(-2, 7),
+           fx=(('speedlines', 'hip', -10, -6),)), 40),
+        (p(dx=22, dy=3, lean=30, hf=(11, 2), wa=8, ff=(13, 1), fb=(-10, 1), ghost=(8,), face='o', fx=(('speedlines', 'hip', -10, -6),)), 60),
+        (p(dx=8, dy=5, lean=14, sq=0.92, hf=(10, 3), wa=14, ff=(13, 0), fb=(-6, 0), face='g', fx=(('dust', 'ff', 4, -1), ('dust', 'fb', -4, -1))), 90),
+        (p(dy=4, lean=12, sq=0.94, hf=(10, 3), wa=12, ff=(12, 0), fb=(-8, 0), face='g'), 320),
+        (p(dy=3, lean=10, hf=(8, 4), wa=50, ff=(10, 0), fb=(-8, 0)), 120),
+        (S0, 100)],
+        desc=desc, hit_frame=5, power=2, type='through', input='fwd, fwd + Strike (dash)')
+
+
+def t_guard_break(desc):
+    """Guard break: a long, heavy wind-up (three held keys), then the pommel drives into the raised guard."""
+    return W([
+        (p(dy=3, lean=-4, turn=0.8, hf=(-2, 1), wa=180, ff=(8, 0), fb=(-8, 0), face='g'), 140),
+        (p(dy=5, lean=-10, sq=0.94, chest=1.05, turn=0.7, hf=(-5, 1), wa=180, ff=(9, 0), fb=(-9, 0), face='o'), 160),
+        (p(dy=6, lean=-14, sq=0.92, chest=1.07, turn=0.65, hf=(-6, 2), wa=178, ff=(9, 0), fb=(-10, 0), face='o'), 190),
+        (p(dy=3, lean=30, hf=(10, -1), wa=176, ff=(14, 0), fb=(-9, 0), dx=7, face='o', smear_b=(-6, 2), fx=(('speedlines', 'hip', -10, -6),)), 40),
+        (p(dy=3, lean=32, hf=(10, -1), wa=178, ff=(14, 0), fb=(-9, 0), face='o', fx=(('block', 'hf', 3, 0), ('spark', 'hf', 4, -1))), 180),
+        (p(dy=3, lean=30, hf=(10, 0), wa=176, ff=(14, 0), fb=(-9, 0), face='g'), 240),
+        (p(dy=2, lean=14, hf=(8, 3), wa=60, ff=(10, 0), fb=(-8, 0)), 110),
+        (S0, 100)],
+        desc=desc, hit_frame=4, power=2, type='guard_break', input='back, fwd + Strike (hold)')
+
+
+THROW_MS = (110, 120, 150, 170, 40, 210, 120, 100)     # attacker and defender share this clock (grab 1, release 4, slam 5)
+
+
+def t_throw(desc):
+    """Throw: reach in, GRAB (grab_frame), hoist the opponent overhead, slam them down in front (hit_frame).  The
+    defender's `thrown` row is keyed to the same clock (THROW_MS), so the two stay in sync whoever throws whom."""
+    ms = THROW_MS
+    return W([
+        (p(dy=3, lean=20, hf=(11, 0), wa=130, hb=(3, 4), ff=(12, 0), fb=(-8, 0), face='g'), ms[0]),
+        (p(dy=3, lean=22, hf=(12, 0), wa=128, hb=(3, 4), ff=(12, 0), fb=(-8, 0), face='o', fx=(('spark_s', 'hf', 3, 0),)), ms[1]),
+        (p(dy=5, lean=-2, sq=0.93, hf=(6, -8), eb_f='up', wa=-150, hb=(2, 3), ff=(9, 0), fb=(-9, 0), face='o'), ms[2]),
+        (p(dy=2, lean=-14, sq=1.05, chest=1.06, hf=(2, -12), eb_f='up', wa=-170, hb=(0, 2), ff=(8, 0), fb=(-9, 0), face='o'), ms[3]),
+        (p(dy=5, lean=36, hf=(12, 6), wa=80, hb=(4, 4), ff=(12, 0), fb=(-9, 0), dx=3, face='o', smear_f=(2, -12)), ms[4]),
+        (p(dy=6, lean=40, sq=0.92, hf=(12, 7), wa=86, hb=(4, 5), ff=(12, 0), fb=(-9, 0), face='o', fx=(('dust', 'ff', 8, -1),)), ms[5]),
+        (p(dy=3, lean=16, hf=(8, 3), wa=40, ff=(10, 0), fb=(-8, 0), face='g'), ms[6]),
+        (S0, ms[7])],
+        cat='throw', desc=desc, hit_frame=5, grab_frame=1, release_frame=4, power=2, type='throw', input='close: fwd + Grab')
+
+
+def t_taunt_blade(desc):
+    """Blade taunt: twirl the blade once round the wrist, flick it, sheathe it at the hip with a head tilt."""
+    return W([
+        (p(dy=2, lean=8, hf=(8, 1), wa=0, face='g'), 140),
+        (p(dy=2, lean=8, hf=(8, 1), wa=80, face='g'), 70),
+        (p(dy=2, lean=8, hf=(8, 1), wa=170, face='g'), 60),
+        (p(dy=2, lean=8, hf=(8, 1), wa=-100, face='g'), 70),
+        (p(dy=2, lean=10, hf=(9, 3), wa=40, face='w', fx=(('spark_s', 'hf', 3, 1),)), 160),
+        (p(dy=3, lean=6, turn=0.85, hf=(-1, 7), wa=165, head=(2, 0), tilt=-6, face='w'), 340),
+        (p(dy=2, lean=6, turn=0.9, hf=(0, 6), wa=160, face='w'), 140),
+        (S0, 120)],
+        cat='emote', desc=desc, type='taunt', input='Taunt')
+
+
+# ---------------------------------------------------------------- shared reactions (defender)
+# ---------------------------------------------------------------- dual (twin short swords, twin tonfa)
+def dual_flurry(desc):
+    """Flurry: a coiled guard, then three alternating cuts (lead, rear, lead rising), each one smear and a short check;
+    the third lands and is held."""
+    return W([
+        (p(dy=4, lean=6, sq=0.95, hf=(1, -5), wa=-120, hb=(-2, 3), wb=160, ff=(9, 0), fb=(-8, 0), face='g'), 120),
+        (p(dy=3, lean=22, hf=(10, 3), wa=30, hb=(-1, 3), wb=150, ff=(12, 0), fb=(-8, 0), dx=3, face='o', smear_f=(1, -5)), 40),
+        (p(dy=3, lean=24, hf=(9, 5), wa=50, hb=(-1, 3), wb=150, ff=(12, 0), fb=(-8, 0), face='o'), 70),
+        (p(dy=3, lean=24, hf=(3, 5), wa=90, hb=(11, -1), wb=-10, ff=(12, 0), fb=(-8, 0), dx=2, face='o', smear_b=(-1, 3)), 40),
+        (p(dy=3, lean=24, hf=(3, 5), wa=95, hb=(10, 0), wb=0, ff=(12, 0), fb=(-8, 0), face='o'), 80),
+        (p(dy=2, lean=14, hf=(8, -8), wa=-70, hb=(4, 3), wb=40, ff=(12, 0), fb=(-8, 0), dx=2, face='o', smear_f=(3, 5)), 40),
+        (p(dy=2, lean=12, hf=(8, -9), wa=-76, hb=(4, 3), wb=40, ff=(12, 1), fb=(-8, 0), face='o', fx=(('spark', 'hf', 1, -3),)), 170),
+        (p(dy=2, lean=10, hf=(7, -8), wa=-84, hb=(3, 4), wb=50, ff=(10, 0), fb=(-8, 0), face='g'), 220)],
+        desc=desc, hit_frame=6, power=2, type='string', input='Strike, Strike, Strike')
+
+
+def dual_scissor(desc):
+    """Scissor cut: both blades thrown wide (one high back, one low back) and held, then both snap shut across the
+    opponent in one frame; the X is held."""
+    return W([
+        (p(dy=3, lean=4, chest=1.05, hf=(-2, -7), eb_f='up', wa=-130, hb=(-4, 6), eb_b='back', wb=150, ff=(9, 0), fb=(-8, 0), face='g'), 130),
+        (p(dy=5, lean=0, sq=0.94, chest=1.08, hf=(-3, -8), eb_f='up', wa=-140, hb=(-5, 7), eb_b='back', wb=160, ff=(9, 0), fb=(-9, 0), face='o'), 170),
+        (p(dy=3, lean=26, hf=(10, 3), wa=25, hb=(10, -1), wb=-25, ff=(13, 0), fb=(-9, 0), dx=5, face='o', smear_f=(-3, -8), smear_b=(-5, 7)), 40),
+        (p(dy=3, lean=28, hf=(10, 3), wa=28, hb=(10, -1), wb=-28, ff=(13, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 3, -1),)), 170),
+        (p(dy=3, lean=28, hf=(9, 4), wa=34, hb=(9, -2), wb=-34, ff=(13, 0), fb=(-9, 0), face='g'), 250),
+        (p(dy=2, lean=14, hf=(8, 1), wa=-40, hb=(3, 4), wb=40, ff=(10, 0), fb=(-8, 0)), 110),
+        (S0, 100)],
+        desc=desc, hit_frame=3, power=3, type='string', input='back, fwd + Strike')
+
+
+def dual_dance(desc):
+    """Blade dance: a full turn with both weapons held out like a spinning top (the back shows on the wind-up), the lead
+    weapon sweeps the opponent and the spin stops in a low, wide finish."""
+    return W([
+        (p(dy=3, lean=12, sq=0.95, turn=0.85, hf=(5, 2), wa=-30, hb=(2, 3), wb=160, ff=(8, 0), fb=(-8, 0), face='g'), 130),
+        (p(dy=2, lean=0, turn=0.55, face='back', hf=(-8, -1), wa=180, hb=(9, -1), wb=0, ff=(4, 0), fb=(-4, 0)), 80),
+        (p(dy=2, lean=4, turn=0.35, face='back', hf=(-2, -3), wa=-120, hb=(4, -3), wb=-60, ff=(3, 1), fb=(-3, 0)), 60),
+        (p(dy=3, lean=20, turn=0.8, hf=(11, 1), wa=8, hb=(-8, 1), wb=172, ff=(12, 0), fb=(-9, 0), dx=4, face='o', smear_f=(-2, -3)), 40),
+        (p(dy=3, lean=22, turn=0.9, hf=(11, 2), wa=10, hb=(-8, 2), wb=170, ff=(12, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 3, 0),)), 160),
+        (p(dy=5, lean=24, sq=0.93, hf=(11, 3), wa=14, hb=(-8, 3), wb=168, ff=(13, 0), fb=(-10, 0), face='g'), 240),
+        (p(dy=3, lean=12, hf=(8, 2), wa=-30, hb=(3, 3), wb=40, ff=(10, 0), fb=(-8, 0)), 110),
+        (S0, 100)],
+        desc=desc, hit_frame=4, power=2, type='string', input='down, back + Strike')
+
+
+def dual_riposte(desc):
+    """Riposte: the rear weapon snaps straight out from the guard, a one-frame stab, held, back."""
+    return W([
+        (p(dy=3, lean=4, turn=0.85, hf=(6, -2), wa=-60, hb=(-3, 2), wb=-8, ff=(8, 0), fb=(-8, 0), face='g'), 90),
+        (p(dy=3, lean=26, hf=(4, 2), wa=60, hb=(10, 0), wb=-4, ff=(13, 0), fb=(-9, 0), dx=5, face='o', smear_b=(-3, 2)), 40),
+        (p(dy=3, lean=28, hf=(4, 2), wa=62, hb=(10, 0), wb=-2, ff=(13, 0), fb=(-9, 0), face='o', fx=(('spark', 'hb', 4, 0),)), 140),
+        (p(dy=3, lean=26, hf=(4, 3), wa=60, hb=(10, 1), wb=2, ff=(13, 0), fb=(-9, 0), face='g'), 190),
+        (p(dy=2, lean=12, hf=(7, 1), hb=(3, 3), ff=(10, 0), fb=(-8, 0)), 100),
+        (S0, 90)],
+        desc=desc, hit_frame=2, power=2, type='riposte', input='(after a parry) Strike')
+
+
+# ---------------------------------------------------------------- polearm (spear) and staff
+def pole_thrust(desc, power=2, typ='string', inp='fwd + Strike (hold)'):
+    """Long thrust: draw the pole all the way back and hold, one lunging stab to full length, a long frozen extension."""
+    return W([
+        (p(dy=3, lean=-6, turn=0.8, hf=(-4, 2), wa=-4, ff=(9, 0), fb=(-9, 0), face='g'), 120),
+        (p(dy=5, lean=-10, sq=0.94, turn=0.75, hf=(-6, 3), wa=-4, ff=(10, 0), fb=(-10, 0), face='o'), 170),
+        (p(dy=3, lean=28, hf=(11, 0), wa=-2, ff=(15, 0), fb=(-9, 0), dx=7, face='o', smear_f=(-6, 3)), 40),
+        (p(dy=3, lean=30, hf=(11, 0), wa=-2, ff=(15, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 4, 0),)), 150),
+        (p(dy=3, lean=30, hf=(11, 1), wa=0, ff=(15, 0), fb=(-9, 0), face='g'), 260),
+        (p(dy=2, lean=14, hf=(5, 2), wa=-20, ff=(11, 0), fb=(-8, 0)), 110),
+        (S0, 100)],
+        desc=desc, hit_frame=3, power=power, type=typ, input=inp)
+
+
+def pole_jab(desc):
+    """Riposte with a pole: choke up and snap the shaft forward, short and fast."""
+    return W([
+        (p(dy=3, lean=0, turn=0.85, hf=(-2, 2), wa=-6, ff=(8, 0), fb=(-8, 0), face='g'), 90),
+        (p(dy=3, lean=24, hf=(9, 1), wa=-4, ff=(13, 0), fb=(-9, 0), dx=5, face='o', smear_f=(-2, 2)), 40),
+        (p(dy=3, lean=26, hf=(9, 1), wa=-4, ff=(13, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 4, 0),)), 140),
+        (p(dy=3, lean=24, hf=(9, 2), wa=0, ff=(13, 0), fb=(-9, 0), face='g'), 180),
+        (p(dy=2, lean=12, hf=(5, 2), wa=-20, ff=(10, 0), fb=(-8, 0)), 100),
+        (S0, 90)],
+        desc=desc, hit_frame=2, power=2, type='riposte', input='(after a parry) Strike')
+
+
+def pole_sweep(desc):
+    """Low sweep: the pole goes up and back over the shoulder, the fighter drops low, one flat sweep along the ankles."""
+    return W([
+        (p(dy=2, lean=0, hf=(-1, -7), eb_f='up', wa=-150, ff=(8, 0), fb=(-8, 0), face='g'), 110),
+        (p(dy=7, lean=14, sq=0.92, hf=(-3, -5), eb_f='up', wa=-162, ff=(10, 0), fb=(-10, 0), face='o'), 90),
+        (p(dy=8, lean=26, sq=0.92, hf=(10, 8), wa=26, ff=(13, 0), fb=(-10, 0), dx=4, face='o', smear_f=(-3, -5)), 40),
+        (p(dy=8, lean=28, sq=0.92, hf=(10, 9), wa=28, ff=(13, 0), fb=(-10, 0), face='o', fx=(('spark', 'hf', 3, 1), ('dust', 'ff', 8, -1))), 140),
+        (p(dy=8, lean=26, sq=0.92, hf=(9, 9), wa=34, ff=(13, 0), fb=(-10, 0), face='g'), 190),
+        (p(dy=4, lean=14, hf=(6, 4), wa=-20, ff=(10, 0), fb=(-8, 0)), 110),
+        (S0, 90)],
+        desc=desc, hit_frame=3, power=1, type='string', input='down + Strike')
+
+
+def pole_vault(desc):
+    """Vault kick: plant the pole ahead, ride up it with both legs tucked (held), whip a flying kick off the top, land."""
+    return W([
+        (p(dy=4, lean=18, sq=0.94, hf=(8, 5), wa=64, ff=(9, 0), fb=(-8, 0), face='g'), 110),
+        (p(dy=-5, lean=-8, sq=1.05, hf=(6, 6), wa=74, ff=(6, 7), fb=(-3, 6), face='o'), 80),
+        (p(dy=-8, lean=-20, hf=(5, 7), wa=78, ff=(5, 9), fb=(1, 9), face='o'), 150),
+        (p(dy=-8, lean=-26, sq=1.04, hf=(4, 7), wa=80, ff=(15, 12), fb=(0, 8), ang_f=-12, dx=4, face='o', smear_ff=(5, 9)), 40),
+        (p(dy=-8, lean=-26, hf=(4, 7), wa=80, ff=(16, 12), fb=(0, 8), ang_f=-12, face='o', fx=(('spark', 'ff', 4, -1),)), 160),
+        (p(dy=-6, lean=-20, hf=(4, 7), wa=78, ff=(15, 11), fb=(0, 7), ang_f=-10, face='g'), 200),
+        (p(dy=5, lean=12, sq=0.88, hf=(6, 4), wa=40, ff=(9, 0), fb=(-8, 0), fx=(('dust', 'ff', 4, 1), ('dust', 'fb', -5, 1))), 100),
+        (S0, 110)],
+        desc=desc, hit_frame=4, power=3, type='string', input='fwd, up + Kick')
+
+
+def pole_spin(desc):
+    """Pole spin: the pole whirls overhead (four quarter turns, speeding up), then comes down across the opponent."""
+    return W([
+        (p(dy=2, lean=0, hf=(3, -9), eb_f='up', wa=0, ff=(8, 0), fb=(-8, 0), face='g'), 100),
+        (p(dy=2, lean=0, hf=(3, -9), eb_f='up', wa=90, ff=(8, 0), fb=(-8, 0), face='g'), 80),
+        (p(dy=2, lean=-2, hf=(3, -9), eb_f='up', wa=180, ff=(8, 0), fb=(-8, 0), face='o'), 70),
+        (p(dy=3, lean=-6, sq=0.96, hf=(2, -9), eb_f='up', wa=-100, ff=(8, 0), fb=(-9, 0), face='o'), 60),
+        (p(dy=3, lean=24, hf=(11, 3), wa=30, ff=(12, 0), fb=(-9, 0), dx=4, face='o', smear_f=(2, -9)), 40),
+        (p(dy=3, lean=26, hf=(11, 4), wa=34, ff=(12, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 3, 0),)), 160),
+        (p(dy=3, lean=26, hf=(10, 6), wa=44, ff=(12, 0), fb=(-9, 0), face='g'), 230),
+        (p(dy=2, lean=12, hf=(6, 2), wa=-20, ff=(10, 0), fb=(-8, 0)), 110)],
+        desc=desc, hit_frame=5, power=2, type='string', input='Strike (hold), release')
+
+
+def staff_slam(desc):
+    """Overhead slam: squat, raise the staff in both hands, rise on the toes and HOLD, then bring it down in one frame;
+    the ground cracks (shock + dust) and the staff stays planted for a long beat."""
+    return W([
+        (p(dy=5, lean=10, sq=0.92, hf=(4, 4), wa=-30, ff=(9, 0), fb=(-8, 0), face='g'), 120),
+        (p(dy=1, lean=-6, sq=1.04, hf=(2, -8), eb_f='up', wa=-150, ff=(8, 0), fb=(-8, 0), face='o'), 140),
+        (p(dy=0, lean=-10, sq=1.06, chest=1.06, hf=(1, -9), eb_f='up', wa=-160, ff=(8, 1), fb=(-8, 1), face='o'), 190),
+        (p(dy=5, lean=36, hf=(11, 6), wa=60, ff=(12, 0), fb=(-9, 0), dx=4, face='o', smear_f=(1, -9)), 40),
+        (p(dy=7, lean=40, sq=0.90, hf=(11, 7), wa=66, ff=(12, 0), fb=(-9, 0), face='o',
+           fx=(('spark', 'hf', 2, 2), ('shock', 'abs', 46, 56), ('dust', 'ff', 8, -1))), 180),
+        (p(dy=7, lean=38, sq=0.92, hf=(11, 7), wa=66, ff=(12, 0), fb=(-9, 0), face='g', fx=(('dust', 'ff', 10, -2),)), 290),
+        (p(dy=3, lean=18, hf=(7, 3), wa=10, ff=(10, 0), fb=(-8, 0)), 120),
+        (S0, 100)],
+        desc=desc, hit_frame=4, power=3, type='string', input='down, up + Strike', shake=dict(frames=4, amp=2))
+
+
+# ---------------------------------------------------------------- chain / kunai
+def chain_pull(desc):
+    """Chain pull: whirl the rear kunai on its chain, sling it out (the chain pays out across the gap), it bites, then a
+    hard yank back with the whole body - the opponent comes with it (the engine slides it in on `pull_frame`)."""
+    return W([
+        (p(dy=3, lean=4, hf=(6, -2), wa=-60, hb=(-6, -4), wb=-150, ff=(8, 0), fb=(-8, 0), face='g'), 110),
+        (p(dy=3, lean=0, hf=(6, -2), wa=-60, hb=(-2, -10), eb_b='up', wb=-100, ff=(8, 0), fb=(-8, 0), face='o'), 90),
+        (p(dy=3, lean=24, hf=(4, 2), wa=60, hb=(11, -1), wb=-2, ff=(12, 0), fb=(-8, 0), dx=3, face='o', smear_b=(-2, -10),
+           fx=(('chain', 'hb', 2, 0, 12),)), 40),
+        (p(dy=3, lean=26, hf=(4, 2), wa=60, hb=(11, -1), wb=-2, ff=(12, 0), fb=(-8, 0), face='o',
+           fx=(('chain', 'hb', 2, 0, 18), ('spark', 'hb', 22, 0))), 140),
+        (p(dy=5, lean=-18, sq=0.94, hf=(2, 3), wa=80, hb=(-3, 1), wb=-10, ff=(10, 0), fb=(-9, 0), face='o',
+           fx=(('chain', 'hb', 2, 0, 24),)), 130),
+        (p(dy=4, lean=-12, hf=(3, 2), wa=70, hb=(-1, 2), wb=-20, ff=(10, 0), fb=(-9, 0), face='g', fx=(('chain', 'hb', 2, 0, 8),)), 150),
+        (p(dy=3, lean=4, hf=(6, -1), wa=-50, hb=(1, 4), ff=(9, 0), fb=(-8, 0)), 120),
+        (S0, 100)],
+        desc=desc, hit_frame=3, pull_frame=4, power=1, type='pull', input='back + Grab')
+
+
+def kunai_toss(desc):
+    """Kunai toss: a third kunai drawn from the belt, cocked behind the ear and held, flung side-arm; it crosses the
+    gap in two frames and strikes."""
+    return W([
+        (p(dy=3, lean=2, hf=(6, -2), wa=-60, hb=(-3, 2), wb=150, ff=(8, 0), fb=(-8, 0), face='g'), 100),
+        (p(dy=3, lean=-8, sq=0.96, hf=(6, -2), wa=-60, hb=(-4, -8), eb_b='up', wb=-150, ff=(8, 0), fb=(-9, 0), face='o'), 150),
+        (p(dy=3, lean=22, hf=(4, 2), wa=60, hb=(11, 0), wb=0, ff=(12, 0), fb=(-8, 0), dx=3, face='o', smear_b=(-4, -8),
+           fx=(('kunai', 'hb', 9, 0),)), 40),
+        (p(dy=3, lean=24, hf=(4, 2), wa=60, hb=(11, 1), wb=10, ff=(12, 0), fb=(-8, 0), face='o',
+           fx=(('kunai', 'hb', 21, 1), ('spark', 'hb', 23, 1))), 140),
+        (p(dy=3, lean=24, hf=(4, 3), wa=62, hb=(10, 2), wb=20, ff=(12, 0), fb=(-8, 0), face='g'), 200),
+        (p(dy=2, lean=10, hf=(6, -1), wa=-50, hb=(2, 3), ff=(9, 0), fb=(-8, 0)), 110),
+        (S0, 90)],
+        desc=desc, hit_frame=3, power=1, type='string', input='fwd + Strike (throw)')
+
+
+# ---------------------------------------------------------------- bow + dagger
+def bow_point_blank(desc):
+    """Point-blank shot: raise the bow, draw to the cheek and HOLD (the string bends back to the hand), release - the
+    arrow crosses the gap - and the bow arm stays up through the follow-through."""
+    return W([
+        (p(dy=2, lean=6, hf=(9, -1), wa=0, hb=(4, -1), wb=150, ff=(8, 0), fb=(-8, 0), face='g', nock=True), 120),
+        (p(dy=3, lean=2, chest=1.05, hf=(10, -1), wa=0, hb=(-2, -2), wb=150, ff=(8, 0), fb=(-9, 0), face='o', nock=True), 190),
+        (p(dy=3, lean=0, hf=(10, -1), wa=0, hb=(-6, 1), wb=150, ff=(8, 0), fb=(-9, 0), face='o', smear_b=(-2, -2),
+           fx=(('arrow', 'hf', 9, 0),)), 40),
+        (p(dy=3, lean=0, hf=(10, -1), wa=0, hb=(-6, 1), wb=150, ff=(8, 0), fb=(-9, 0), face='o',
+           fx=(('arrow', 'hf', 19, 0), ('spark', 'hf', 21, 0))), 140),
+        (p(dy=3, lean=-2, hf=(10, -2), wa=-6, hb=(-5, 2), wb=150, ff=(8, 0), fb=(-9, 0), face='g'), 230),
+        (p(dy=2, lean=6, hf=(7, 1), wa=0, hb=(2, 3), ff=(8, 0), fb=(-8, 0)), 110),
+        (S0, 90)],
+        desc=desc, hit_frame=3, power=2, type='string', input='Shoot')
+
+
+def bow_volley(desc):
+    """Volley: three arrows in quick succession, a fast re-nock between each, the third one lands."""
+    a = dict(hf=(10, -1), wa=0, ff=(8, 0), fb=(-9, 0))
+    return W([
+        (p(dy=3, lean=2, chest=1.04, hb=(-2, -2), wb=150, face='o', nock=True, **a), 150),
+        (p(dy=3, lean=0, hb=(-6, 1), wb=150, face='o', smear_b=(-2, -2), fx=(('arrow', 'hf', 14, 0),), **a), 40),
+        (p(dy=3, lean=2, hb=(-1, -2), wb=150, face='o', nock=True, fx=(('arrow', 'hf', 22, 0),), **a), 80),
+        (p(dy=3, lean=0, hb=(-6, 1), wb=150, face='o', smear_b=(-1, -2), fx=(('arrow', 'hf', 14, -1),), **a), 40),
+        (p(dy=3, lean=2, hb=(-1, -2), wb=150, face='o', nock=True, fx=(('arrow', 'hf', 22, -1),), **a), 70),
+        (p(dy=3, lean=0, hb=(-6, 1), wb=150, face='o', smear_b=(-1, -2), fx=(('arrow', 'hf', 12, 1),), **a), 40),
+        (p(dy=3, lean=-1, hb=(-6, 1), wb=150, face='o', fx=(('arrow', 'hf', 19, 1), ('spark', 'hf', 21, 1)), **a), 160),
+        (p(dy=3, lean=-2, hf=(10, -2), wa=-6, hb=(-5, 2), wb=150, ff=(8, 0), fb=(-9, 0), face='g'), 230)],
+        desc=desc, hit_frame=6, power=2, type='string', input='Shoot, Shoot, Shoot')
+
+
+def bow_leap_shot(desc):
+    """Leaping back-shot: crouch, spring backwards, draw at the top of the leap (held), loose, land skidding."""
+    return W([
+        (p(dy=5, lean=14, sq=0.88, hf=(6, 3), wa=10, hb=(3, 3), ff=(8, 0), fb=(-7, 0), face='g'), 100),
+        (p(dx=-8, dy=-6, lean=-14, sq=1.06, hf=(9, -2), wa=0, hb=(3, -1), wb=150, ff=(5, 6), fb=(-5, 5), face='o', nock=True,
+           fx=(('dust', 'ff', 4, 1),)), 60),
+        (p(dx=-4, dy=-8, lean=-18, chest=1.05, hf=(10, -1), wa=0, hb=(-2, -2), wb=150, ff=(5, 8), fb=(-4, 7), face='o', nock=True), 150),
+        (p(dy=-8, lean=-18, hf=(10, -1), wa=0, hb=(-6, 1), wb=150, ff=(5, 8), fb=(-4, 7), face='o', smear_b=(-2, -2),
+           fx=(('arrow', 'hf', 9, 1),)), 40),
+        (p(dy=-7, lean=-16, hf=(10, -1), wa=0, hb=(-6, 1), wb=150, ff=(5, 7), fb=(-4, 6), face='o',
+           fx=(('arrow', 'hf', 19, 2), ('spark', 'hf', 21, 2))), 140),
+        (p(dx=-3, dy=5, lean=10, sq=0.88, hf=(8, 2), wa=0, hb=(2, 3), ff=(9, 0), fb=(-8, 0), fx=(('dust', 'ff', 4, 1), ('dust', 'fb', -5, 1))), 110),
+        (S0, 100)],
+        desc=desc, hit_frame=4, power=2, type='string', input='back, back + Shoot')
+
+
+def bow_bash(desc):
+    """Guard break with a bow: the bow comes up two-handed like a club over the shoulder (held), then the limb cracks
+    down across the guard."""
+    return W([
+        (p(dy=3, lean=-6, turn=0.8, hf=(0, -8), eb_f='up', wa=-60, hb=(-2, 2), ff=(8, 0), fb=(-8, 0), face='g'), 150),
+        (p(dy=5, lean=-12, sq=0.94, chest=1.06, turn=0.7, hf=(-2, -9), eb_f='up', wa=-80, hb=(-3, 3), ff=(9, 0), fb=(-9, 0), face='o'), 170),
+        (p(dy=5, lean=-14, sq=0.93, chest=1.07, turn=0.7, hf=(-3, -9), eb_f='up', wa=-86, hb=(-3, 3), ff=(9, 0), fb=(-10, 0), face='o'), 180),
+        (p(dy=3, lean=30, hf=(11, 4), wa=50, hb=(2, 4), ff=(14, 0), fb=(-9, 0), dx=6, face='o', smear_f=(-3, -9)), 40),
+        (p(dy=3, lean=32, hf=(11, 5), wa=54, hb=(2, 4), ff=(14, 0), fb=(-9, 0), face='o', fx=(('block', 'hf', 3, 0), ('spark', 'hf', 4, -1))), 180),
+        (p(dy=3, lean=30, hf=(10, 6), wa=60, hb=(2, 4), ff=(14, 0), fb=(-9, 0), face='g'), 240),
+        (p(dy=2, lean=12, hf=(8, 1), wa=0, hb=(3, 3), ff=(10, 0), fb=(-8, 0)), 110),
+        (S0, 100)],
+        desc=desc, hit_frame=4, power=2, type='guard_break', input='back, fwd + Strike (hold)')
+
+
+# ---------------------------------------------------------------- fans / chakram
+def fan_gust(desc):
+    """Fan gust: both fans swept back and held, then one huge forward fan - a gust of wind crosses the gap and shoves."""
+    return W([
+        (p(dy=3, lean=-4, hf=(-3, -6), eb_f='up', wa=-150, hb=(-5, 3), wb=160, ff=(8, 0), fb=(-8, 0), face='g'), 130),
+        (p(dy=4, lean=-10, sq=0.95, chest=1.05, hf=(-4, -7), eb_f='up', wa=-160, hb=(-6, 4), wb=170, ff=(8, 0), fb=(-9, 0), face='o'), 170),
+        (p(dy=3, lean=24, hf=(11, 0), wa=-10, hb=(9, 3), wb=10, ff=(12, 0), fb=(-9, 0), dx=3, face='o', smear_f=(-4, -7),
+           fx=(('gust', 'hf', 4, 0),)), 40),
+        (p(dy=3, lean=26, hf=(11, 0), wa=-8, hb=(9, 3), wb=12, ff=(12, 0), fb=(-9, 0), face='o',
+           fx=(('gust', 'hf', 12, 0), ('gust', 'hf', 4, 3))), 150),
+        (p(dy=3, lean=26, hf=(11, 1), wa=-4, hb=(9, 4), wb=16, ff=(12, 0), fb=(-9, 0), face='g', fx=(('gust', 'hf', 17, 0),)), 230),
+        (p(dy=2, lean=12, hf=(7, -2), wa=-40, hb=(2, 3), wb=40, ff=(10, 0), fb=(-8, 0)), 110),
+        (S0, 100)],
+        desc=desc, hit_frame=3, power=2, type='gust', input='back, fwd + Strike')
+
+
+def chakram_boomerang(desc):
+    """Boomerang: cock the lead chakram across the body and hold, whip it out (it leaves the hand on proj_frame), the
+    hand stays open and waits while it flies out and curves back, then it is caught (catch_frame) and twirled."""
+    return W([
+        (p(dy=3, lean=-6, turn=0.8, hf=(-3, -2), wa=180, ff=(8, 0), fb=(-8, 0), face='g'), 120),
+        (p(dy=4, lean=-10, sq=0.95, turn=0.75, hf=(-5, -1), wa=180, ff=(8, 0), fb=(-9, 0), face='o'), 150),
+        (p(dy=3, lean=24, hf=(11, -1), wa=0, ff=(12, 0), fb=(-9, 0), dx=3, face='o', smear_f=(-5, -1)), 40),
+        (p(dy=3, lean=24, hf=(11, -1), open_f=True, nowf=True, ff=(12, 0), fb=(-9, 0), face='o'), 170),
+        (p(dy=3, lean=14, hf=(9, -2), open_f=True, nowf=True, ff=(10, 0), fb=(-8, 0), face='g'), 330),
+        (p(dy=3, lean=10, hf=(8, -2), wa=0, ff=(10, 0), fb=(-8, 0), face='w', fx=(('spark_s', 'hf', 3, 0),)), 90),
+        (p(dy=2, lean=8, hf=(8, -1), wa=120, ff=(9, 0), fb=(-8, 0), face='w'), 110),
+        (S0, 100)],
+        cat='special', desc=desc, proj_frame=3, catch_frame=5, power=2, type='boomerang', input='down, fwd + Throw')
+
+
+# ---------------------------------------------------------------- heavy (greatsword, axe, kanabo)
+def heavy_cleave(desc):
+    """Heavy cleave: the weapon goes all the way back over the shoulder and the fighter sinks under its weight - three
+    held keys - then ONE frame down, it bites the ground and stays there; heaving it out is part of the move.  Armour:
+    the fighter does not flinch from a light hit during the wind-up (`armor`)."""
+    return W([
+        (p(dy=3, lean=-6, chest=1.04, hf=(-1, -8), eb_f='up', wa=-140, ff=(8, 0), fb=(-8, 0), face='g'), 160),
+        (p(dy=4, lean=-14, sq=0.96, chest=1.07, hf=(-3, -9), eb_f='up', wa=-160, ff=(9, 0), fb=(-9, 0), face='o'), 200),
+        (p(dy=6, lean=-16, sq=0.92, chest=1.08, hf=(-4, -9), eb_f='up', wa=-166, ff=(10, 0), fb=(-10, 0), face='o'), 230),
+        (p(dy=5, lean=36, hf=(11, 6), wa=58, ff=(13, 0), fb=(-9, 0), dx=5, face='o', smear_f=(-4, -9)), 50),
+        (p(dy=7, lean=40, sq=0.90, hf=(11, 7), wa=66, ff=(13, 0), fb=(-9, 0), face='o',
+           fx=(('spark', 'hf', 2, 2), ('dust', 'ff', 8, -1))), 210),
+        (p(dy=8, lean=40, sq=0.90, hf=(11, 8), wa=72, ff=(13, 0), fb=(-9, 0), face='g', fx=(('dust', 'ff', 10, -2),)), 330),
+        (p(dy=4, lean=16, hf=(6, 2), wa=-10, ff=(10, 0), fb=(-8, 0), face='g'), 150),
+        (S0, 120)],
+        desc=desc, hit_frame=4, power=3, type='string', armor=True, input='back + Heavy', shake=dict(frames=4, amp=2))
+
+
+def heavy_ground_slam(desc):
+    """Ground slam: lift and hold, smash the ground in front, the shock wave runs along the floor and reaches the
+    opponent a frame later (contact on the wave, not the weapon)."""
+    return W([
+        (p(dy=2, lean=-8, hf=(1, -9), eb_f='up', wa=-110, ff=(8, 0), fb=(-8, 0), face='g'), 200),
+        (p(dy=1, lean=-12, sq=1.05, chest=1.07, hf=(0, -10), eb_f='up', wa=-124, ff=(8, 1), fb=(-8, 1), face='o'), 260),
+        (p(dy=6, lean=38, hf=(9, 8), wa=74, ff=(11, 0), fb=(-9, 0), dx=3, face='o', smear_f=(0, -10)), 50),
+        (p(dy=8, lean=42, sq=0.88, hf=(9, 9), wa=80, ff=(11, 0), fb=(-9, 0), face='o',
+           fx=(('shock', 'abs', 44, 56), ('dust', 'hf', 6, 6))), 110),
+        (p(dy=8, lean=42, sq=0.88, hf=(9, 9), wa=80, ff=(11, 0), fb=(-9, 0), face='o',
+           fx=(('shock', 'abs', 54, 56), ('spark', 'abs', 56, 50), ('dust', 'hf', 8, 7))), 170),
+        (p(dy=7, lean=38, sq=0.92, hf=(9, 8), wa=78, ff=(11, 0), fb=(-9, 0), face='g'), 260),
+        (p(dy=3, lean=16, hf=(6, 2), wa=-20, ff=(10, 0), fb=(-8, 0)), 140),
+        (S0, 110)],
+        desc=desc, hit_frame=4, power=3, type='string', input='down, down + Heavy', shake=dict(frames=5, amp=2))
+
+
+def heavy_jab(desc):
+    """Riposte for a heavy weapon: no time to swing, so the pommel / haft is driven straight out."""
+    return W([
+        (p(dy=3, lean=-2, turn=0.85, hf=(-3, 1), wa=180, ff=(8, 0), fb=(-8, 0), face='g'), 100),
+        (p(dy=3, lean=24, hf=(9, 0), wa=178, ff=(13, 0), fb=(-9, 0), dx=5, face='o', smear_b=(-3, 1),
+           fx=(('speedlines', 'hip', -10, -6),)), 40),
+        (p(dy=3, lean=26, hf=(9, 0), wa=178, ff=(13, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 3, 0),)), 150),
+        (p(dy=3, lean=24, hf=(9, 1), wa=176, ff=(13, 0), fb=(-9, 0), face='g'), 200),
+        (p(dy=2, lean=12, hf=(6, 2), wa=-30, ff=(10, 0), fb=(-8, 0)), 110),
+        (S0, 90)],
+        desc=desc, hit_frame=2, power=2, type='riposte', input='(after a parry) Strike')
+
+
+# ---------------------------------------------------------------- taunt variants (per family)
+def taunt_twirl(desc, end, spins=(80, 170, -100)):
+    """A weapon twirl round the wrist, a flick, then the family's own closing pose `end` (held)."""
+    keys = [(p(dy=2, lean=8, hf=(8, 1), wa=0, face='g'), 140)]
+    for a, ms in zip(spins, (70, 60, 70)):
+        keys.append((p(dy=2, lean=8, hf=(8, 1), wa=a, face='g'), ms))
+    keys += [(p(dy=2, lean=10, hf=(9, 3), wa=40, face='w', fx=(('spark_s', 'hf', 3, 1),)), 160),
+             (p(**end), 360), (p(**dict(end, dy=end.get('dy', 2) + 1)), 150), (S0, 120)]
+    return W(keys, cat='emote', desc=desc, type='taunt', input='Taunt')
+
+
+def _lying(body):
+    return dict(lean=-90, dy=body.lie_dy, head=(-2, -2), hf=(-4, 3), hb=(-7, 1), eb_f='up', eb_b='up', ff=(12, 1), fb=(10, 0), face='x', cx=5)
+
+
+def r_launched(body):
+    """Popped into the air by a launcher: white flash, the hips leave the ground, the body tips back and hangs."""
+    return W([
+        (p(flash=True, lean=-16, cx=1, head=(-3, -1), hf=(7, -1), hb=(3, 1), face='h', dx=-2), 50),
+        (p(wa=165, wb=170, dy=-8, lean=-34, cx=1, sq=1.06, head=(-4, -1), hf=(4, -6), hb=(0, -5), ff=(5, 6), fb=(-3, 5), face='h', dx=-3), 70),
+        (p(wa=165, wb=170, dy=-13, lean=-52, cx=3, head=(-4, 0), hf=(2, -4), hb=(-3, -2), ff=(7, 9), fb=(1, 8), face='h', dx=-2), 90),
+        (p(wa=165, wb=170, dy=-14, lean=-62, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 10), fb=(2, 9), face='x', dx=-1), 160),
+        (p(wa=165, wb=170, dy=-14, lean=-66, cx=3, head=(-3, 1), hf=(1, -1), hb=(-4, 1), ff=(8, 10), fb=(2, 8), face='x'), 220)],
+        cat='reaction', desc='Launched: popped up and hanging in the air, open for a juggle.', type='launched')
+
+
+def r_air_hit(body):
+    """Struck again in the air: flash, the body spins further back and stays up."""
+    return W([
+        (p(wa=165, wb=170, flash=True, dy=-14, lean=-70, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 10), fb=(2, 9), face='h', dx=-2), 50),
+        (p(wa=165, wb=170, dy=-15, lean=-86, cx=3, head=(-3, 1), hf=(-2, -4), hb=(-6, -2), ff=(10, 9), fb=(4, 10), face='h', dx=-3), 80),
+        (p(wa=165, wb=170, dy=-14, lean=-80, cx=3, head=(-2, 1), hf=(-1, -3), hb=(-5, -1), ff=(9, 10), fb=(3, 9), face='x', dx=-1), 140),
+        (p(wa=165, wb=170, dy=-13, lean=-76, cx=3, head=(-2, 1), hf=(0, -2), hb=(-4, 0), ff=(9, 9), fb=(3, 9), face='x'), 180)],
+        cat='reaction', desc='Juggled: hit again while airborne.', type='air_hit')
+
+
+def r_spiked(body):
+    """Slammed out of the air: a short fall, flat impact with dust, one bounce, lying (then `getup`)."""
+    lying, ldy = _lying(body), body.lie_dy
+    return W([
+        (p(wa=165, wb=170, flash=True, dy=-12, lean=-70, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 10), fb=(2, 9), face='h', dx=-1), 50),
+        (p(wa=165, wb=170, dy=-4, lean=-84, head=(-3, -1), hf=(-2, 1), hb=(-6, 0), ff=(10, 6), fb=(6, 6), face='h', cx=3, dx=-2), 50),
+        (p(**{**lying, 'dy': ldy + 0.5}, sq=0.86, fx=(('shock', 'abs', 32, 56), ('dust', 'hip', -4, 5), ('dust', 'hip', 8, 4))), 90),
+        (p(**{**lying, 'dy': ldy - 3}, sq=1.0), 70),
+        (p(**lying, sq=0.94, fx=(('dust', 'hip', -6, 4),)), 110),
+        (p(**lying), 200)],
+        cat='reaction', desc='Spiked: slammed out of the air, bounces once and lies there.', type='spiked',
+        shake=dict(frames=3, amp=1))
+
+
+def r_thrown(body):
+    """Thrown: grabbed (frame 0 = the attacker's grab_frame), lifted off its feet, flipped overhead, slammed flat on the
+    attacker's hit_frame (frame 4), one bounce, lying.  Same clock as t_throw."""
+    lying, ldy = _lying(body), body.lie_dy
+    ms = THROW_MS
+    return W([
+        (p(lean=22, head=(2, 1), hf=(9, 2), hb=(6, 3), ff=(9, 0), fb=(-6, 0), face='h'), ms[1]),
+        (p(wa=165, wb=170, dy=-6, lean=6, sq=1.04, head=(1, 0), hf=(6, -2), hb=(3, -1), ff=(4, 5), fb=(-3, 4), face='h'), ms[2]),
+        (p(wa=165, wb=170, dy=-13, lean=-40, head=(-2, 0), hf=(4, -6), hb=(0, -5), ff=(6, 10), fb=(0, 9), face='h'), ms[3]),
+        (p(wa=165, wb=170, dy=-6, lean=-78, head=(-3, 0), hf=(-1, -4), hb=(-5, -3), ff=(10, 8), fb=(5, 8), face='x', cx=3), ms[4]),
+        (p(**{**lying, 'dy': ldy + 0.5}, flash=True, sq=0.86, fx=(('shock', 'abs', 32, 56), ('dust', 'hip', -4, 5), ('dust', 'hip', 8, 4))), ms[5]),
+        (p(**{**lying, 'dy': ldy - 2}, sq=1.0), 80),
+        (p(**lying), 220)],
+        cat='reaction', desc='Thrown: grabbed, hoisted overhead and slammed flat.', type='thrown', grab_frame=0, hit_frame=4,
+        shake=dict(frames=3, amp=1))
+
+
+def r_pulled(body):
+    """Yanked in by a chain: jerked forward at the waist, arms trailing, stumbles two steps, finds its feet."""
+    return W([
+        (p(flash=True, lean=30, head=(3, 1), hf=(-3, 5), hb=(-6, 4), ff=(5, 0), fb=(-9, 1), face='h', dx=4), 50),
+        (p(lean=34, head=(3, 2), hf=(-4, 6), hb=(-7, 5), ff=(11, 3), fb=(-8, 0), face='h', dx=6), 90),
+        (p(dy=3, lean=26, sq=0.95, head=(2, 1), hf=(2, 5), hb=(-2, 5), ff=(12, 0), fb=(-5, 2), face='o', dx=3), 110),
+        (p(dy=2, lean=12, hf=(6, 2), hb=(2, 3), ff=(9, 0), fb=(-7, 0), face='o'), 120),
+        (S0, 100)],
+        cat='reaction', desc='Pulled: yanked in by a chain and stumbles forward.', type='pulled')
+
+
+def r_guard_crush(body):
+    """Guard broken: the raised guard is smashed open (flash + guard spark), arms fly up, a staggering step back with
+    stars, then the guard comes back."""
+    stars = (('star', 'head', -6, -9), ('star', 'head', 6, -8))
+    return W([
+        (p(flash=True, dy=3, lean=-4, hf=(7, -3), hb=(5, -3), wa=-100, wb=-104, fist_f=4, face='h', dx=-2, fx=(('block', 'hf', 4, -3),)), 50),
+        (p(dy=1, lean=-20, head=(-3, -1), hf=(3, -11), hb=(-3, -9), eb_f='up', eb_b='up', ff=(7, 0), fb=(-9, 0), face='h', dx=-4), 90),
+        (p(dy=2, lean=-24, head=(-3, 0), hf=(2, -10), hb=(-4, -8), eb_f='up', eb_b='up', ff=(8, 2), fb=(-9, 0), face='x', dx=-2, fx=stars), 140),
+        (p(dy=3, lean=-10, head=(-1, 1), tilt=8, hf=(5, 2), hb=(1, 3), ff=(8, 0), fb=(-8, 0), face='x', fx=stars), 180),
+        (p(dy=3, lean=4, tilt=-4, hf=(6, 1), hb=(3, 2), face='o'), 130),
+        (S0, 110)],
+        cat='reaction', desc='Guard crushed: the guard flies open and the fighter staggers, wide open.', type='guard_crush')
+
+
+def r_hit_high(body):
+    """Hit high (a rising or overhead blow): the chin snaps up, the head leads back, the arms lift a frame later."""
+    return W([
+        (p(flash=True, lean=-10, head=(-3, -2), tilt=-10, hf=(7, -1), hb=(3, 1), face='h', dx=-2), 50),
+        (p(lean=-20, head=(-4, -3), tilt=-14, hf=(5, -5), hb=(1, -4), ff=(7, 0), fb=(-8, 0), face='h', dx=-2), 70),
+        (p(lean=-14, head=(-2, -2), tilt=-8, hf=(4, -2), hb=(1, -1), ff=(7, 0), fb=(-8, 0), face='h', dx=-1), 90),
+        (p(lean=2, head=(0, 0), hf=(6, 1), hb=(3, 1), face='h'), 70), (S0, 90)],
+        cat='reaction', desc='Hit high: the head snaps back first, the arms follow.', type='hit_high')
+
+
+def r_hit_low(body):
+    """Hit low (a sweep or a body blow): folds over the hit, the knees buckle, then straightens up."""
+    return W([
+        (p(flash=True, dy=3, lean=22, head=(2, 2), hf=(6, 2), hb=(3, 3), face='h', dx=-1), 50),
+        (p(dy=6, lean=34, sq=0.92, head=(3, 3), hf=(3, 6), hb=(1, 6), ff=(6, 1), fb=(-8, 0), face='h', dx=-2), 90),
+        (p(dy=5, lean=28, sq=0.95, head=(2, 2), hf=(4, 5), hb=(2, 5), ff=(7, 0), fb=(-8, 0), face='h', dx=-1), 100),
+        (p(dy=2, lean=12, hf=(6, 2), hb=(3, 2), face='o'), 80), (S0, 90)],
+        cat='reaction', desc='Hit low: doubles over the blow, knees buckle.', type='hit_low')
+
+
+def r_hit_back(body):
+    """Hit from behind (after a dash-through): pitched forward off its feet, stumbles two steps, catches itself."""
+    return W([
+        (p(flash=True, lean=22, head=(3, 1), hf=(4, 3), hb=(1, 3), face='h', dx=3), 50),
+        (p(lean=34, head=(4, 2), hf=(-3, 4), hb=(-6, 3), ff=(11, 3), fb=(-7, 0), face='h', dx=4), 80),
+        (p(dy=3, lean=26, sq=0.95, head=(3, 2), hf=(2, 5), hb=(-2, 5), ff=(12, 0), fb=(-5, 1), face='h', dx=3), 110),
+        (p(dy=2, lean=12, hf=(6, 2), hb=(2, 3), ff=(9, 0), fb=(-7, 0), face='o'), 100), (S0, 100)],
+        cat='reaction', desc='Hit from behind: pitched forward, stumbles, catches itself.', type='hit_back')
+
+
+def r_clash(body):
+    """Weapon clash: both fighters' weapons meet and lock (spark), a straining push with the weapons crossed high, then
+    both shove off and skid back.  Both fighters play this row on the same instant."""
+    return W([
+        (p(dy=3, lean=26, hf=(10, -3), wa=-40, ff=(12, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 3, -2),)), 60),
+        (p(dy=4, lean=30, sq=0.95, chest=1.05, hf=(10, -4), wa=-44, ff=(12, 0), fb=(-10, 0), face='o'), 130),
+        (p(dy=4, lean=27, sq=0.96, chest=1.06, hf=(9, -3), wa=-40, ff=(12, 0), fb=(-10, 0), face='g', fx=(('spark_s', 'hf', 2, -3),)), 150),
+        (p(dy=4, lean=31, sq=0.95, chest=1.06, hf=(10, -4), wa=-46, ff=(12, 0), fb=(-10, 0), face='o'), 120),
+        (p(dy=2, lean=-12, hf=(6, 0), wa=-70, ff=(8, 2), fb=(-9, 0), dx=-6, face='o', fx=(('spark', 'hf', 4, -1),)), 90),
+        (p(dy=3, lean=-4, sq=0.96, hf=(7, 2), wa=-50, ff=(9, 0), fb=(-8, 0), face='g', fx=(('dust', 'ff', 4, 1),)), 110),
+        (S0, 100)],
+        cat='reaction', desc='Clash: the weapons lock with a spark, a straining push, then both shove off.', type='clash', lock_frame=0)
+
+
+REACTIONS = (('launched', r_launched), ('air_hit', r_air_hit), ('spiked', r_spiked), ('thrown', r_thrown),
+             ('pulled', r_pulled), ('guard_crush', r_guard_crush), ('hit_high', r_hit_high), ('hit_low', r_hit_low),
+             ('hit_back', r_hit_back), ('clash', r_clash))
+
+
+def _turned(body, ps):
+    sk = rig.skeleton(body, ps)
+    for side, want in (('f', ps.wa), ('b', ps.wb)):
+        w = sk['w' + side]
+        if w is not None and want is not None and abs(((w['a'] - want) + 180) % 360 - 180) > 1:
+            return True
+    return False
+
+
+def fit_weapons(body, mv):
+    """Hand-tuning aid: where the rig would have to TURN a weapon away from the angle a key asks for (its ends would
+    leave the cell), pull the hands in toward the shoulder in small steps until it fits at the asked angle, so the blade
+    never jumps between two frames.  Keys that fit are left exactly as authored."""
+    fr = []
+    for ps, ms in mv['frames']:
+        if (ps.wa is not None or ps.wb is not None) and _turned(body, ps):
+            for k in [1.0 - 0.04 * i for i in range(1, 13)]:
+                cand = replace(ps, hf=(ps.hf[0] * k, ps.hf[1] * k), hb=(ps.hb[0] * k, ps.hb[1] * k))
+                if not _turned(body, cand):
+                    ps = cand
+                    break
+        fr.append((ps, ms))
+    mv['frames'] = fr
+    return mv
+
+
+TAUNT_END = {
+    'blade': dict(dy=3, lean=6, turn=0.85, hf=(-1, 7), wa=165, head=(2, 0), tilt=-6, face='w'),
+    'dual': dict(dy=2, lean=4, hf=(6, -3), wa=-50, hb=(6, -3), wb=-130, face='w', tilt=-4),
+    'polearm': dict(dy=2, lean=4, hf=(8, 0), wa=-90, head=(2, 0), tilt=6, face='w'),
+    'staff': dict(dy=2, lean=4, hf=(8, 0), wa=-90, head=(2, 0), tilt=6, face='w'),
+    'chain': dict(dy=3, lean=14, hf=(10, -2), wa=0, hb=(1, 4), face='w', tilt=-4),
+    'bow': dict(dy=1, lean=0, hf=(4, -11), eb_f='up', wa=-90, face='w'),
+    'fans': dict(dy=2, lean=4, hf=(4, -6), wa=-60, head=(2, 0), tilt=-8, face='w'),
+    'heavy': dict(dy=2, lean=2, chest=1.06, hf=(2, -3), wa=-150, face='w', head=(2, 0)),
+}
+TAUNT_DESC = {
+    'blade': 'Twirls the blade, flicks it and sheathes it at the hip.',
+    'dual': 'Spins one weapon, then crosses both in front of the face.',
+    'polearm': 'Twirls the spear and plants it upright with a head tilt.',
+    'staff': 'Twirls the staff and plants it with a head tilt.',
+    'chain': 'Spins a kunai round one finger and points it at the opponent.',
+    'bow': 'Twirls the bow and raises it overhead.',
+    'fans': 'Twirls a fan and hides a smile behind it.',
+    'heavy': 'Twirls the weapon and rests it on the shoulder.',
+}
+
+# family -> [(name, template, desc)]: the family moves first; the shared types are added after them
+FAMILY_MOVES = {
+    'blade': [('iai_slash', blade_iai, 'Iai: crouches with the blade low at the hip, then draws and cuts in one flash.'),
+              ('cross_cut', blade_cross_cut, 'Two strokes that cross in an X: a falling diagonal, then the rising back-cut.'),
+              ('riposte', blade_thrust, 'Riposte: a straight lunging stab, the answer to a parry.')],
+    'dual': [('flurry', dual_flurry, 'Three alternating cuts, lead, rear, lead rising; the third one lands.'),
+             ('scissor_cut', dual_scissor, 'Both weapons thrown wide, then snapped shut across the opponent like scissors.'),
+             ('blade_dance', dual_dance, 'A full spin with both weapons held out; the lead one sweeps through.'),
+             ('riposte', dual_riposte, 'Riposte: the rear weapon snaps out in a straight stab.')],
+    'polearm': [('long_thrust', pole_thrust, 'Draws the spear all the way back, then lunges to its full length.'),
+                ('pole_sweep', pole_sweep, 'Drops low and sweeps the spear flat along the ankles.'),
+                ('vault_kick', pole_vault, 'Plants the spear, rides up it and whips a flying kick off the top.'),
+                ('pole_spin', pole_spin, 'Whirls the spear overhead, faster each turn, then brings it down.'),
+                ('riposte', pole_jab, 'Riposte: chokes up and snaps the shaft forward.')],
+    'staff': [('overhead_slam', staff_slam, 'Raises the staff, rises on the toes, then cracks it into the ground.'),
+              ('staff_sweep', pole_sweep, 'Drops low and sweeps the staff along the ground.'),
+              ('pole_vault', pole_vault, 'Plants the staff, vaults up it and kicks off the top.'),
+              ('riposte', pole_jab, 'Riposte: drives the end of the staff straight out.')],
+    'chain': [('chain_pull', chain_pull, 'Slings the rear kunai out on its chain, then yanks the opponent in.'),
+              ('kunai_toss', kunai_toss, 'Cocks a kunai behind the ear and flings it across the gap.'),
+              ('riposte', dual_riposte, 'Riposte: a reverse-grip stab with the rear kunai.')],
+    'bow': [('point_blank', bow_point_blank, 'Draws to the cheek, holds, and looses an arrow at point-blank range.'),
+            ('arrow_volley', bow_volley, 'Three arrows in quick succession; the third one lands.'),
+            ('leap_shot', bow_leap_shot, 'Springs backwards and shoots from the top of the leap.'),
+            ('riposte', dual_riposte, 'Riposte: a quick stab with the dagger in the rear hand.')],
+    'fans': [('fan_gust', fan_gust, 'Sweeps both fans back, then fans a gust of wind across the gap.'),
+             ('fan_cut', dual_scissor, 'Both fans thrown wide, then snapped shut across the opponent.'),
+             ('fan_flurry', dual_flurry, 'Three alternating fan cuts; the third one lands.'),
+             ('riposte', dual_riposte, 'Riposte: the rear fan snaps out edge-first.')],
+    'heavy': [('cleave', heavy_cleave, 'A huge wind-up it will not flinch out of, then one cleave into the ground.'),
+              ('ground_slam', heavy_ground_slam, 'Smashes the ground; the shock wave runs along the floor into the opponent.'),
+              ('riposte', heavy_jab, 'Riposte: no time to swing, so the pommel is driven straight out.')],
+}
+# per-character changes to the family list (the chakram thrower boomerangs instead of gusting; names fit the weapon)
+CHAR_MOVES = {
+    'nomad': {'fan_gust': ('chakram_boomerang', chakram_boomerang, 'Whips a chakram out; it curves back and is caught.'),
+              'fan_cut': ('ring_slash', dual_scissor, 'Both chakrams thrown wide, then snapped shut across the opponent.'),
+              'fan_flurry': ('ring_flurry', dual_flurry, 'Three alternating chakram cuts; the third one lands.')},
+    'monk': {'flurry': ('tonfa_flurry', dual_flurry, 'Three alternating tonfa strikes; the third one lands.'),
+             'scissor_cut': ('tonfa_crush', dual_scissor, 'Both tonfa thrown wide, then slammed together on the opponent.'),
+             'blade_dance': ('tonfa_whirl', dual_dance, 'A full spin with both tonfa out; the lead one sweeps through.')},
+}
+SHARED = [('air_slash', t_air_slash, 'Jumps after a launched opponent and strikes down through it in mid-air.'),
+          ('spike', t_spike, 'Leaps, raises the weapon overhead and spikes the airborne opponent into the ground.'),
+          ('throw', t_throw, 'Grabs the opponent, hoists it overhead and slams it down.'),
+          ('dash_slash', t_dash_slash, 'Bursts through the opponent and stops on the far side; the cut lands a beat later.'),
+          ('guard_break', t_guard_break, 'A long heavy wind-up, then the pommel smashes the guard open.')]
+SHARED_NAMES = {'codex': {'dash_slash': 'shadow_step'}}
+GUARD_BREAK = {'bow': bow_bash}
+
+
+def heavier(mv, wind=1.25, follow=1.15):
+    """The same keys with the weight of a heavy weapon: every frame before the smear and after the contact is held longer
+    (rounded to 10 ms); the smear and the contact frame keep their timing."""
+    sm = (mv.get('smear_frames') or [0])[0]
+    hit = mv.get('hit_frame', sm)
+    fr = []
+    for i, (ps, ms) in enumerate(mv['frames']):
+        k = wind if i < sm else (follow if i > hit else 1.0)
+        fr.append((ps, int(round(ms * k / 10.0)) * 10 if k != 1.0 else ms))
+    mv['frames'] = fr
+    return mv
+
+
+def weapon_moves(ch):
+    """The character's V7 rows, in a fixed order: family moves, the shared types, the taunt variant, the reactions."""
+    fam = family_of(ch)
+    out = {}
+    swap = CHAR_MOVES.get(ch.name, {})
+    for name, fn, desc in FAMILY_MOVES[fam]:
+        name, fn, desc = swap.get(name, (name, fn, desc))
+        out[name] = fn(desc)
+        out[name]['family'] = fam
+    for name, fn, desc in SHARED:
+        if name == 'guard_break':
+            fn = GUARD_BREAK.get(fam, fn)
+        name = SHARED_NAMES.get(ch.name, {}).get(name, name)
+        out[name] = fn(desc)
+        out[name]['family'] = fam
+        if fam == 'heavy' and fn is not t_throw:       # a heavy weapon winds up longer and follows through longer
+            out[name] = heavier(out[name])
+    out['taunt2'] = taunt_twirl(TAUNT_DESC[fam], TAUNT_END[fam])
+    for name in combo_for(ch):                     # a string member can be cut short right after its contact hold
+        mv = out[name]
+        mv['cancel_frame'] = min(len(mv['frames']) - 1, mv['hit_frame'] + 1)
+    for name, fn in REACTIONS:
+        out[name] = fn(ch.body)
+    return {k: fit_weapons(ch.body, v) for k, v in out.items()}
+
+
+# the character's 3-hit string (anim.json `combo`): riposte -> two family moves, each cancelled on its cancel_frame
+COMBO = {'blade': ('riposte', 'iai_slash', 'cross_cut'), 'dual': ('riposte', 'flurry', 'scissor_cut'),
+         'polearm': ('riposte', 'long_thrust', 'pole_spin'), 'staff': ('riposte', 'staff_sweep', 'overhead_slam'),
+         'chain': ('riposte', 'kunai_toss', 'guard_break'), 'bow': ('riposte', 'point_blank', 'arrow_volley'),
+         'fans': ('riposte', 'fan_flurry', 'fan_cut'), 'heavy': ('riposte', 'guard_break', 'cleave')}
+COMBO_NAMES = {'nomad': {'fan_flurry': 'ring_flurry', 'fan_cut': 'ring_slash'},
+               'monk': {'flurry': 'tonfa_flurry', 'scissor_cut': 'tonfa_crush'}}
+
+
+def combo_for(character):
+    import roster
+    ch = roster.get(character)
+    ren = COMBO_NAMES.get(ch.name, {})
+    return [ren.get(m, m) for m in COMBO[family_of(ch)]]
+
+
+# ---------------------------------------------------------------- contact metadata (V7 part C): how a hit lands
+BLUNT_WEAPONS = ('staff', 'kanabo', 'tonfa')
+PIERCE_MOVES = ('jab', 'riposte', 'long_thrust', 'kunai_toss', 'point_blank', 'arrow_volley', 'leap_shot', 'chain_pull')
+BLUNT_MOVES = ('low_kick', 'roundhouse', 'vault_kick', 'pole_vault', 'guard_break', 'throw')
+HIGH_MOVES = ('uppercut', 'cross', 'roundhouse', 'cross_cut', 'spike', 'air_slash', 'overhead_slam', 'cleave', 'pole_spin',
+              'vault_kick', 'pole_vault', 'scissor_cut', 'tonfa_crush', 'fan_cut', 'ring_slash')
+LOW_MOVES = ('low_kick', 'pole_sweep', 'staff_sweep', 'ground_slam')
+TEMPLATE_HIT = {'spin': ('blunt', 'high'), 'pound': ('blunt', 'high'), 'throw': (None, 'mid'), 'cast': ('pierce', 'mid')}
+
+
+def annotate_contact(ch, mv):
+    """Every move that lands gets `hit` (slash / blunt / pierce: which spark the engine draws on contact) and `height`
+    (high / mid / low / back: which reaction the defender plays).  Read from the weapon and the move's shape."""
+    kind = ch.body.weapon.kind
+    sig_tpl = {name: tpl for name, (tpl, _d, _o) in ch.sig_moves.items()}
+    for name, m in mv.items():
+        if 'hit_frame' not in m or m.get('cat') not in ('strike', 'throw', 'ultimate', 'special'):
+            continue
+        hit, height = None, 'mid'
+        if name in sig_tpl and sig_tpl[name] in TEMPLATE_HIT:
+            hit, height = TEMPLATE_HIT[sig_tpl[name]]
+        if name in PIERCE_MOVES or (m.get('type') == 'riposte'):
+            hit = 'pierce'
+        elif name in BLUNT_MOVES or kind in BLUNT_WEAPONS:
+            hit = 'blunt'
+        hit = hit or ('blunt' if kind in BLUNT_WEAPONS else 'slash')
+        if name in HIGH_MOVES:
+            height = 'high'
+        elif name in LOW_MOVES:
+            height = 'low'
+        if m.get('type') == 'through':
+            height = 'back'
+        m.setdefault('hit', hit)
+        m.setdefault('height', height)
+    return mv

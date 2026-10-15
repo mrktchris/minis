@@ -1,9 +1,9 @@
-"""V4 ultimates: anime-homage finishers (original art, no copied sprites), one per roster character.
+"""V4 ultimates: signature finishers (original art, no copied sprites), one per roster character.
 
 Each template returns a move with cat='ultimate' plus `fx`: which effect in fx.json plays on which frames of this row
 ({'name', 'from', 'to'} spans or {'name', 'at'} one-shots; indices into this row).  `proj_frame` is the release frame
 (the engine spawns the main effect there, anchored per fx.json), `hit_frame` the contact frame for dash-in hits.
-Codex's rasengan carries a support row (`shadow_clones`) referenced from its anim entry as `support`.
+Codex's spiral_orb carries a support row (`mirror_images`) referenced from its anim entry as `support`.
 
 V5 keying (modelled on the archer's 11-frame draw-and-release, docs/ANIMATION-NOTES.md): a long charge that builds
 in readable increments (aura 1 -> 4, the chest swelling, the stance sinking), ONE smear frame (40 ms) where both arms
@@ -26,7 +26,7 @@ def _wa(move, angles):
     return move
 
 
-def ult_kamehameha(desc, **_):
+def ult_radiant_beam(desc, **_):
     """Two-hand charge at the hip for 1.2 s with a growing glow, then a horizontal beam."""
     def ch(i):
         return (('charge_big', 'hb', -1, -1),) if i < 2 else (('charge_big', 'hb', -1, -1), ('spark_s', 'hf', -2, 1))
@@ -42,10 +42,10 @@ def ult_kamehameha(desc, **_):
            fx=(('spark', 'hf', 4, 0),)), 600),
         (p(dy=3, lean=8, sq=0.96, hf=(8, 0), hb=(5, 1), face='b'), 260)],
         cat='ultimate', desc=desc, proj_frame=6, hit_frame=6, hitstop_ms=ULT_HITSTOP, shake=dict(frames=8, amp=3),
-        fx=[{'name': 'kamehameha_charge', 'from': 0, 'to': 4}, {'name': 'kamehameha', 'at': 6}]), {0: 150, 1: 150, 2: 152, 3: 154, 4: 156, 5: -6, 6: -4})
+        fx=[{'name': 'radiant_beam_charge', 'from': 0, 'to': 4}, {'name': 'radiant_beam', 'at': 6}]), {0: 150, 1: 150, 2: 152, 3: 154, 4: 156, 5: -6, 6: -4})
 
 
-def ult_rasengan(desc, **_):
+def ult_spiral_orb(desc, **_):
     """A spinning sphere forms in the open hand, dash in with afterimages, thrust it home, spiral burst."""
     return _wa(M([
         (p(dy=2, lean=4, hf=(6, -3), hb=(3, -2), open_f=True, face='g', fx=(('charge', 'hf', 1, -4),)), 200),
@@ -59,10 +59,10 @@ def ult_rasengan(desc, **_):
         (p(dy=2, lean=28, hf=(13, -2), hb=(4, 0), open_f=True, ff=(11, 0), fb=(-9, 0), face='o', fx=(('spark', 'hf', 5, -1),)), 260),
         (p(dy=3, lean=10, sq=0.96, hf=(8, 0), hb=(5, 1), face='g'), 220)],
         cat='ultimate', desc=desc, proj_frame=6, hit_frame=6, hitstop_ms=ULT_HITSTOP, shake=dict(frames=6, amp=3),
-        fx=[{'name': 'rasengan_orb', 'from': 0, 'to': 5}, {'name': 'rasengan_burst', 'at': 6}]), {5: -4, 6: -2})
+        fx=[{'name': 'spiral_orb_core', 'from': 0, 'to': 5}, {'name': 'spiral_orb_burst', 'at': 6}]), {5: -4, 6: -2})
 
 
-def sup_shadow_clones(desc, **_):
+def sup_mirror_images(desc, **_):
     """Support: cross-finger hand sign, poof, three dithered clones rush out (the clones are the effect)."""
     return M([
         (p(dy=2, lean=4, sq=0.96, hf=(4, -5), hb=(4, -5), fist_f=4, fist_b=4, face='g'), 160),
@@ -72,10 +72,10 @@ def sup_shadow_clones(desc, **_):
         (p(dy=1, lean=8, hf=(10, -2), hb=(7, -1), face='g', fx=(('dust', 'hip', -9, 1), ('dust', 'hip', 8, 1))), 200),
         (p(dy=2, lean=10, hf=(9, -1), hb=(5, 0), face='g'), 160)],
         cat='support', desc=desc, proj_frame=2,
-        fx=[{'name': 'clone_poof', 'at': 2}, {'name': 'shadow_clones', 'at': 2}])
+        fx=[{'name': 'clone_poof', 'at': 2}, {'name': 'mirror_images', 'at': 2}])
 
 
-def ult_getsuga(desc, **_):
+def ult_crescent_fang(desc, **_):
     """Arm raised overhead, energy gathers, a huge crescent slash wave is swung down and released."""
     return _wa(M([
         (p(dy=2, lean=-8, hf=(2, -11), hb=(-2, -3), eb_f='up', face='g', fx=(('charge', 'hf', 1, -3),)), 200),
@@ -89,10 +89,10 @@ def ult_getsuga(desc, **_):
         (p(dy=2, lean=28, hf=(12, 4), hb=(3, 3), fist_f=4, ff=(11, 0), fb=(-9, 0), face='o'), 80),
         (p(dy=3, lean=10, sq=0.96, hf=(8, 0), hb=(5, 1), face='g'), 220)],
         cat='ultimate', desc=desc, proj_frame=5, hit_frame=5, hitstop_ms=280, shake=dict(frames=6, amp=3),
-        fx=[{'name': 'getsuga_charge', 'from': 0, 'to': 3}, {'name': 'getsuga', 'at': 5}]), {0: -100, 1: -104, 2: -104, 3: -108, 4: 30, 5: 36, 6: 52})
+        fx=[{'name': 'crescent_fang_charge', 'from': 0, 'to': 3}, {'name': 'crescent_fang', 'at': 5}]), {0: -100, 1: -104, 2: -104, 3: -108, 4: 30, 5: 36, 6: 52})
 
 
-def ult_odm(desc, **_):
+def ult_grapple(desc, **_):
     """Two grapple lines shoot out, the fighter zips along them and finishes with a spinning cross slash."""
     return _wa(M([
         (p(dy=2, lean=6, hf=(10, -5), hb=(9, -4), fist_f=4, fist_b=4, face='g'), 180),
@@ -108,10 +108,10 @@ def ult_odm(desc, **_):
         (p(dy=-2, lean=-6, turn=0.8, hf=(10, -8), hb=(-6, -4), fist_f=4, ff=(7, 2), fb=(-6, 1), face='g', fx=(('spark', 'hf', 3, -1), ('spark_s', 'hb', 2, -1))), 150),
         (p(dy=4, lean=14, sq=0.90, hf=(6, 2), hb=(2, 2), face='g', fx=(('dust', 'ff', 4, 1), ('dust', 'fb', -5, 1))), 220)],
         cat='ultimate', desc=desc, proj_frame=1, hit_frame=6, hitstop_ms=260, shake=dict(frames=5, amp=2),
-        fx=[{'name': 'odm_lines', 'at': 1}, {'name': 'odm_slash', 'at': 6}]), {5: -150, 6: 30})
+        fx=[{'name': 'grapple_lines', 'at': 1}, {'name': 'grapple_slash', 'at': 6}]), {5: -150, 6: 30})
 
 
-def ult_wind_scar(desc, **_):
+def ult_gale_rend(desc, **_):
     """Both arms raised, power builds, a downward slam rips three energy claws along the ground."""
     return _wa(M([
         (p(dy=1, lean=-6, hf=(3, -12), hb=(1, -12), eb_f='up', eb_b='up', fist_f=4, fist_b=4, face='g', fx=(('charge', 'hf', 1, -3),)), 200),
@@ -128,10 +128,10 @@ def ult_wind_scar(desc, **_):
         (p(dy=4, lean=20, sq=0.95, hf=(6, 4), hb=(3, 5), face='g'), 180),
         (p(dy=2, lean=10, hf=(8, 0), hb=(5, 1), face='b'), 160)],
         cat='ultimate', desc=desc, proj_frame=5, hit_frame=5, hitstop_ms=ULT_HITSTOP, shake=dict(frames=6, amp=3),
-        fx=[{'name': 'wind_scar_charge', 'from': 0, 'to': 3}, {'name': 'wind_scar', 'at': 5}]), {0: -96, 1: -98, 2: -100, 3: -102, 4: 60, 5: 66})
+        fx=[{'name': 'gale_rend_charge', 'from': 0, 'to': 3}, {'name': 'gale_rend', 'at': 5}]), {0: -96, 1: -98, 2: -100, 3: -102, 4: 60, 5: 66})
 
 
-def ult_bankai(desc, **_):
+def ult_awakening(desc, **_):
     """Arms down, head back, a pillar of aura bursts up, then three flash-step strikes with holographic afterimages."""
     return _wa(M([
         (p(dy=2, lean=0, hf=(-2, 7), hb=(-4, 7), eb_f='back', eb_b='back', face='g'), 200),
@@ -146,10 +146,10 @@ def ult_bankai(desc, **_):
            fx=(('spark', 'hf', 4, 0), ('speedlines', 'hip', -9, -5))), 80),
         (p(dy=3, lean=8, sq=0.95, hf=(8, -1), hb=(4, 1), face='g', aura=1), 300)],
         cat='ultimate', desc=desc, proj_frame=2, hit_frame=4, hitstop_ms=200, shake=dict(frames=4, amp=2),
-        fx=[{'name': 'bankai_aura', 'at': 2}, {'name': 'bankai_slash', 'from': 4, 'to': 6}]), {0: 120, 1: 124, 3: -80, 4: 10, 5: -30, 6: 24})
+        fx=[{'name': 'awakening_aura', 'at': 2}, {'name': 'awakening_slash', 'from': 4, 'to': 6}]), {0: 120, 1: 124, 3: -80, 4: 10, 5: -30, 6: 24})
 
 
-def ult_spirit_bomb(desc, **_):
+def ult_star_core(desc, **_):
     """Both hands raised, a huge ball gathers overhead, then it is thrown with both arms."""
     return _wa(M([
         (p(dy=2, lean=-4, hf=(2, -12), hb=(-1, -12), eb_f='up', eb_b='up', open_f=True, face='g', fx=(('charge', 'hf', 0, -4),)), 240),
@@ -165,12 +165,12 @@ def ult_spirit_bomb(desc, **_):
         (p(dy=2, lean=26, hf=(13, -3), hb=(12, -2), fist_f=4, fist_b=4, ff=(10, 0), fb=(-9, 0), face='o'), 80),
         (p(dy=3, lean=10, sq=0.96, hf=(8, 0), hb=(5, 1), face='b'), 220)],
         cat='ultimate', desc=desc, proj_frame=5, hit_frame=5, hitstop_ms=280, shake=dict(frames=8, amp=3),
-        fx=[{'name': 'spirit_bomb_orb', 'from': 0, 'to': 3}, {'name': 'spirit_bomb', 'at': 5}]), {0: -90, 1: -92, 2: -92, 3: -94, 4: -6, 5: 0, 6: 10})
+        fx=[{'name': 'star_core_orb', 'from': 0, 'to': 3}, {'name': 'star_core', 'at': 5}]), {0: -90, 1: -92, 2: -92, 3: -94, 4: -6, 5: 0, 6: 10})
 
 
-ULTIMATES = {'kamehameha': ult_kamehameha, 'rasengan': ult_rasengan, 'getsuga': ult_getsuga, 'odm_strike': ult_odm,
-             'wind_scar': ult_wind_scar, 'bankai': ult_bankai, 'spirit_bomb': ult_spirit_bomb}
-SUPPORTS = {'shadow_clones': sup_shadow_clones}
+ULTIMATES = {'radiant_beam': ult_radiant_beam, 'spiral_orb': ult_spiral_orb, 'crescent_fang': ult_crescent_fang, 'grapple_strike': ult_grapple,
+             'gale_rend': ult_gale_rend, 'awakening': ult_awakening, 'star_core': ult_star_core}
+SUPPORTS = {'mirror_images': sup_mirror_images}
 
 
 def add_ultimate(mv, ch):

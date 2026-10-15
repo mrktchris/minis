@@ -328,6 +328,8 @@ class Look(unittest.TestCase):
                 kick = sm and all(not (mv['frames'][i][0].smear_f or mv['frames'][i][0].smear_b) for i in sm)
                 if mv['cat'] not in ('strike', 'ultimate') or kick:          # kicks smear the leg, not the weapon
                     continue
+                if mv.get('type') in ('guard_break', 'riposte') and not mv['frames'][sm[0]][0].smear_f:
+                    continue                  # V7: a pommel / shoulder drive: the smear is the driving arm's band + speed lines
                 hand_smears = [i for i in sm if mv['frames'][i][0].smear_f or mv['frames'][i][0].smear_b]
                 self.assertTrue(hand_smears, f'{ch}/{name}: the weapon never swings')
                 i = hand_smears[0]
@@ -510,9 +512,14 @@ class Reach(unittest.TestCase):
                 self.assertIn('reach', a, f'{ch}/{name}')
                 i = a['hit_frame']
                 buf, _, pose = parts(ch, name, i)
+                if any(f[0] in BF.MISSILE_FX for f in pose.fx):
+                    continue                  # V7: an in-cell missile is what lands (WeaponMovesV7 checks its reach)
                 anc = next((f[1] for f in pose.fx if f[0] in BF.IMPACT_FX and f[1] in BF.STRIKE_PARTS), None)
                 if anc is None:
-                    self.assertTrue(8 <= a['reach'] <= 30, f'{ch}/{name}: reach {a["reach"]}')
+                    top = 34 if a.get('type') in ('through', 'throw') else 30      # V7: a dash-through's frozen pose, a throw
+                    if a.get('type') and any(f[0] == 'shock' for f in pose.fx):
+                        top = 36                                                    # V7: a ground slam's travelling wave
+                    self.assertTrue(8 <= a['reach'] <= top, f'{ch}/{name}: reach {a["reach"]}')
                     continue
                 twin = {'hf': 'hb', 'hb': 'hf', 'ff': 'fb', 'fb': 'ff'}[anc]
                 bp, sp = buf.load(), s.frame(name, i).load()
@@ -546,11 +553,12 @@ class Schema(unittest.TestCase):
                 self.assertIn(n, s.anim, f'{ch} is missing {n}')
             own = set(s.anim) - set(s.meta['signature'].values())
             own -= {a['support'] for a in s.anim.values() if a.get('support')}     # an ultimate's helper row
+            own -= {n for n, a in s.anim.items() if a.get('family')}                # V7: the weapon family's own moves
             shared = own if shared is None else shared
             self.assertEqual(own, shared, f'{ch}: shared move set differs')
 
     def test_signature_moves_exist_and_have_the_right_shape(self):
-        legacy = {'claude': ('spin_kick', 'slash_wave', 'reverse', 'kamehameha'), 'codex': ('ground_pound', 'deploy', 'sudo', 'rasengan')}
+        legacy = {'claude': ('spin_kick', 'slash_wave', 'reverse', 'radiant_beam'), 'codex': ('ground_pound', 'deploy', 'sudo', 'spiral_orb')}
         for ch, (st, sp, su, ul) in legacy.items():
             self.assertEqual(Sheet(ch).meta['signature'], {'strike': st, 'special': sp, 'super': su, 'ultimate': ul})
         for ch in CHARS:
@@ -595,8 +603,8 @@ CAPS = {1: 32, 2: 64}
 GENERIC_FX = ('hit_light', 'hit_heavy', 'block_spark', 'dust', 'ko_stars', 'crack_small', 'crack_big', 'shatter', 'explosion',
               'letters', 'ko_text', 'round_text')
 BANNER_FX = ('round_1', 'round_2', 'round_3', 'fight', 'winner', 'ko')
-ULTIMATES = {'claude': 'kamehameha', 'codex': 'rasengan', 'gemini': 'getsuga', 'cursor': 'odm_strike',
-             'ollama': 'wind_scar', 'lmstudio': 'bankai', 'generic': 'spirit_bomb',
+ULTIMATES = {'claude': 'radiant_beam', 'codex': 'spiral_orb', 'gemini': 'crescent_fang', 'cursor': 'grapple_strike',
+             'ollama': 'gale_rend', 'lmstudio': 'awakening', 'generic': 'star_core',
              'kunoichi': 'petal_dance', 'knight': 'holy_crescent', 'barbarian': 'earthsplitter', 'monk': 'chi_sphere',
              'nomad': 'ring_storm', 'oni': 'oni_roar'}
 FX_KEYS = {'frames', 'anchor', 'offset', 'loop', 'layer', 'hit_frame', 'travel', 'shake', 'grow', 'flash'}
@@ -670,8 +678,11 @@ class Resolution(unittest.TestCase):
     def test_ultimate_rows_come_after_every_v3_row(self):
         for ch in CHARS:
             s = Sheet(ch)
-            v3 = max(a['row'] for n, a in s.anim.items() if n not in (s.meta['signature']['ultimate'], s.anim[s.meta['signature']['ultimate']].get('support')))
-            self.assertGreater(s.anim[s.meta['signature']['ultimate']]['row'], v3, ch)
+            ult = s.meta['signature']['ultimate']
+            v7 = {n for n, a in s.anim.items() if a.get('type')}                       # V7 rows come after the ultimate
+            v3 = max(a['row'] for n, a in s.anim.items() if n not in (ult, s.anim[ult].get('support')) and n not in v7)
+            self.assertGreater(s.anim[ult]['row'], v3, ch)
+            self.assertGreater(min(s.anim[n]['row'] for n in v7), max(s.anim[ult]['row'], s.anim.get(s.anim[ult].get('support'), {}).get('row', 0)), ch)
 
     def test_rig_res_factor_scales_the_cell_and_is_restored(self):
         self.assertEqual(rig.RES, 1)
@@ -877,15 +888,15 @@ class Effects(unittest.TestCase):
                 self.assertIn(f'{sig["special"]}_impact', eff)
                 self.assertIn(f'{sig["super"]}_burst', eff)
                 if ch == 'codex':
-                    self.assertEqual(a.get('support'), 'shadow_clones')
-                    self.assertEqual(s.anim['shadow_clones']['cat'], 'support')
-                    self.assertIn('shadow_clones', eff)
-                    self.assertIsNotNone(eff['shadow_clones']['travel'])
-                    self.assertEqual(len(eff['shadow_clones']['frames']), 3)
+                    self.assertEqual(a.get('support'), 'mirror_images')
+                    self.assertEqual(s.anim['mirror_images']['cat'], 'support')
+                    self.assertIn('mirror_images', eff)
+                    self.assertIsNotNone(eff['mirror_images']['travel'])
+                    self.assertEqual(len(eff['mirror_images']['frames']), 3)
                 if res == 2:
                     lo = Sheet(ch).fx['effects']
                     self.assertEqual(set(lo), set(eff), f'{ch}: HD and RES 1 effect sets differ')
-                    for n in ('kamehameha', 'getsuga', 'wind_scar', 'explosion'):
+                    for n in ('radiant_beam', 'crescent_fang', 'gale_rend', 'explosion'):
                         if n in eff:
                             self.assertEqual(eff[n]['frames'][1]['w'], lo[n]['frames'][1]['w'] * 2, f'{ch}/{n}: HD frames are 2x')
 
@@ -939,17 +950,154 @@ class Effects(unittest.TestCase):
 
     def test_beams_and_waves_are_wide_and_energy_has_a_white_core(self):
         s = Sheet('claude', 'assets_hd')
-        beam = s.fx['effects']['kamehameha']
+        beam = s.fx['effects']['radiant_beam']
         self.assertGreaterEqual(beam['frames'][2]['w'], 256)
         f = beam['frames'][3]
         im = s.fxs.crop((f['x'], f['y'], f['x'] + f['w'], f['y'] + f['h']))
         self.assertIn((255, 255, 255), {p[:3] for _, p in im.getcolors(1 << 16) if p[3]})
         self.assertEqual(beam['anchor'], 'hand')
         self.assertIsNotNone(beam['shake'])
-        for ch, n in (('gemini', 'getsuga'), ('ollama', 'wind_scar'), ('generic', 'spirit_bomb')):
+        for ch, n in (('gemini', 'crescent_fang'), ('ollama', 'gale_rend'), ('generic', 'star_core')):
             e = Sheet(ch, 'assets_hd').fx['effects'][n]
             self.assertIsNotNone(e['travel'], f'{n} travels')
             self.assertGreaterEqual(e['frames'][0]['w'], 80, f'{n} is big')
+
+
+class WeaponMovesV7(unittest.TestCase):
+    """V7: every fighter fights like its weapon (docs/ANIMATION-NOTES.md section 8)."""
+    ATTACK = ('string', 'riposte', 'air', 'spike', 'throw', 'through', 'guard_break', 'pull', 'gust', 'boomerang')
+    REACT = ('launched', 'air_hit', 'spiked', 'thrown', 'pulled', 'guard_crush', 'hit_high', 'hit_low', 'hit_back', 'clash')
+
+    def test_every_character_has_eight_plus_weapon_moves_a_taunt_variant_and_every_reaction(self):
+        for ch in CHARS:
+            s = Sheet(ch)
+            mine = [n for n, a in s.anim.items() if a.get('type') in self.ATTACK]
+            self.assertGreaterEqual(len(mine), 8, (ch, mine))
+            fam = {s.anim[n]['family'] for n in mine}
+            self.assertEqual(len(fam), 1, (ch, fam))                          # one weapon family per character
+            self.assertEqual(s.anim['taunt2']['type'], 'taunt')
+            for r in self.REACT:
+                self.assertEqual(s.anim[r]['type'], r, ch)
+            for n in mine:
+                a = s.anim[n]
+                self.assertIn('input', a, (ch, n))
+                if 'hit_frame' in a:
+                    self.assertIn(a['hit'], ('slash', 'blunt', 'pierce'), (ch, n))
+                    self.assertIn(a['height'], ('high', 'mid', 'low', 'back'), (ch, n))
+
+    def test_every_new_strike_winds_up_longer_than_it_strikes_and_holds_the_hit(self):
+        """Section 6/7 keying on the real sheets: wind-up (frames before the first smear) >= 2 x the smear, the smear is
+        <= 50 ms, the contact frame is held >= 140 ms, and the move ends in a recovery (frames after the hit)."""
+        for ch in CHARS:
+            s = Sheet(ch)
+            for n, a in s.anim.items():
+                if a.get('type') not in self.ATTACK or a['cat'] != 'strike':
+                    continue
+                ms = [f['ms'] for f in a['frames']]
+                sm = a['smear_frames'][0]
+                self.assertGreaterEqual(sum(ms[:sm]), 2 * ms[sm], (ch, n, ms))
+                self.assertLessEqual(ms[sm], 50, (ch, n, ms))
+                self.assertGreaterEqual(ms[a['hit_frame']], 140, (ch, n, ms))
+                self.assertGreater(len(ms) - 1, a['hit_frame'], (ch, n))
+                if a['family'] == 'heavy' and a['type'] == 'string':          # heavy weapons: a longer wind-up, armour
+                    self.assertGreaterEqual(sum(ms[:sm]), 450, (ch, n, ms))
+
+    def test_throw_and_thrown_share_one_clock(self):
+        for ch in CHARS:
+            a, t = Sheet(ch).anim['throw'], Sheet(ch).anim['thrown']
+            ms_a = [f['ms'] for f in a['frames']]
+            ms_t = [f['ms'] for f in t['frames']]
+            self.assertEqual(sum(ms_a[a['grab_frame']:a['hit_frame']]), sum(ms_t[t['grab_frame']:t['hit_frame']]), ch)
+            self.assertLess(a['grab_frame'], a['release_frame'], ch)
+            self.assertLessEqual(a['release_frame'], a['hit_frame'], ch)
+
+    def test_strings_cancel_and_special_frames_are_ordered(self):
+        for ch in CHARS:
+            s = Sheet(ch)
+            combo = s.meta['combo']
+            self.assertEqual(len(combo), 3, ch)
+            for n in combo:
+                self.assertEqual(s.anim[n]['cancel_frame'], s.anim[n]['hit_frame'] + 1, (ch, n))
+            for n, a in s.anim.items():
+                if a.get('type') == 'boomerang':
+                    self.assertLess(a['proj_frame'], a['catch_frame'], (ch, n))
+                if a.get('type') == 'pull':
+                    self.assertGreater(a['pull_frame'], a['hit_frame'], (ch, n))
+                if a.get('type') == 'clash':
+                    self.assertEqual(a['lock_frame'], 0)
+
+    def test_a_thrown_weapon_leaves_the_hand_and_comes_back(self):
+        """The boomerang's empty-hand frames really draw no chakram; the catch frame draws it again."""
+        for ch in CHARS:
+            mv = M.build_moves(ch)
+            for n, m in mv.items():
+                if m.get('type') != 'boomerang':
+                    continue
+                for i, (pose, _) in enumerate(m['frames']):
+                    buf, _, _ = parts(ch, n, i)
+                    has = buf.tobytes().count(bytes([rig.PID['wpn_f']])) > 0
+                    self.assertEqual(has, not pose.nowf, (ch, n, i))
+                self.assertFalse(m['frames'][m['catch_frame']][0].nowf)
+
+    def test_in_cell_missiles_reach_the_front_of_the_opponent(self):
+        """An arrow / kunai / chain / gust that lands is measured from its own pixels and reaches past the defender's
+        front edge at a normal bout distance (hips ~32 px apart, the front of the body ~9 px before the hip)."""
+        for ch in CHARS:
+            s = Sheet(ch)
+            mv = M.build_moves(ch)
+            for n, a in s.anim.items():
+                if 'hit_frame' not in a:
+                    continue
+                pose = mv[n]['frames'][a['hit_frame']][0]
+                if not any(f[0] in BF.MISSILE_FX for f in pose.fx):
+                    continue
+                self.assertGreaterEqual(a['reach'], 23, (ch, n, a['reach']))
+
+    def test_the_bow_string_bends_back_to_the_drawing_hand(self):
+        rig.set_res(1)
+        c = roster.get('generic')
+        pose = M.build_moves(c)['point_blank']['frames'][1][0]
+        self.assertTrue(pose.nock)
+        buf, meta = rig.render_parts(c.body, pose, None)
+        px = buf.load()
+        hb = meta['hb']
+        near = [(x, y) for y in range(64) for x in range(64)
+                if px[x, y] == rig.PID['string'] and abs(x - hb[0]) <= 2 and abs(y - hb[1]) <= 2]
+        self.assertTrue(near, 'the string meets the rear hand')
+
+
+class HD128(unittest.TestCase):
+    """V7 part B: the 128 px build is the master - real faces, knuckles, folds - and the 64 px build is untouched by it."""
+
+    def test_hd_faces_have_an_eye_white_a_brow_and_a_mouth_that_changes_with_the_mood(self):
+        rig.set_res(2)
+        try:
+            c = roster.get('claude')
+            mv = M.build_moves(c)
+            got = {}
+            for name, i in (('idle', 0), ('iai_slash', 3), ('hit_high', 1), ('thumbs_up', 1)):
+                buf, meta = rig.render_parts(c.body, mv[name]['frames'][i][0], None)
+                b = buf.tobytes()
+                counts = {k: b.count(bytes([rig.PID[k]])) for k in ('eye', 'eyew', 'brow', 'mouth')}
+                got[name] = counts
+                self.assertGreater(counts['eye'] + counts['brow'], 0, (name, counts))
+                self.assertGreater(counts['mouth'], 0, (name, counts))
+            self.assertGreater(got['iai_slash']['mouth'], got['idle']['mouth'])     # the shout opens the mouth
+            self.assertGreater(got['idle']['eyew'], 0)                             # a real eye white
+        finally:
+            rig.set_res(1)
+
+    def test_hd_fists_show_knuckles_on_the_grip_and_bent_joints_fold(self):
+        c = roster.get('knight')
+        pose = M.build_moves(c)['cleave']['frames'][2][0]
+        rig.set_res(2)
+        try:
+            buf, _ = rig.render_parts(c.body, pose, None)
+            self.assertGreater(buf.tobytes().count(bytes([rig.PID['crease']])), 2)
+        finally:
+            rig.set_res(1)
+        buf1, _ = rig.render_parts(c.body, pose, None)
+        self.assertEqual(buf1.tobytes().count(bytes([rig.PID['crease']])), 0)      # nothing of it at 64 px
 
 
 def frame_hashes():

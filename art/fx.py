@@ -450,14 +450,153 @@ def fx_round_text():
                         for s in ('ROUND 1', 'ROUND 2', 'ROUND 3', 'FIGHT!', 'WINNER')], anchor='center', offset=(0, -34))
 
 
+# ---------------------------------------------------------------- V7 contact sparks (per hit type; drawn facing +x = toward the
+# attacker, since they spawn on the defender, who faces the attacker)
+def fx_hit_slash():
+    """Slash: a thin, bright arc cut diagonally across the body (hairline -> full -> broken), sparks thrown off the edge."""
+    out = []
+    ox, oy, r = 30, 30, 22.5                   # the cut is an arc of a big circle: low-back to high-front
+    for k in range(4):
+        c = Canvas(32, 28)
+        if k == 0:
+            c.arc_band(ox, oy, r - 0.4, r + 0.4, 200, 252, W_)
+        elif k == 1:
+            c.arc_band(ox, oy, r - 1.4, r + 1.0, 194, 258, Y_)
+            c.arc_band(ox, oy, r - 0.6, r + 0.4, 198, 254, W_)
+            for a, L in ((-70, 6), (-35, 7), (0, 6), (35, 5)):
+                c.spike(15, 13, a, L, 0.6, W_ if L > 5 else Y_, inner=2)
+        elif k == 2:
+            for a0 in range(196, 256, 10):
+                c.arc_band(ox, oy, r - 0.8, r + 0.6, a0, a0 + 6, O_)
+            for a, L in ((-70, 9), (-35, 10), (0, 9), (35, 8)):
+                c.px(15 + L * math.cos(math.radians(a)), 13 + L * math.sin(math.radians(a)), Y_)
+        else:
+            for a, L in ((-70, 12), (0, 12), (35, 10)):
+                c.px(15 + L * math.cos(math.radians(a)), 14 + L * math.sin(math.radians(a)), O_)
+        out.append((c.done(), (40, 60, 60, 70)[k]))
+    return dict(frames=out, anchor='center', offset=(0, 0), hit_frame=1)
+
+
+def fx_hit_blunt():
+    """Blunt: a white core, then a radial shock ring that widens and thins, with dust kicked out at the bottom."""
+    out = []
+    for k in range(4):
+        c = Canvas(32, 32)
+        cx = cy = 16
+        if k == 0:
+            c.disc(cx, cy, 5, W_)
+            c.ring(cx, cy, 7, 1.2, Y_)
+        elif k == 1:
+            c.ring(cx, cy, 9, 2.6, Y_)
+            c.ring(cx, cy, 8.5, 1.2, W_)
+            for a in range(0, 360, 45):
+                c.spike(cx, cy, a, 14, 1.0, O_ if a % 90 else Y_, inner=11)
+            c.disc(cx, cy, 3, W_)
+        elif k == 2:
+            c.ring(cx, cy, 13, 1.4, O_)
+            for x, r in ((7, 2.4), (11, 3.0), (21, 3.0), (25, 2.4)):
+                c.disc(x, 27, r, G2)
+                c.disc(x - 0.7, 26.3, r * 0.55, G1)
+        else:
+            for a in range(0, 360, 30):
+                c.px(cx + 14.5 * math.cos(math.radians(a)), cy + 14.5 * math.sin(math.radians(a)), O_ if a % 60 else EMB)
+            for x in (5, 12, 20, 27):
+                c.px(x, 25 + (x % 2), G2)
+        out.append((c.done(), (40, 60, 70, 80)[k]))
+    return dict(frames=out, anchor='center', offset=(0, 0), hit_frame=1, shake=dict(frames=2, amp=1))
+
+
+def fx_hit_pierce():
+    """Pierce: a long white streak driven straight through from the front, then a spray fanning out behind."""
+    out = []
+    ox = 14                                     # where the point comes out of the back
+    for k in range(4):
+        c = Canvas(40, 18)
+        cy = 9
+        if k == 0:
+            c.line((38, cy), (ox, cy), W_, 1.2)
+            c.line((38, cy), (24, cy), Y_, 2.2)
+        elif k == 1:
+            c.poly([(39, cy - 1.6), (ox + 2, cy - 0.4), (ox - 2, cy), (ox + 2, cy + 0.4), (39, cy + 1.6)], Y_)
+            c.line((38, cy), (ox, cy), W_, 1.0)
+            for a, L in ((160, 7), (175, 9), (190, 7), (150, 5), (205, 5)):
+                c.spike(ox, cy, a, L, 0.5, W_ if L > 6 else Y_)
+        elif k == 2:
+            for a, L in ((160, 9), (175, 11), (190, 9), (150, 7), (205, 7)):
+                c.px(ox + L * math.cos(math.radians(a)), cy + L * math.sin(math.radians(a)), Y_)
+                c.px(ox + (L - 2) * math.cos(math.radians(a)), cy + (L - 2) * math.sin(math.radians(a)), O_)
+            for x in range(24, 38, 3):
+                c.px(x, cy, O_)
+        else:
+            for a, L in ((160, 12), (190, 12), (175, 13)):
+                c.px(ox + L * math.cos(math.radians(a)), cy + L * math.sin(math.radians(a)), O_)
+        out.append((c.done(), (40, 60, 60, 70)[k]))
+    return dict(frames=out, anchor='center', offset=(0, 0), hit_frame=1)
+
+
+def fx_block_deflect():
+    """Block: a clang flash on the guard and sparks deflected back toward the attacker, then a ringing arc."""
+    out = []
+    for k in range(4):
+        c = Canvas(24, 24)
+        cx, cy = 9, 12
+        if k == 0:
+            c.disc(cx, cy, 4, W_)
+            c.ring(cx, cy, 5.5, 1.0, GL1)
+        elif k == 1:
+            c.arc_band(cx, cy, 6, 8, -70, 70, GL2)
+            c.arc_band(cx, cy, 6.6, 7.4, -50, 50, W_)
+            for a, L in ((-55, 10), (-25, 12), (10, 13), (40, 10), (65, 8)):
+                c.spike(cx + 2, cy, a, L, 0.6, W_ if L > 11 else GL1, inner=4)
+            c.disc(cx, cy, 2, W_)
+        elif k == 2:
+            c.arc_band(cx, cy, 8, 9.2, -60, 60, GL2)
+            for a, L in ((-55, 13), (-25, 15), (10, 15), (40, 13), (65, 11)):
+                c.px(cx + 2 + L * math.cos(math.radians(a)), cy + L * math.sin(math.radians(a)), Y_)
+        else:
+            for a0 in range(-60, 60, 20):
+                c.arc_band(cx, cy, 9.5, 10.2, a0, a0 + 9, GL3)
+        out.append((c.done(), (40, 60, 60, 70)[k]))
+    return dict(frames=out, anchor='hand', offset=(0, 0), hit_frame=1)
+
+
+def fx_clash_sparks():
+    """Clash: two weapons lock - a white star where they meet, a fountain of sparks up and out both ways, embers."""
+    out = []
+    for k in range(5):
+        c = Canvas(32, 32)
+        cx, cy = 16, 14
+        if k == 0:
+            c.disc(cx, cy, 4, W_)
+            for a in (45, 135, 225, 315):
+                c.spike(cx, cy, a, 8, 1.2, W_)
+        elif k in (1, 2):
+            rr = 1.0 + 0.5 * k
+            for a, L in ((-150, 9), (-120, 12), (-90, 13), (-60, 12), (-30, 9), (200, 8), (-20, 7), (160, 8), (20, 8)):
+                c.spike(cx, cy, a, L * rr * 0.75, 0.6, W_ if L >= 12 else Y_, inner=2 * k)
+            c.disc(cx, cy, 3.5 - k, Y_ if k == 2 else W_)
+        elif k == 3:
+            for a, L in ((-150, 13), (-120, 16), (-90, 17), (-60, 16), (-30, 13), (200, 11), (160, 11)):
+                x, y = cx + L * math.cos(math.radians(a)), cy + L * math.sin(math.radians(a)) + 2
+                c.px(x, y, Y_)
+                c.px(x, y + 1, O_)
+        else:
+            for a, L in ((-120, 16), (-60, 16), (200, 12), (160, 12)):
+                c.px(cx + L * math.cos(math.radians(a)), cy + L * math.sin(math.radians(a)) + 5, O_)
+        out.append((c.done(), (50, 60, 70, 80, 90)[k]))
+    return dict(frames=out, anchor='center', offset=(14, -6), hit_frame=0, shake=dict(frames=3, amp=1))
+
+
 GENERIC = dict(hit_light=fx_hit_light, hit_heavy=fx_hit_heavy, block_spark=fx_block_spark, dust=fx_dust, ko_stars=fx_ko_stars,
                crack_small=fx_crack_small, crack_big=fx_crack_big, shatter=fx_shatter, explosion=fx_explosion,
-               letters=fx_letters, ko_text=fx_ko_text, round_text=fx_round_text)
+               letters=fx_letters, ko_text=fx_ko_text, round_text=fx_round_text,
+               hit_slash=fx_hit_slash, hit_blunt=fx_hit_blunt, hit_pierce=fx_hit_pierce, block_deflect=fx_block_deflect,
+               clash_sparks=fx_clash_sparks)                # V7 contact sparks (after the V4 set, so older rects never move)
 ALIASES = {'round_1': ('round_text', 0), 'round_2': ('round_text', 1), 'round_3': ('round_text', 2),
            'fight': ('round_text', 3), 'winner': ('round_text', 4), 'ko': ('ko_text', 2)}
 # an ultimate whose main effect has a more specific name also answers to the move's own name (same rects), so the
 # engine's `get(<ultimate>)` never falls through to a procedural stand-in
-ULT_ALIASES = {'rasengan': 'rasengan_burst', 'bankai': 'bankai_aura', 'odm_strike': 'odm_slash'}
+ULT_ALIASES = {'spiral_orb': 'spiral_orb_burst', 'awakening': 'awakening_aura', 'grapple_strike': 'grapple_slash'}
 
 
 # ---------------------------------------------------------------- character effects
@@ -749,7 +888,7 @@ def fx_super_burst(pal):
 
 
 # ---- ultimates
-def fx_kamehameha(pal):
+def fx_radiant_beam(pal):
     """Frame 0 is the release flash (a white-hot muzzle burst and a core-only stub), 1 the beam reaching, 2-4 the full
     beam (each with its own ripple phase and noise), 5 the dying beam, 6 embers.  `grow` tells the engine to stretch
     the first 100 ms from the hands outward; `flash` marks frame 0 as the release flash."""
@@ -785,7 +924,7 @@ def fx_kamehameha(pal):
                 grow=dict(from_w=28, to_w=L, ms=100), flash=True)
 
 
-def fx_rasengan_orb(pal):
+def fx_spiral_orb_core(pal):
     """The sphere forming in the hand: it spins, pulses, and the air around it is pulled in (converging motes)."""
     out = []
     ramp = _energy(pal)
@@ -801,7 +940,7 @@ def fx_rasengan_orb(pal):
     return dict(frames=out, anchor='center', offset=(0, 0), loop=True)
 
 
-def fx_rasengan_burst(pal):
+def fx_spiral_orb_burst(pal):
     ramp = _energy(pal)
     core, hot, acc, deep = ramp
     out = []
@@ -846,7 +985,7 @@ def fx_clone_poof():
     return dict(frames=out, anchor='center', offset=(0, 0))
 
 
-def fx_shadow_clones(ch, hands):
+def fx_mirror_images(ch, hands):
     """Three looping run frames of the character itself, flattened to its trim colours with a checker shimmer."""
     import moves
     body = ch.body
@@ -868,7 +1007,7 @@ def fx_shadow_clones(ch, hands):
     return dict(frames=out, anchor='ground', offset=(0, -rig.W // 2), loop=True, travel=dict(speed=220), layer='back')
 
 
-def fx_getsuga_charge(pal):
+def fx_crescent_fang_charge(pal):
     """Energy gathering on the raised fist: black-edged licks, a growing core, motes converging."""
     ramp = _energy(pal)
     core, hot, acc, deep = ramp
@@ -887,7 +1026,7 @@ def fx_getsuga_charge(pal):
     return dict(frames=out, anchor='center', offset=(0, 0))
 
 
-def fx_getsuga(pal):
+def fx_crescent_fang(pal):
     """The crescent slash wave: dithered halo, ink edge, deep / accent / pale / white-hot bands that ripple along the
     arc, ragged licks off the leading edge, a trail of streaks behind.  Four looping frames, none alike."""
     ramp = _energy(pal)
@@ -919,12 +1058,12 @@ def fx_getsuga(pal):
     return dict(frames=out, anchor='center', offset=(20, 0), loop=True, travel=dict(speed=260), hit_frame=0)
 
 
-def fx_getsuga_impact(pal):
+def fx_crescent_fang_impact(pal):
     fr = fx_impact(pal, 40, 5)
     return dict(frames=fr, anchor='center', offset=(0, 0), hit_frame=1, shake=dict(frames=5, amp=3), flash=True)
 
 
-def fx_odm_lines(pal):
+def fx_grapple_lines(pal):
     ramp = _energy(pal)
     core, hot, acc, deep = ramp
     out = []
@@ -953,7 +1092,7 @@ def fx_odm_lines(pal):
     return dict(frames=out, anchor='hand', offset=(50, 2), layer='back')
 
 
-def fx_odm_slash(pal):
+def fx_grapple_slash(pal):
     """The spinning cross slash: two blades drawn as layered energy with a halo, a flash ring on contact, embers."""
     ramp = _energy(pal)
     core, hot, acc, deep = ramp
@@ -989,7 +1128,7 @@ def fx_odm_slash(pal):
     return dict(frames=out, anchor='center', offset=(10, 0), hit_frame=1, shake=dict(frames=4, amp=2), flash=True)
 
 
-def fx_wind_scar(pal):
+def fx_gale_rend(pal):
     """Three claws of energy ripping along the ground: each a layered column (halo, deep, accent, hot, white core) with
     rippling edges, licks off the tips, dirt and stone thrown up, and a burst at the leading claw once it bites."""
     ramp = _energy(pal)
@@ -1040,12 +1179,12 @@ def fx_wind_scar(pal):
                 shake=dict(frames=6, amp=3))
 
 
-def fx_wind_scar_impact(pal):
+def fx_gale_rend_impact(pal):
     fr = _explosion(56, (W_, pal['fx']['b'], pal['fx']['a'], EMB, SMK), 7)
     return dict(frames=fr, anchor='center', offset=(0, 4), hit_frame=1, shake=dict(frames=6, amp=4), flash=True)
 
 
-def fx_bankai_aura(pal):
+def fx_awakening_aura(pal):
     """The pillar of aura: frame 0 is the release flash, then the pillar climbs as layered flame (halo, deep, accent,
     teal, hot, white core) with rippling edges and rising streaks, then it breaks into drifting motes."""
     ramp = _energy(pal)
@@ -1110,7 +1249,7 @@ def fx_bankai_aura(pal):
                 grow=dict(from_w=Wd // 2, to_w=Wd, ms=120), flash=True)
 
 
-def fx_bankai_slash(pal):
+def fx_awakening_slash(pal):
     ramp = _energy(pal)
     core, hot, acc, deep = ramp
     teal = pal['fx']['c']
@@ -1134,7 +1273,7 @@ def fx_bankai_slash(pal):
     return dict(frames=out, anchor='center', offset=(12, 0), hit_frame=0, shake=dict(frames=3, amp=2))
 
 
-def fx_spirit_bomb_orb(pal):
+def fx_star_core_orb(pal):
     """The ball gathering overhead: it grows, spins, pulses, and sparkles stream in from all round."""
     out = []
     ramp = _energy(pal)
@@ -1148,7 +1287,7 @@ def fx_spirit_bomb_orb(pal):
     return dict(frames=out, anchor='center', offset=(2, -34))
 
 
-def fx_spirit_bomb(pal):
+def fx_star_core(pal):
     """The thrown ball: a big spinning orb with a shimmering halo, pulsing, its spin arms turning, a trail behind."""
     out = []
     ramp = _energy(pal)
@@ -1169,27 +1308,27 @@ def fx_spirit_bomb(pal):
     return dict(frames=out, anchor='center', offset=(24, -10), loop=True, travel=dict(speed=150), hit_frame=0)
 
 
-def fx_spirit_bomb_impact(pal):
+def fx_star_core_impact(pal):
     fr = _explosion(64, (W_, pal['fx']['b'], pal['fx']['a'], EMB, SMK), 7)
     return dict(frames=fr, anchor='center', offset=(0, 0), hit_frame=1, shake=dict(frames=8, amp=5), flash=True)
 
 
 ULT_FX = {
-    'kamehameha': lambda ch, h: {'kamehameha_charge': dict(frames=fx_charge(ch.body.palette, 28, 5, (200, 220, 240, 260, 280), 8),
-                                                           anchor='center', offset=_hand_off(h, 'kamehameha', 2, 'hb')),
-                                 'kamehameha': fx_kamehameha(ch.body.palette)},
-    'rasengan': lambda ch, h: {'rasengan_orb': dict(fx_rasengan_orb(ch.body.palette), offset=_hand_off(h, 'rasengan', 1, 'hf', (1, -5))),
-                               'rasengan_burst': fx_rasengan_burst(ch.body.palette),
-                               'clone_poof': fx_clone_poof(), 'shadow_clones': fx_shadow_clones(ch, h)},
-    'getsuga': lambda ch, h: {'getsuga_charge': dict(fx_getsuga_charge(ch.body.palette), offset=_hand_off(h, 'getsuga', 1, 'hf', (0, -4))),
-                              'getsuga': fx_getsuga(ch.body.palette), 'getsuga_impact': fx_getsuga_impact(ch.body.palette)},
-    'odm_strike': lambda ch, h: {'odm_lines': fx_odm_lines(ch.body.palette), 'odm_slash': fx_odm_slash(ch.body.palette)},
-    'wind_scar': lambda ch, h: {'wind_scar_charge': dict(frames=fx_charge(ch.body.palette, 32, 4, (200, 220, 240, 240), 9),
-                                                         anchor='center', offset=_hand_off(h, 'wind_scar', 1, 'hf', (0, -5))),
-                                'wind_scar': fx_wind_scar(ch.body.palette), 'wind_scar_impact': fx_wind_scar_impact(ch.body.palette)},
-    'bankai': lambda ch, h: {'bankai_aura': fx_bankai_aura(ch.body.palette), 'bankai_slash': fx_bankai_slash(ch.body.palette)},
-    'spirit_bomb': lambda ch, h: {'spirit_bomb_orb': fx_spirit_bomb_orb(ch.body.palette), 'spirit_bomb': fx_spirit_bomb(ch.body.palette),
-                                  'spirit_bomb_impact': fx_spirit_bomb_impact(ch.body.palette)},
+    'radiant_beam': lambda ch, h: {'radiant_beam_charge': dict(frames=fx_charge(ch.body.palette, 28, 5, (200, 220, 240, 260, 280), 8),
+                                                           anchor='center', offset=_hand_off(h, 'radiant_beam', 2, 'hb')),
+                                 'radiant_beam': fx_radiant_beam(ch.body.palette)},
+    'spiral_orb': lambda ch, h: {'spiral_orb_core': dict(fx_spiral_orb_core(ch.body.palette), offset=_hand_off(h, 'spiral_orb', 1, 'hf', (1, -5))),
+                               'spiral_orb_burst': fx_spiral_orb_burst(ch.body.palette),
+                               'clone_poof': fx_clone_poof(), 'mirror_images': fx_mirror_images(ch, h)},
+    'crescent_fang': lambda ch, h: {'crescent_fang_charge': dict(fx_crescent_fang_charge(ch.body.palette), offset=_hand_off(h, 'crescent_fang', 1, 'hf', (0, -4))),
+                              'crescent_fang': fx_crescent_fang(ch.body.palette), 'crescent_fang_impact': fx_crescent_fang_impact(ch.body.palette)},
+    'grapple_strike': lambda ch, h: {'grapple_lines': fx_grapple_lines(ch.body.palette), 'grapple_slash': fx_grapple_slash(ch.body.palette)},
+    'gale_rend': lambda ch, h: {'gale_rend_charge': dict(frames=fx_charge(ch.body.palette, 32, 4, (200, 220, 240, 240), 9),
+                                                         anchor='center', offset=_hand_off(h, 'gale_rend', 1, 'hf', (0, -5))),
+                                'gale_rend': fx_gale_rend(ch.body.palette), 'gale_rend_impact': fx_gale_rend_impact(ch.body.palette)},
+    'awakening': lambda ch, h: {'awakening_aura': fx_awakening_aura(ch.body.palette), 'awakening_slash': fx_awakening_slash(ch.body.palette)},
+    'star_core': lambda ch, h: {'star_core_orb': fx_star_core_orb(ch.body.palette), 'star_core': fx_star_core(ch.body.palette),
+                                  'star_core_impact': fx_star_core_impact(ch.body.palette)},
 }
 
 

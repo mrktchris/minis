@@ -40,6 +40,16 @@ PULSE_S, PULSE_ON_S, PULSE_ALPHA = 1.0, 0.15, 0.35     # V6: near the context li
 LOW_HP = 25
 
 
+def proj_x(p, now):
+    """Where a timeline projectile is at `now`.  V7: a returning one (`ret`, `back`) flies out to its arrival point and
+    back to the thrower's hand, arriving on the catch frame."""
+    if p.get('ret') and now > p['arrive']:
+        far = p['x0'] + p['dir'] * p['speed'] * (p['arrive'] - p['spawn'])
+        k = min(1.0, (now - p['arrive']) / max(0.05, p['back'] - p['arrive']))
+        return far + (p['x0'] - far) * k
+    return p['x0'] + p['dir'] * p['speed'] * (now - p['spawn'])
+
+
 def other(slot):
     return RIGHT if slot == LEFT else LEFT
 
@@ -422,9 +432,9 @@ class Brain:
                  eye=(self.eye if self.anim == 'idle' and self.mode == 'home' else (0, 0)))
         if self.script and self.script['projs']:
             for p in self.script['projs']:
-                if p['owner'] == self.slot and p['spawn'] <= now <= p['arrive']:
-                    pos = p['x0'] + p['dir'] * p['speed'] * (now - p['spawn'])
-                    v['proj'] = dict(x=pos, dir=p['dir'], frame=int((now - p['spawn']) * 8), kind=p['move'])
+                end = p.get('back', p['arrive']) if p.get('ret') else p['arrive']
+                if p['owner'] == self.slot and p['spawn'] <= now <= end:
+                    v['proj'] = dict(x=proj_x(p, now), dir=p['dir'], frame=int((now - p['spawn']) * 8), kind=p['move'])
         return v
 
     def flashes_enabled(self, now):
@@ -494,6 +504,7 @@ class Brain:
     def _end_match_visuals(self):
         self.hp = self.round = self.banner = None
         self.stop = self.slide = self.slow = None
+        self.slide_next = []
         self.hold = False
         for s, d in list(self.finish_due.items()):              # finished during that bout: the boost window opens now
             if d == 'after':
@@ -749,8 +760,8 @@ class Brain:
         if sc is None:
             self._goto(self.home_x, now, then='home')
             return
-        if self.partner:
-            self._face_partner()
+        if self.partner and (self.atlas.anim.get(self.anim) or {}).get('type') != 'through':
+            self._face_partner()                                  # V7: a dash-through keeps its back to the opponent until it ends
         tl = sc['tl']
         while self.script_i + 1 < len(tl) and tl[self.script_i + 1][0] <= now:
             self.script_i += 1
@@ -763,7 +774,7 @@ class Brain:
                 self.hp = opts['hp'].get(self.slot)
             hs = opts.get('hitstop')
             if hs:
-                t_stop = float(opts.get('contact', t_abs))
+                t_stop = float(opts.get('stop_at', opts.get('contact', t_abs)))     # V7: a throw's freeze waits for the slam
                 self.stop = (t_stop, t_stop + float(hs) / 1000.0)
             sl = opts.get('slow')
             if isinstance(sl, (list, tuple)) and len(sl) == 3:
@@ -772,7 +783,9 @@ class Brain:
                 z0, z1 = self.zone
                 x1 = max(z0, min(z1, float(opts['to'])))
                 ms = float(opts.get('slide_ms') or self.atlas.total_ms(name) if name in self.atlas.anim else 300)
-                self.slide = (t_abs, max(0.05, ms / 1000.0), self.x, x1)
+                t_sl = float(opts.get('slide_at', t_abs))                   # V7: the slide may start later than the move
+                self.slide = (t_sl, max(0.05, ms / 1000.0), self.x, x1)
+                self.slide_next = [tuple(float(v) for v in leg) for leg in (opts.get('path') or ()) if len(leg) == 3]
             if 'contact' in opts:
                 self.contact_log.append((opts['contact'], name))
                 self._bout_note('contact', opts['contact'], name)
@@ -784,6 +797,11 @@ class Brain:
             el = self.clock(t0, now) if now > t0 else 0.0         # frozen during hitstop, slowed in slow motion
             if el >= dur:
                 self.x, self.slide = x1, None
+                nxt = self.__dict__.get('slide_next') or []
+                if nxt:                                           # V7 `path`: the next leg [t_start, ms, x] (a throw: in, then out)
+                    t1, ms1, xn = nxt.pop(0)
+                    z0, z1 = self.zone
+                    self.slide = (max(t1, t0 + dur), max(0.05, ms1 / 1000.0), self.x, max(z0, min(z1, xn)))
             elif el > 0:
                 k = el / dur
                 self.x = x0 + (x1 - x0) * (1 - (1 - k) ** 2)      # ease-out: fast start, soft stop
@@ -828,6 +846,11 @@ class Brain:
                         self.fxp.spawn('impact', t_abs, self.x, self.atlas.ground_y, self.facing, owner=self.slot, anchor='center')   # its own 100-160 ms
                 else:
                     self.fxp.flash_at(t_abs, 0.85, ms / 1000.0)
+        elif name == '@armor':                                   # V7: a poke through the armour: HP drops, a short flash, no flinch
+            self.hp = (opts.get('hp') or {}).get(self.slot, self.hp)
+            self.hit_log.append((t_abs, 'armor'))
+            if now - t_abs <= 0.5 and self.flashes_enabled(now):
+                self.fxp.flash_at(t_abs, 0.35, 0.1)
         elif name == '@whiff':
             self.hit_log.append((t_abs, 'whiff'))
             self._bout_note('hit', t_abs, 'whiff')

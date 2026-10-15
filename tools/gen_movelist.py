@@ -6,8 +6,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from minis_core.atlas import Atlas, available  # noqa: E402
 from minis_core.sources import RULES, PROGRAM  # noqa: E402
+from minis_core import setpieces  # noqa: E402
 
-brain_src = ''.join(open(os.path.join(ROOT, 'minis_core', f), encoding='utf-8').read() for f in ('brain.py', 'rounds.py', 'arena.py', 'choreo.py'))   # the planners that trigger moves
+brain_src = ''.join(open(os.path.join(ROOT, 'minis_core', f), encoding='utf-8').read() for f in ('brain.py', 'rounds.py', 'arena.py', 'choreo.py', 'setpieces.py'))   # the planners that trigger moves
 CHARS = available()
 ORDER = ['claude', 'codex', 'gemini', 'cursor', 'ollama', 'lmstudio', 'generic']
 CHARS = [c for c in ORDER if c in CHARS] + [c for c in CHARS if c not in ORDER]
@@ -42,8 +43,10 @@ WHEN = {
 CATS = [('locomotion', 'Locomotion'), ('strike', 'Strikes'), ('defense', 'Defense'), ('reaction', 'Reactions'),
         ('emote', 'Emotes'), ('state', 'State animations (what an agent is doing)'), ('pair', 'Paired moves')]
 
-shared = [n for n in A[CHARS[0]].anim if all(n in A[c].anim for c in CHARS) and n not in sig_moves]
-wired = {n: (f"'{n}'" in brain_src) or n in sig_moves for n in set(shared) | sig_moves}
+shared = [n for n in A[CHARS[0]].anim if all(n in A[c].anim for c in CHARS) and n not in sig_moves
+          and not A[CHARS[0]].anim[n].get('family')]
+# V7: the planner picks weapon moves and reactions by their anim.json `type`, so a typed row is wired by construction
+wired = {n: (f"'{n}'" in brain_src) or n in sig_moves or bool(A[CHARS[0]].anim.get(n, {}).get('type')) for n in set(shared) | sig_moves}
 unwired = [n for n in shared if not wired[n]]
 first = A[CHARS[0]]
 programs = {}
@@ -59,8 +62,10 @@ w('Generated from `assets/*/anim.json` by `tools/gen_movelist.py`; every number 
   '"Used" is decided from the planner: a move says *yes* only if `minis_core/brain.py` triggers it or it is a signature move '
   '(the planner reads each character\'s signature strike / special / super from its atlas).\n')
 w('## At a glance\n')
-w(f"- **{len(CHARS)} characters**: {', '.join(A[c].display for c in CHARS)}. Each has the same **{len(shared)} shared moves** plus **three signature moves** "
-  f"({len(first.anim)} moves, {sum(len(a['frames']) for a in first.anim.values())} frames for {first.display}).")
+w(f"- **{len(CHARS)} characters**: {', '.join(A[c].display for c in CHARS)}. Each has the same **{len(shared)} shared moves**, its **signature moves**, "
+  f"and **its weapon family's moves** (V7: {min(sum(1 for m in A[c].anim.values() if m.get('family')) for c in CHARS)}-"
+  f"{max(sum(1 for m in A[c].anim.values() if m.get('family')) for c in CHARS)} per character; "
+  f"{len(first.anim)} moves, {sum(len(a['frames']) for a in first.anim.values())} frames for {first.display}).")
 w(f"- {sum(1 for n in shared if wired[n])} of {len(shared)} shared moves are triggered by the planner today, and every signature move is; "
   f"{len(unwired)} shared moves are built and waiting for a trigger (listed at the end).")
 w('- Which character appears is decided by the **director** from what is running (at most two at a time, slot `a` left and slot `b` right).\n')
@@ -87,6 +92,105 @@ for c in CHARS:
         if role == 'ultimate':
             extra += ' · 40 damage · effects: ' + ', '.join(f'`{name}`' for _, name, _ in A[c].move_fx(n))
         w(f"| {A[c].display} | `{n}` | {role} | {len(m['frames'])} | {A[c].total_ms(n)} ms | {m.get('desc', '')}{extra} |")
+w('')
+
+# ---------------------------------------------------------------- V7: every fighter, move by move
+ARROW = {'fwd': '→', 'back': '←', 'down': '↓', 'up': '↑'}
+FAMILY_TITLE = {'blade': 'blade (katana)', 'dual': 'dual weapons', 'polearm': 'polearm (spear)', 'staff': 'staff',
+                'chain': 'chain and kunai', 'bow': 'bow and dagger', 'fans': 'fans / chakrams', 'heavy': 'heavy weapon'}
+SHARED_INPUT = {'jab': 'Strike', 'cross': '→ + Strike', 'uppercut': '↓ ↑ + Strike', 'low_kick': '↓ + Kick', 'roundhouse': '→ + Kick'}
+ROLE_INPUT = {'strike': '→ ↓ → + Kick', 'special': '↓ → + Special', 'super': '↓ ↓ + Super (meter)', 'ultimate': 'Super (below 30 HP, once a match)'}
+TYPE_LABEL = {'string': 'weapon strike', 'riposte': 'counter (after a parry)', 'air': 'air juggle', 'spike': 'air spike',
+              'throw': 'throw', 'through': 'dash-through', 'guard_break': 'guard break', 'pull': 'chain pull', 'gust': 'wind gust',
+              'boomerang': 'boomerang projectile', 'taunt': 'taunt'}
+
+
+def arrows(s):
+    import re
+    return re.sub(r'\b(fwd|back|down|up)\b', lambda m: ARROW[m.group(1)], s).replace(', ', ' ')
+
+
+def tier(a, n, role=None):
+    if role == 'ultimate':
+        return 'ultimate (40)'
+    if role == 'super':
+        return 'super (24)'
+    if a.get('cat') == 'special' and 'proj_frame' in a:
+        return f"projectile ({int(a.get('power') or 1) * 12})"
+    if 'hit_frame' not in a:
+        return '-'
+    p = int(a.get('power') or 1)
+    return f"{('light', 'medium', 'heavy')[min(2, p - 1)]} ({p * 12})"
+
+
+def family(c):
+    return next((m['family'] for m in A[c].anim.values() if m.get('family')), '-')
+
+
+w('## Every fighter, move by move (V7)\n')
+w('Each fighter fights like its weapon: the shared strikes are swung with it, and every character has its weapon family\'s own '
+  'moves plus the shared move *types* (air juggle, throw, dash-through, guard break, riposte, a taunt variant).  The input '
+  'labels are fighting-game notation for reading the list (→ forward, ← back, ↓ down, ↑ up); nothing reads them as input - the '
+  'choreographer picks every move itself.  Damage tiers: light 12, medium 24, heavy 36, super 24, ultimate 40.  '
+  '"Frames" and "length" are read from the real sheet; contact-frame and reach notes come from the art.\n')
+for c in CHARS:
+    a = A[c]
+    fam = family(c)
+    combo = a.meta.get('combo') or []
+    w(f"### {a.display} - {FAMILY_TITLE.get(fam, fam)}\n")
+    if combo:
+        w(f"3-hit string: {' → '.join(f'`{m}`' for m in combo)} (each hit cancels into the next on its cancel frame).\n")
+    w('| move | input | type | damage | frames | length | what it is |\n| --- | --- | --- | --- | ---: | ---: | --- |')
+    rows = []
+    for role in ('strike', 'special', 'super', 'ultimate'):
+        n = SIG[c].get(role)
+        if n:
+            rows.append((n, ROLE_INPUT[role], f'signature {role}', tier(a.anim[n], n, role)))
+    for n in ('jab', 'cross', 'uppercut', 'low_kick', 'roundhouse'):
+        if n in a.anim:
+            rows.append((n, SHARED_INPUT[n], 'shared strike' + (' (launcher)' if n == 'uppercut' else ''), tier(a.anim[n], n)))
+    for n, m in a.anim.items():
+        if m.get('type') in TYPE_LABEL:
+            rows.append((n, arrows(m.get('input', '-')), TYPE_LABEL[m['type']], tier(m, n)))
+    for n, inp, typ, dmg in rows:
+        m = a.anim[n]
+        extra = []
+        if 'hit_frame' in m and 'reach' in m:
+            extra.append(f"contact frame {m['hit_frame']}, reach {m['reach']:g} px")
+        if m.get('hit'):
+            extra.append(f"{m['hit']} hit, {m['height']}")
+        if m.get('armor'):
+            extra.append('armour: no flinch from a light hit in the wind-up')
+        desc = m.get('desc', '') + (' · ' + '; '.join(extra) if extra else '')
+        w(f"| `{n}` | {inp} | {typ} | {dmg} | {len(m['frames'])} | {a.total_ms(n)} ms | {desc} |")
+    w('')
+
+w('## How the fight uses them (V7)\n')
+w('| move type | what happens on the taskbar |\n| --- | --- |')
+for k, v in [
+    ('weapon strike', 'Picked by the no-repeat picker with the shared strikes (which now weigh a little less); a family strike opens, chains in combos, and is the 3-hit string\'s material.'),
+    ('3-hit string', 'Riposte → two family moves: each hit starts on the previous move\'s cancel frame (contact + hitstop), so the string flows instead of resetting to guard.'),
+    ('air juggle', 'A landed launcher (`uppercut`) pops the defender up (`launched`, it hangs on its last frame), the attacker leaps after it with its `air` move (`air_hit`) and spikes it into the floor (`spiked`), then the get-up.'),
+    ('throw', 'Close range only.  The defender\'s `thrown` row starts on the attacker\'s grab frame; both rows share one clock, so the flat landing falls on the attacker\'s slam.  The defender is hoisted in close, then slammed out in front; a slipped grab ends in a backdash.'),
+    ('chain pull', 'From range: the chain bites on contact and yanks the opponent to arm\'s length on the pull frame - often straight into the launcher and a juggle.'),
+    ('dash-through', 'From range: the attacker slides THROUGH the defender during its burst, stops on the far side with its back turned, and the cut registers on the frozen pose (`hit_back`: pitched forward).  The attacker then vaults back over to its own side.'),
+    ('guard break', 'The guard is smashed open (`guard_crush`, 12 chip damage) and the next strike is free.'),
+    ('riposte', 'When a strike is parried, the defender answers with its own riposte row most of the time.'),
+    ('clash', 'About a third of blocked or parried weapon strikes become a weapon lock instead: both fighters play `clash` on the same instant (sparks, a straining push), then both skid apart.'),
+    ('armour', 'Heavy cleaves: a light poke from the defender lands during the wind-up for 12, the attacker does not flinch and the cleave still lands.'),
+    ('boomerang', 'The chakram leaves the hand on its projectile frame, flies out to the defender and back, and is caught on the catch frame.'),
+    ('contact', 'Every landed hit draws a spark for its kind (slash: a thin bright arc; blunt: a shock ring and dust; pierce: a streak and spray), blocks draw deflected sparks, light hits play a high / low reaction by the move\'s height, and the screen shakes by power.'),
+]:
+    w(f'| {k} | {v} |')
+w('')
+w('### Set pieces\n')
+w('Hand-authored joint exchanges for both fighters (`minis_core/setpieces.py`), written against weapon-family slots so any pairing '
+  'plays them; a match plays one to three at its dramatic moments (a round\'s second exchange, the comeback, match point).  '
+  'Preview one with `python tools/setpiece_preview.py <piece> --a claude --b codex`.\n')
+w('| set piece | when | what happens |\n| --- | --- | --- |')
+for n in setpieces.ORDER:
+    pc = setpieces.PIECES[n]
+    w(f"| {pc['title']} (`{n}`) | {', '.join(pc['when'])} | {pc['desc']} |")
 w('')
 
 w('## What makes them move\n')
@@ -145,10 +249,9 @@ w((', '.join(f'`{n}`' for n in unwired) or 'none') + '. These have art, timing a
 
 w('## Ideas to expand\n')
 for head, items in [
-    ('More fighting', ['**Throws and grapples** (needs a paired pose set): a shoulder toss the other fighter tumbles through.',
-                       '**Combo counter and hit-streak** text above a fighter ("3 HIT") when exchanges chain.',
+    ('More fighting', ['**Combo counter and hit-streak** text above a fighter ("3 HIT") when a string or a juggle chains.',
                        '**Super meter** that fills from something real, e.g. the cache-hit ratio, and spends on the signature super.',
-                       '**Parry into counter**: wire `parry`, `crouch_block`, `dash`, `backdash` into longer, less predictable bouts.']),
+                       '**More set pieces**: a projectile duel where the two specials collide mid-air; a double knockout.']),
     ('Real signals instead of flair', ['**CI pass or fail** becomes win or lose; a failing test is a `facepalm`.',
                                       'A **click** opens that agent\'s window; hover shows exact numbers and "resets in 2d 4h".']),
     ('Polish', ['Hand-polish key frames: drop a 64x64 PNG with the character\'s palette at `art/hand/<character>/<move>_<frame>.png` '

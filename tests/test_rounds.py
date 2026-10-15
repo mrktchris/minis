@@ -256,7 +256,7 @@ class FightFeelV6(unittest.TestCase):
             ki = s['final_ko']
             tc, loser, champ = ki['tc'], s['loser'], s['winner']
             self.assertLessEqual(t_end - tc, rounds.POST_KO_MAX_S + 1e-6)
-            ko = [o for t, n2, o in tl[loser] if n2 == 'knockdown' and abs(t - tc) < 1e-6][0]
+            ko = [o for t, n2, o in tl[loser] if n2 in rounds.LYING and abs(t - tc) < 1e-6 or n2 == 'thrown' and o.get('stop_at') == round(tc, 4)][0]
             self.assertGreaterEqual(ko['hitstop'], rounds.KO_HITSTOP_MS)                    # freeze on the blow...
             self.assertEqual(ko['slow'][2], rounds.SLOW_K)                                    # ...then slow motion
             self.assertTrue(any(n2 == '@impact' and abs(t - tc) < 1e-6 for t, n2, o in tl[loser]))
@@ -319,8 +319,10 @@ class FightFeelV6(unittest.TestCase):
                 kos += 1
                 w = s['winner']
                 g = LIB[p['chars'][w]].signature()
-                ko = [o for t, n, o in tl[s['loser']] if n == 'knockdown' and abs(t - s['final_ko']['tc']) < 1e-6][0]
-                sig += ko['react_to'] in (g['strike'], g['super'], g['ultimate'], g['special'])
+                ko = [o for t, n, o in tl[s['loser']] if (n in rounds.LYING and abs(t - s['final_ko']['tc']) < 1e-6)
+                      or (n == 'thrown' and o.get('stop_at') == round(s['final_ko']['tc'], 4))][0]
+                show = (LIB[p['chars'][w]].anim.get(ko['react_to']) or {}).get('type') in ('throw', 'spike', 'through', 'pull')
+                sig += ko['react_to'] in (g['strike'], g['super'], g['ultimate'], g['special']) or show   # V7 showpieces count
         self.assertGreater(comebacks, 20)
         self.assertGreater(sig / kos, 0.85)
 
@@ -356,12 +358,148 @@ class FightFeelV6(unittest.TestCase):
             pos = dict(p['pos'])
             ev = sorted((t, w, n, o) for w in 'ab' for t, n, o in tl[w] if 'to' in o)
             for t, w, n, o in ev:
-                pos[w] = o['to']
+                pos[w] = o['path'][-1][2] if o.get('path') else o['to']     # V7: a thrown fighter's slide has a second leg
                 self.assertGreaterEqual(abs(pos['a'] - pos['b']), rounds.MIN_APART - 1e-6, (t, w, n, pos))
             for w in 'ab':
                 for t, n, o in tl[w]:
                     if 'contact' in o and o.get('outcome') == 'hit':
                         self.assertGreaterEqual(o['hitstop'], 100, (n, o))
+
+
+class WeaponFightsV7(unittest.TestCase):
+    """V7: weapon families in the fight - throws in sync, juggles, boomerangs, dash-throughs, clashes, strings, set pieces."""
+    LIBV = Library()
+    PAIRS = [('claude', 'codex'), ('codex', 'knight'), ('nomad', 'cursor'), ('generic', 'oni'), ('gemini', 'monk'),
+             ('kunoichi', 'barbarian'), ('lmstudio', 'ollama')]
+
+    def match(self, seed, a, b):
+        p = dict(plan(seed, chars=(a, b)))
+        return p, rounds.make_match(p, {a: self.LIBV[a], b: self.LIBV[b]}, fx.default())
+
+    def find(self, pred, n=60):
+        for seed in range(n):
+            a, b = self.PAIRS[seed % len(self.PAIRS)]
+            p, (tl, t_end, s) = self.match(seed, a, b)
+            hit = pred(p, tl, s)
+            if hit:
+                return p, tl, s, hit
+        self.fail('no seeded match showed it')
+
+    def test_variety_300_match_audit(self):
+        out = sim.audit(300)
+        for ch, v in out['chars'].items():
+            self.assertGreaterEqual(v['distinct'], 14, (ch, v))
+            self.assertLessEqual(v['top_share'], 0.20, (ch, v))
+            self.assertEqual(v['session12'], 1.0, (ch, v))                       # 12+ distinct moves per 10-minute session
+        for k in ('throw', 'juggle', 'through', 'string', 'clash', 'guard_break', 'riposte'):
+            self.assertGreater(out['per_match'].get(k, 0), 0.05, (k, out['per_match']))
+        self.assertLess(out['per_match']['ultimate'], 0.5)                         # V6 rarity kept
+        self.assertLess(out['per_match']['super'], 1.6)
+
+    def test_a_throw_starts_the_defender_on_the_grab_and_slams_it_on_the_contact(self):
+        def throw(p, tl, s):
+            for w in 'ab':
+                for t, n, o in tl[w]:
+                    if (self.LIBV[p['chars'][w]].anim.get(n) or {}).get('type') == 'throw' and o.get('outcome') == 'hit':
+                        return w, t, o
+        p, tl, s, (w, t, o) = self.find(throw)
+        d = 'b' if w == 'a' else 'a'
+        A, D = self.LIBV[p['chars'][w]], self.LIBV[p['chars'][d]]
+        grab = t + A.start_ms('throw', A.anim['throw']['grab_frame']) / 1000.0
+        th = [(t2, o2) for t2, n2, o2 in tl[d] if n2 == 'thrown' and o2.get('react_to') == 'throw']
+        self.assertTrue(th)
+        t_r, o_r = min(th, key=lambda e: abs(e[0] - grab))
+        self.assertAlmostEqual(t_r + D.start_ms('thrown', D.anim['thrown']['grab_frame']) / 1000.0, grab, places=2)
+        self.assertAlmostEqual(t_r + D.start_ms('thrown', D.anim['thrown']['hit_frame']) / 1000.0, o['contact'], places=2)
+        self.assertAlmostEqual(o_r['stop_at'], o['contact'], places=3)             # both freeze on the slam
+        self.assertEqual(len(o_r['path']), 1)                                         # hoisted in, then slammed out
+
+    def test_launcher_air_hit_spike_in_order_and_the_defender_hangs_in_the_air(self):
+        def juggle(p, tl, s):
+            for w in 'ab':
+                names = [n for t, n, o in tl[w] if n in ('launched', 'air_hit', 'spiked')]
+                if names[:3] == ['launched', 'air_hit', 'spiked']:
+                    return w
+        p, tl, s, w = self.find(juggle)
+        ents = [(t, n, o) for t, n, o in tl[w] if n in ('launched', 'air_hit', 'spiked', 'getup')]
+        self.assertTrue(ents[0][2].get('hold') and ents[1][2].get('hold'))           # hangs until the next hit
+        i = [n for t, n, o in ents].index('spiked')
+        self.assertTrue(any(n == 'getup' for t, n, o in ents[i:]) or s['final_ko'])     # then gets up (or it was the KO)
+
+    def test_a_boomerang_flies_out_and_comes_back_on_the_catch_frame(self):
+        from minis_core.brain import proj_x
+        p, (tl, t_end, s) = None, (None, None, None)
+        for seed in range(80):
+            p, (tl, t_end, s) = self.match(seed, 'nomad', 'claude')
+            pr = [q for q in s['projs'] if q.get('ret')]
+            if pr:
+                break
+        self.assertTrue(pr, 'no boomerang in 80 matches')
+        q = pr[0]
+        A = self.LIBV['nomad']
+        mv = [t for t, n, o in tl[q['owner']] if n == q['move']]
+        t0 = min(mv, key=lambda t: abs(t + A.start_ms(q['move'], A.anim[q['move']]['catch_frame']) / 1000.0 - q['back']))
+        self.assertAlmostEqual(t0 + A.start_ms(q['move'], A.anim[q['move']]['catch_frame']) / 1000.0, q['back'], places=3)
+        self.assertAlmostEqual(proj_x(q, q['back']), q['x0'], places=3)              # back in the hand
+        far = proj_x(q, q['arrive'])
+        self.assertGreater(abs(far - q['x0']), 10)                                   # it really went out
+
+    def test_a_dash_through_swaps_sides_and_the_attacker_vaults_back(self):
+        def through(p, tl, s):
+            for w in 'ab':
+                for t, n, o in tl[w]:
+                    if o.get('through'):
+                        return w, t, o
+        p, tl, s, (w, t, o) = self.find(through)
+        d = 'b' if w == 'a' else 'a'
+        side_before = 1 if w == 'a' else -1                                         # a starts left of b
+        pos_d = [o2['to'] for t2, n2, o2 in tl[d] if 'to' in o2 and t2 <= o['slide_at']]
+        x_d = pos_d[-1] if pos_d else p['pos'][d]
+        self.assertGreater((o['to'] - x_d) * side_before, 0)                          # it ended up on the far side
+        vault = [o2 for t2, n2, o2 in tl[w] if n2 == 'jump' and o2.get('vault') and t2 > t]
+        self.assertTrue(vault, 'vaults back over')
+
+    def test_a_clash_puts_both_fighters_in_the_lock_on_the_same_instant(self):
+        def clash(p, tl, s):
+            for w in 'ab':
+                for t, n, o in tl[w]:
+                    if n == 'clash' and o.get('outcome') == 'clash' and 'contact' in o:
+                        return w, t, o
+        p, tl, s, (w, t, o) = self.find(clash, 120)
+        d = 'b' if w == 'a' else 'a'
+        self.assertTrue(any(n == 'clash' and abs(t2 - t) < 0.01 for t2, n, o2 in tl[d]), 'the other one locks too')
+
+    def test_a_string_cancels_on_its_cancel_frame(self):
+        def string(p, tl, s):
+            for w in 'ab':
+                A = self.LIBV[p['chars'][w]]
+                combo = A.meta.get('combo') or []
+                ent = [(t, n, o) for t, n, o in tl[w] if n in combo and 'contact' in o]
+                for (t1, n1, o1), (t2, n2, o2) in zip(ent, ent[1:]):
+                    if combo.index(n2) == combo.index(n1) + 1 and o1.get('outcome') == 'hit' and t2 - t1 < 2.0:
+                        return A, (t1, n1, o1), (t2, n2, o2)
+        p, tl, s, (A, (t1, n1, o1), (t2, n2, o2)) = self.find(string, 120)
+        cancel = t1 + A.start_ms(n1, A.anim[n1]['cancel_frame']) / 1000.0 + o1['hitstop'] / 1000.0
+        self.assertLessEqual(t2, t1 + A.total_ms(n1) / 1000.0 + o1['hitstop'] / 1000.0)    # starts before the move ends
+        self.assertGreaterEqual(t2 + 1e-6, cancel - 0.01)
+
+    def test_set_pieces_are_deterministic_playable_for_every_pairing_and_one_to_three_per_match(self):
+        from minis_core import setpieces as SP
+        from minis_core.atlas import available
+        n = []
+        for seed in range(28):
+            a, b = self.PAIRS[seed % len(self.PAIRS)]
+            p, (tl, t_end, s) = self.match(seed, a, b)
+            _, (tl2, _, s2) = self.match(seed, a, b)
+            self.assertEqual(tl, tl2)
+            n.append(len(s['story']['pieces']))
+            for name in s['story']['pieces']:
+                self.assertIn(name, SP.PIECES)
+        self.assertLessEqual(max(n), SP.MAX_PER_MATCH)
+        self.assertTrue(1.0 <= sum(n) / len(n) <= 3.0, n)
+        for name in SP.ORDER:                                                        # every piece fits some pairing
+            ok = [(a, b) for a in available() for b in available() if a != b and SP.eligible(name, self.LIBV[a], self.LIBV[b])]
+            self.assertTrue(ok, name)
 
 
 if __name__ == '__main__':

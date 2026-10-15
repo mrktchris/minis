@@ -18,7 +18,7 @@ sys.path.insert(0, HERE)
 from PIL import Image, ImageDraw  # noqa: E402
 import rig  # noqa: E402
 from rig import W, H, HIP_X, GROUND, PID, NAME, render_parts, mirror_parts, mirror_rgba, finish, palette_of  # noqa: E402
-from moves import build_moves  # noqa: E402
+from moves import build_moves, combo_for  # noqa: E402
 import roster  # noqa: E402
 import fx as FXMOD  # noqa: E402
 
@@ -31,6 +31,18 @@ SCHEMA_NOTES = {                                 # V5 keys the engine may read; 
     'shake': 'per move, optional {frames, amp}: screen shake the fighter itself asks for on its hit_frame (amp in px at this res).',
     'smear_frames': 'per move, optional: frame indices drawn as smears (one-frame motion arcs); play them short (<= 50 ms), never hold them.',
     'credits': 'top level: the reference-pack credit line to show in-game.',
+    'type': 'V7, per move: what the move is to the choreographer (string, riposte, air, spike, throw, through, guard_break, '
+            'pull, gust, boomerang, taunt; reactions launched, air_hit, spiked, thrown, pulled, guard_crush).',
+    'family': 'V7, per move: the weapon family it belongs to (blade, dual, polearm, staff, chain, bow, fans, heavy).',
+    'input': 'V7, per move: the fighting-game input label shown in the move list (decoration; nothing reads it as input).',
+    'armor': 'V7, per move: true = a light hit during the wind-up does not make the fighter flinch.',
+    'pull_frame': 'V7, per move: the frame the chain yanks the opponent in.',
+    'catch_frame': 'V7, per move: the frame a thrown boomerang projectile is caught again.',
+    'cancel_frame': 'V7, per move: in a string, the next hit may start at this frame (the rest of the move is cancelled).',
+    'lock_frame': 'V7, per move: the frame two clashing weapons meet (the clash row).',
+    'hit': 'V7, per move: slash / blunt / pierce: which contact spark the engine draws.',
+    'height': 'V7, per move: high / mid / low / back: which directional reaction the defender plays.',
+    'combo': "V7, top level: the character's 3-hit string, played with cancel timing.",
 }
 CAPS = {1: 32, 2: 64}                            # colours incl. transparency per RES
 OUT_DIRS = {1: 'assets', 2: 'assets_hd'}
@@ -217,6 +229,7 @@ def ghost(im, offsets, body, mirrored, pose=None, prev=None):
 STRIKE_PARTS = {'hf': ('hand_f', 'cuff_f', 'arm_f_fo', 'wpn_f', 'hilt_f', 'blade_hl'), 'hb': ('hand_b', 'cuff_b', 'arm_b_fo', 'wpn_b', 'hilt_b'),
                 'ff': ('shoe_f', 'sole_f', 'leg_f_sh', 'boot_f'), 'fb': ('shoe_b', 'sole_b', 'leg_b_sh', 'boot_b')}
 IMPACT_FX = ('spark', 'spark_s', 'block')
+MISSILE_FX = ('arrow', 'kunai', 'chain', 'gust')
 BODY_IDS = {PID[n] for n in rig.PART_ORDER if n not in rig.NOLINE and n not in ('doc', 'doc_line')}
 
 
@@ -268,6 +281,10 @@ def hit_reach(buf, pose):
     def edge(ids):
         xs = [x for y in range(cw) for x in range(cw) if px[x, y] in ids]
         return max(xs) + 1 + S - hipx if xs else None    # one past the limb, plus the RES px outline
+    if any(f[0] in MISSILE_FX for f in pose.fx):         # V7: an in-cell missile (arrow, kunai, chain, gust) is what lands
+        fx_ids = {PID[n] for n in ('fx_a', 'fx_b', 'fx_w', 'fx_c')}
+        xs = [x for y in range(cw) for x in range(cw) if px[x, y] in fx_ids]
+        return max(xs) + 1 - hipx
     if anc is None:                                      # a slam: the shockwave is what lands
         if any(f[0] == 'shock' for f in pose.fx):
             fx_ids = {PID[n] for n in ('fx_a', 'fx_b', 'fx_w', 'fx_c')}
@@ -450,7 +467,8 @@ def build(character, out_root, res=1, cap=None, with_fx=True):
         entry = dict(row=r, loop=mv['loop'], cat=mv['cat'], desc=mv['desc'], frames=frames)
         if mv.get('loop_range'):
             entry['loop_range'] = list(mv['loop_range'])
-        for k in ('hit_frame', 'proj_frame', 'release_frame', 'grab_frame', 'power', 'hitstop_ms'):
+        for k in ('hit_frame', 'proj_frame', 'release_frame', 'grab_frame', 'power', 'hitstop_ms',
+                  'type', 'family', 'input', 'armor', 'pull_frame', 'catch_frame', 'cancel_frame', 'lock_frame', 'hit', 'height'):    # V7 keys after the V3-V6 ones
             if k in mv:
                 entry[k] = mv[k]
         if 'stride' in mv:
@@ -487,6 +505,9 @@ def build(character, out_root, res=1, cap=None, with_fx=True):
                                 kind=ch.projectile['kind'], move=ch.signature['special'], style=ch.projectile['style']),
                 palette=['#%02X%02X%02X' % c for c in sorted(cols)], colors=len(cols), anims=anim, res=S,
                 credits=CREDITS, schema_notes=SCHEMA_NOTES)
+    combo = combo_for(ch)
+    if combo:
+        meta['combo'] = combo                            # V7: the character's 3-hit string (choreo.combo_of)
     if with_fx:
         meta['fx'] = dict(file='fx.json', sheet='fx.png')
         FXMOD.build_character(ch, d_out, res=S, cap=cap, hands=hands, anims=anim)

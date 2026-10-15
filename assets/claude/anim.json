@@ -8,7 +8,7 @@
   "strike": "spin_kick",
   "special": "slash_wave",
   "super": "reverse",
-  "ultimate": "kamehameha"
+  "ultimate": "radiant_beam"
  },
  "cell": [
   64,
@@ -429,6 +429,8 @@
    "hit_frame": 3,
    "power": 1,
    "hitstop_ms": 150,
+   "hit": "pierce",
+   "height": "mid",
    "smear_frames": [
     2
    ],
@@ -479,6 +481,8 @@
    "hit_frame": 3,
    "power": 2,
    "hitstop_ms": 180,
+   "hit": "slash",
+   "height": "high",
    "smear_frames": [
     2
    ],
@@ -529,6 +533,8 @@
    "hit_frame": 3,
    "power": 2,
    "hitstop_ms": 180,
+   "hit": "slash",
+   "height": "high",
    "smear_frames": [
     2
    ],
@@ -579,6 +585,8 @@
    "hit_frame": 3,
    "power": 1,
    "hitstop_ms": 150,
+   "hit": "blunt",
+   "height": "low",
    "smear_frames": [
     2
    ],
@@ -634,6 +642,8 @@
    "hit_frame": 3,
    "power": 3,
    "hitstop_ms": 220,
+   "hit": "blunt",
+   "height": "high",
    "smear_frames": [
     2
    ],
@@ -689,6 +699,8 @@
    "hit_frame": 4,
    "power": 3,
    "hitstop_ms": 220,
+   "hit": "blunt",
+   "height": "high",
    "smear_frames": [
     3
    ],
@@ -1834,7 +1846,7 @@
     }
    ]
   },
-  "kamehameha": {
+  "radiant_beam": {
    "row": 48,
    "loop": false,
    "cat": "ultimate",
@@ -1884,6 +1896,8 @@
    "hit_frame": 6,
    "proj_frame": 6,
    "hitstop_ms": 300,
+   "hit": "slash",
+   "height": "mid",
    "shake": {
     "frames": 8,
     "amp": 3
@@ -1898,12 +1912,12 @@
    ],
    "fx": [
     {
-     "name": "kamehameha_charge",
+     "name": "radiant_beam_charge",
      "from": 0,
      "to": 4
     },
     {
-     "name": "kamehameha",
+     "name": "radiant_beam",
      "at": 6
     }
    ],
@@ -1911,6 +1925,914 @@
     21,
     -31
    ]
+  },
+  "iai_slash": {
+   "row": 49,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Iai: crouches with the blade low at the hip, then draws and cuts in one flash.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 170,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 6
+    },
+    {
+     "i": 3,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 280,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 120,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 3,
+   "power": 2,
+   "hitstop_ms": 180,
+   "type": "string",
+   "family": "blade",
+   "input": "down, fwd + Strike",
+   "cancel_frame": 4,
+   "hit": "slash",
+   "height": "mid",
+   "smear_frames": [
+    2
+   ],
+   "reach": 28
+  },
+  "cross_cut": {
+   "row": 50,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Two strokes that cross in an X: a falling diagonal, then the rising back-cut.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 4
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 40,
+     "dx": 2
+    },
+    {
+     "i": 5,
+     "ms": 170,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 250,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 110,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 5,
+   "power": 3,
+   "hitstop_ms": 220,
+   "type": "string",
+   "family": "blade",
+   "input": "fwd, fwd + Strike",
+   "cancel_frame": 6,
+   "hit": "slash",
+   "height": "high",
+   "smear_frames": [
+    2,
+    4
+   ],
+   "reach": 17
+  },
+  "riposte": {
+   "row": 51,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Riposte: a straight lunging stab, the answer to a parry.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 40,
+     "dx": 6
+    },
+    {
+     "i": 2,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 190,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 90,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 2,
+   "power": 2,
+   "hitstop_ms": 180,
+   "type": "riposte",
+   "family": "blade",
+   "input": "(after a parry) Strike",
+   "cancel_frame": 3,
+   "hit": "pierce",
+   "height": "mid",
+   "smear_frames": [
+    1
+   ],
+   "reach": 29
+  },
+  "air_slash": {
+   "row": 52,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Jumps after a launched opponent and strikes down through it in mid-air.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 50,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 40,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 120,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 4,
+   "power": 2,
+   "hitstop_ms": 180,
+   "type": "air",
+   "family": "blade",
+   "input": "up + Strike (air)",
+   "hit": "slash",
+   "height": "high",
+   "smear_frames": [
+    3
+   ],
+   "reach": 29
+  },
+  "spike": {
+   "row": 53,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Leaps, raises the weapon overhead and spikes the airborne opponent into the ground.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 40,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 240,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 4,
+   "power": 3,
+   "hitstop_ms": 220,
+   "type": "spike",
+   "family": "blade",
+   "input": "(air) down + Strike",
+   "hit": "slash",
+   "height": "high",
+   "shake": {
+    "frames": 3,
+    "amp": 1
+   },
+   "smear_frames": [
+    3
+   ],
+   "reach": 25
+  },
+  "throw": {
+   "row": 54,
+   "loop": false,
+   "cat": "throw",
+   "desc": "Grabs the opponent, hoists it overhead and slams it down.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 170,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 40,
+     "dx": 3
+    },
+    {
+     "i": 5,
+     "ms": 210,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 5,
+   "release_frame": 4,
+   "grab_frame": 1,
+   "power": 2,
+   "hitstop_ms": 180,
+   "type": "throw",
+   "family": "blade",
+   "input": "close: fwd + Grab",
+   "hit": "blunt",
+   "height": "mid",
+   "smear_frames": [
+    4
+   ],
+   "reach": 26
+  },
+  "dash_slash": {
+   "row": 55,
+   "loop": false,
+   "cat": "strike",
+   "desc": "Bursts through the opponent and stops on the far side; the cut lands a beat later.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 40,
+     "dx": 22
+    },
+    {
+     "i": 3,
+     "ms": 60,
+     "dx": 22
+    },
+    {
+     "i": 4,
+     "ms": 90,
+     "dx": 8
+    },
+    {
+     "i": 5,
+     "ms": 320,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 5,
+   "power": 2,
+   "hitstop_ms": 180,
+   "type": "through",
+   "family": "blade",
+   "input": "fwd, fwd + Strike (dash)",
+   "hit": "slash",
+   "height": "back",
+   "smear_frames": [
+    2
+   ],
+   "reach": 31
+  },
+  "guard_break": {
+   "row": 56,
+   "loop": false,
+   "cat": "strike",
+   "desc": "A long heavy wind-up, then the pommel smashes the guard open.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 190,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 40,
+     "dx": 7
+    },
+    {
+     "i": 4,
+     "ms": 180,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 240,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 4,
+   "power": 2,
+   "hitstop_ms": 180,
+   "type": "guard_break",
+   "family": "blade",
+   "input": "back, fwd + Strike (hold)",
+   "hit": "blunt",
+   "height": "mid",
+   "smear_frames": [
+    3
+   ],
+   "reach": 26
+  },
+  "taunt2": {
+   "row": 57,
+   "loop": false,
+   "cat": "emote",
+   "desc": "Twirls the blade, flicks it and sheathes it at the hip.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 140,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 160,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 360,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 7,
+     "ms": 120,
+     "dx": 0
+    }
+   ],
+   "type": "taunt",
+   "input": "Taunt"
+  },
+  "launched": {
+   "row": 58,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Launched: popped up and hanging in the air, open for a juggle.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -2
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": -3
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": -2
+    },
+    {
+     "i": 3,
+     "ms": 160,
+     "dx": -1
+    },
+    {
+     "i": 4,
+     "ms": 220,
+     "dx": 0
+    }
+   ],
+   "type": "launched"
+  },
+  "air_hit": {
+   "row": 59,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Juggled: hit again while airborne.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -2
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": -3
+    },
+    {
+     "i": 2,
+     "ms": 140,
+     "dx": -1
+    },
+    {
+     "i": 3,
+     "ms": 180,
+     "dx": 0
+    }
+   ],
+   "type": "air_hit"
+  },
+  "spiked": {
+   "row": 60,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Spiked: slammed out of the air, bounces once and lies there.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -1
+    },
+    {
+     "i": 1,
+     "ms": 50,
+     "dx": -2
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 200,
+     "dx": 0
+    }
+   ],
+   "type": "spiked",
+   "shake": {
+    "frames": 3,
+    "amp": 1
+   }
+  },
+  "thrown": {
+   "row": 61,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Thrown: grabbed, hoisted overhead and slammed flat.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 170,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 40,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 210,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 220,
+     "dx": 0
+    }
+   ],
+   "hit_frame": 4,
+   "grab_frame": 0,
+   "hitstop_ms": 150,
+   "type": "thrown",
+   "shake": {
+    "frames": 3,
+    "amp": 1
+   },
+   "reach": 18
+  },
+  "pulled": {
+   "row": 62,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Pulled: yanked in by a chain and stumbles forward.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": 4
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": 6
+    },
+    {
+     "i": 2,
+     "ms": 110,
+     "dx": 3
+    },
+    {
+     "i": 3,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "type": "pulled"
+  },
+  "guard_crush": {
+   "row": 63,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Guard crushed: the guard flies open and the fighter staggers, wide open.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -2
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": -4
+    },
+    {
+     "i": 2,
+     "ms": 140,
+     "dx": -2
+    },
+    {
+     "i": 3,
+     "ms": 180,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 5,
+     "ms": 110,
+     "dx": 0
+    }
+   ],
+   "type": "guard_crush"
+  },
+  "hit_high": {
+   "row": 64,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Hit high: the head snaps back first, the arms follow.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -2
+    },
+    {
+     "i": 1,
+     "ms": 70,
+     "dx": -2
+    },
+    {
+     "i": 2,
+     "ms": 90,
+     "dx": -1
+    },
+    {
+     "i": 3,
+     "ms": 70,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 90,
+     "dx": 0
+    }
+   ],
+   "type": "hit_high"
+  },
+  "hit_low": {
+   "row": 65,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Hit low: doubles over the blow, knees buckle.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": -1
+    },
+    {
+     "i": 1,
+     "ms": 90,
+     "dx": -2
+    },
+    {
+     "i": 2,
+     "ms": 100,
+     "dx": -1
+    },
+    {
+     "i": 3,
+     "ms": 80,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 90,
+     "dx": 0
+    }
+   ],
+   "type": "hit_low"
+  },
+  "hit_back": {
+   "row": 66,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Hit from behind: pitched forward, stumbles, catches itself.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 50,
+     "dx": 3
+    },
+    {
+     "i": 1,
+     "ms": 80,
+     "dx": 4
+    },
+    {
+     "i": 2,
+     "ms": 110,
+     "dx": 3
+    },
+    {
+     "i": 3,
+     "ms": 100,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "type": "hit_back"
+  },
+  "clash": {
+   "row": 67,
+   "loop": false,
+   "cat": "reaction",
+   "desc": "Clash: the weapons lock with a spark, a straining push, then both shove off.",
+   "frames": [
+    {
+     "i": 0,
+     "ms": 60,
+     "dx": 0
+    },
+    {
+     "i": 1,
+     "ms": 130,
+     "dx": 0
+    },
+    {
+     "i": 2,
+     "ms": 150,
+     "dx": 0
+    },
+    {
+     "i": 3,
+     "ms": 120,
+     "dx": 0
+    },
+    {
+     "i": 4,
+     "ms": 90,
+     "dx": -6
+    },
+    {
+     "i": 5,
+     "ms": 110,
+     "dx": 0
+    },
+    {
+     "i": 6,
+     "ms": 100,
+     "dx": 0
+    }
+   ],
+   "type": "clash",
+   "lock_frame": 0
   }
  },
  "res": 1,
@@ -1919,8 +2841,24 @@
   "hitstop_ms": "per move: how long both fighters should freeze when hit_frame lands (light 150, medium 180, heavy 220, ultimate 260-320).",
   "shake": "per move, optional {frames, amp}: screen shake the fighter itself asks for on its hit_frame (amp in px at this res).",
   "smear_frames": "per move, optional: frame indices drawn as smears (one-frame motion arcs); play them short (<= 50 ms), never hold them.",
-  "credits": "top level: the reference-pack credit line to show in-game."
+  "credits": "top level: the reference-pack credit line to show in-game.",
+  "type": "V7, per move: what the move is to the choreographer (string, riposte, air, spike, throw, through, guard_break, pull, gust, boomerang, taunt; reactions launched, air_hit, spiked, thrown, pulled, guard_crush).",
+  "family": "V7, per move: the weapon family it belongs to (blade, dual, polearm, staff, chain, bow, fans, heavy).",
+  "input": "V7, per move: the fighting-game input label shown in the move list (decoration; nothing reads it as input).",
+  "armor": "V7, per move: true = a light hit during the wind-up does not make the fighter flinch.",
+  "pull_frame": "V7, per move: the frame the chain yanks the opponent in.",
+  "catch_frame": "V7, per move: the frame a thrown boomerang projectile is caught again.",
+  "cancel_frame": "V7, per move: in a string, the next hit may start at this frame (the rest of the move is cancelled).",
+  "lock_frame": "V7, per move: the frame two clashing weapons meet (the clash row).",
+  "hit": "V7, per move: slash / blunt / pierce: which contact spark the engine draws.",
+  "height": "V7, per move: high / mid / low / back: which directional reaction the defender plays.",
+  "combo": "V7, top level: the character's 3-hit string, played with cancel timing."
  },
+ "combo": [
+  "riposte",
+  "iai_slash",
+  "cross_cut"
+ ],
  "fx": {
   "file": "fx.json",
   "sheet": "fx.png"

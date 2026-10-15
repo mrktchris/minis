@@ -137,3 +137,73 @@ def save_gif(frames, times, path, fps=10, colors=48, hold_last=0.8):
     dur = [int(1000 / fps)] * len(q)
     dur[-1] = int(hold_last * 1000)
     q[0].save(path, save_all=True, append_images=q[1:], duration=dur, loop=0, optimize=False, disposal=1)
+
+# ---------------------------------------------------------------- variety audit (V7 move-list expansion)
+def audit(n=300, seed0=1, chars=None, session_s=600.0):
+    """Play `n` seeded matches through rounds.make_match over every ordered roster pair and count what the fighters did.
+    Pure timelines (no windows, no record.json).  -> dict with per-match rates and per-character variety:
+      distinct      moves a character attacked with over the whole audit
+      session12     share of 10-minute sessions (consecutive matches of one character, `session_s` of fight time) with
+                    12+ distinct attack moves
+      top_share     the most-used attack move's share of that character's attacks (<= 0.20 wanted)
+    Rates: ultimates / supers / throws / juggles / pulls / boomerangs / dash-throughs / guard breaks per match, TIME-outs
+    per round, 2-0 rate, mean round length."""
+    from collections import Counter, defaultdict
+    from . import rounds, choreo, fx as fxmod
+    from .atlas import available
+    lib = _LIB
+    names = list(chars or available())
+    fxd = fxmod.default()
+    pairs = [(a, b) for a in names for b in names if a != b]
+    per = defaultdict(Counter)
+    sessions = defaultdict(list)                          # char -> [(fight seconds, Counter)] in match order
+    rate = Counter()
+    rounds_n = time_n = sweep = 0
+    round_len = []
+    for i in range(n):
+        a, b = pairs[i % len(pairs)]
+        plan = dict(kind='match', left='a', right='b', pos={'a': 500.0, 'b': 532.0}, t0=1000.0, seed=seed0 + i,
+                    chars={'a': a, 'b': b}, mode='decided', scores={'a': 100.0, 'b': 100.0}, id=f'audit:{i}', deadline=1003.0)
+        atl = {a: lib[a], b: lib[b]}
+        tl, t_end, s = rounds.make_match(plan, atl, fxd)
+        for slot, ch in (('a', a), ('b', b)):
+            c = Counter()
+            for bt in s['beats'][slot]:
+                k = bt.get('kind')
+                if k in choreo.ATTACK_KINDS:
+                    c[bt['anim']] += 1
+                    rate[k] += 1
+                    if bt.get('outcome') == 'clash':
+                        rate['clash'] += 1
+                for flag in ('throw', 'juggle', 'pull', 'boomerang', 'through', 'guard_break', 'spike', 'string', 'armor', 'riposte'):
+                    if bt.get(flag):
+                        rate[flag] += 1
+            per[ch].update(c)
+            sessions[ch].append((t_end - 1000.0, c))
+        for r in s['rounds']:
+            rounds_n += 1
+            time_n += 0 if r['ko'] else 1
+            round_len.append(r['t1'] - r['t0'])
+        sweep += 1 if min(s['wins'].values()) == 0 else 0
+    out = dict(matches=n, per_match={k: round(v / float(n), 2) for k, v in sorted(rate.items())},
+               time_rate=round(time_n / float(max(1, rounds_n)), 3), sweep_rate=round(sweep / float(n), 3),
+               mean_round_s=round(sum(round_len) / max(1, len(round_len)), 1), chars={})
+    for ch, c in per.items():
+        tot = sum(c.values())
+        sess, cur, cur_s = [], Counter(), 0.0
+        for secs, cc in sessions[ch]:
+            cur.update(cc)
+            cur_s += secs
+            if cur_s >= session_s:
+                sess.append(len(cur))
+                cur, cur_s = Counter(), 0.0
+        top = c.most_common(1)[0] if c else ('-', 0)
+        out['chars'][ch] = dict(distinct=len(c), top=top[0], top_share=round(top[1] / float(max(1, tot)), 3),
+                                sessions=len(sess), session12=round(sum(1 for x in sess if x >= 12) / float(max(1, len(sess))), 2),
+                                session_min=min(sess) if sess else len(c))
+    return out
+
+
+if __name__ == '__main__':
+    import json, sys
+    print(json.dumps(audit(int(sys.argv[1]) if len(sys.argv) > 1 else 300), indent=1))
