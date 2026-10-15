@@ -854,6 +854,7 @@ class Moves7(unittest.TestCase):
         self.assertGreater(abs(b.vx), 900)
 
 
+@unittest.skipUnless(sys.platform == 'win32', 'Win32 only: it records minis_win.shell and user32 (the macOS arena reads bounds only)')
 class VisualOnly7(Isolated):
     """The arena never touches another window: run the real arena process body against a recording shell and a recording
     user32, and require that the only shell call is the single-instance mutex and that user32 is never called at all."""

@@ -30,7 +30,7 @@ except ImportError as _e:                                   # pragma: no cover -
     raise ImportError('Taskbar Fighters on macOS needs PyObjC. Run ./scripts/setup_mac.sh, or: '
                       'python3 -m pip install -r requirements-mac.txt   (missing: %s)' % _e) from _e
 
-from PIL import Image, ImageChops
+from PIL import Image
 
 from . import geometry as G
 from .procs import make_mutex  # noqa: F401  (same name as minis_win.shell.make_mutex)
@@ -378,9 +378,8 @@ def make_tray(tip, flags, on_choice, on_left, log=None, icon_path=None):
 # ---------------------------------------------------------------- images
 def cgimage(img):
     """PIL image -> CGImage (premultiplied RGBA, 8 bits per channel)."""
-    img = img.convert('RGBA')
-    r, g, b, a = img.split()
-    data = Image.merge('RGBA', (ImageChops.multiply(r, a), ImageChops.multiply(g, a), ImageChops.multiply(b, a), a)).tobytes()
+    img = img if img.mode == 'RGBA' else img.convert('RGBA')
+    data = img.convert('RGBa').tobytes()                  # Pillow's premultiplied mode: same bytes, ~4x faster than 3 multiplies
     w, h = img.size
     provider = Quartz.CGDataProviderCreateWithCFData(NSData.dataWithBytes_length_(data, len(data)))
     space = Quartz.CGColorSpaceCreateDeviceRGB()
