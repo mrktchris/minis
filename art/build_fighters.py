@@ -465,6 +465,9 @@ def build(character, out_root, res=1, cap=None, with_fx=True):
             entry['proj_from'] = list(proj_from)
         if mv.get('fx'):                                 # V4: which effects play on which frames (see fx.py)
             entry['fx'] = [dict(e) for e in mv['fx']]
+        elif name == ch.signature.get('super'):          # the super's burst art (fx.py `<super>_burst`); without this the
+            at = mv.get('hit_frame', len(mv['frames']) // 2)    # engine looked for an effect named after the move and drew a stand-in
+            entry['fx'] = [dict(name=f'{name}_burst', at=int(at))]
         if mv.get('support'):
             entry['support'] = mv['support']
         anim[name] = entry

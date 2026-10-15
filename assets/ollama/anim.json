@@ -1729,6 +1729,12 @@
      "ms": 110,
      "dx": 0
     }
+   ],
+   "fx": [
+    {
+     "name": "serve_burst",
+     "at": 3
+    }
    ]
   },
   "handoff_give": {

@@ -1734,6 +1734,12 @@
      "ms": 110,
      "dx": 0
     }
+   ],
+   "fx": [
+    {
+     "name": "valor_burst",
+     "at": 3
+    }
    ]
   },
   "handoff_give": {

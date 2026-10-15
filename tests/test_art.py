@@ -903,6 +903,18 @@ class Effects(unittest.TestCase):
                         ib = s.fxs.crop((fb['x'], fb['y'], fb['x'] + fb['w'], fb['y'] + fb['h']))
                         self.assertEqual(ia.tobytes(), ib.tobytes(), f'{root}/{ch}/{n}: generic art differs')
 
+    def test_every_signature_effect_has_art(self):
+        """Every effect a signature move asks for exists in the character's fx.json (a missing one silently became a
+        procedural stand-in beam: all 13 supers did, 2026-10-15)."""
+        for root in ROOTS:
+            for ch in CHARS:
+                s = Sheet(ch, root)
+                for kind in ('super', 'ultimate'):
+                    mv = s.meta['anims'][s.meta['signature'][kind]]
+                    self.assertTrue(mv.get('fx'), f'{root}/{ch} {kind} names no effect')
+                    for e in mv['fx']:
+                        self.assertIn(e['name'], s.fx['effects'], f'{root}/{ch} {kind} -> {e["name"]}')
+
     def test_impact_frames_effect_for_heavy_hits_and_ultimates(self):
         """Dark silhouette with white rays + rim, the white inverse with speed lines, outline strokes, a white silhouette.
         Never an opaque cell: on the live strip a full white cell read as a glitch box (owner, 2026-10-15)."""

@@ -1738,6 +1738,12 @@
      "ms": 110,
      "dx": 0
     }
+   ],
+   "fx": [
+    {
+     "name": "meditate_burst",
+     "at": 3
+    }
    ]
   },
   "handoff_give": {

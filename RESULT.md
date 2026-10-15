@@ -404,10 +404,8 @@ Summary of commit `744d818` (details in [CHANGELOG.md](CHANGELOG.md) and the com
 - The arena does not get the task-finished super boost the taskbar has.
 - Fighters stand about 11 px above the taskbar's top edge (the 64 px cell's top rows sit over the desktop); long weapons tilt to fit
   the cell.
-- Every signature super asks for an effect named after the move (`reverse`, `sudo`, `twin_flash` ...). None of those names has art on
-  the sheets (the sheets have e.g. `reverse_burst`, `sudo_burst`, not wired to the move), so the engine plays its procedural
-  stand-in, a beam-like burst with a shake. Seen in an offline render of the move sheet (`tools/doc_images.py` leaves it out of
-  `moves-*.png`); not checked on the live taskbar.
-- No live taskbar capture was taken for the 2026-10-15 docs: Taskbar Fighters was not running then, and the docs work does not start
+- FIXED 2026-10-15: every signature super asked for an effect named after the move, which had no art, so the engine drew a
+  procedural stand-in. `art/build_fighters.py` now wires each super to its `<super>_burst` art; `test_every_signature_effect_has_art` guards it.
+- (Resolved later the same day: `docs/img/live-taskbar.png` and `live-bout.gif` are real captures.) No live taskbar capture was first taken for the 2026-10-15 docs: Taskbar Fighters was not running then, and the docs work does not start
   or stop it. The hero images are offline renders and say so; `tools/taskbar_capture.py` + `tools/doc_images.py --annotate-live`
   make the live version.

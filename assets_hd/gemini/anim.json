@@ -1727,6 +1727,12 @@
      "ms": 260,
      "dx": 0
     }
+   ],
+   "fx": [
+    {
+     "name": "twin_flash_burst",
+     "at": 3
+    }
    ]
   },
   "handoff_give": {

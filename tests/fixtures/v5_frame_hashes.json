@@ -1577,7 +1577,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "\"/reverse\": rewinds to where it stood a second ago, dodging everything. Afterimage trail."
+"desc": "\"/reverse\": rewinds to where it stood a second ago, dodging everything. Afterimage trail.",
+"fx": [
+{
+"name": "reverse_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -3331,7 +3337,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "\"$reverse\": raises a giant $ and powers up with elevated permissions."
+"desc": "\"$reverse\": raises a giant $ and powers up with elevated permissions.",
+"fx": [
+{
+"name": "sudo_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -5126,7 +5138,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Flash-steps back a second in time, leaving a sparkle and an afterimage trail."
+"desc": "Flash-steps back a second in time, leaving a sparkle and an afterimage trail.",
+"fx": [
+{
+"name": "twin_flash_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -6891,7 +6909,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Raises a giant \">\" and powers up: the whole line completes itself."
+"desc": "Raises a giant \">\" and powers up: the whole line completes itself.",
+"fx": [
+{
+"name": "autocomplete_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -8649,7 +8673,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "\"ollama serve\": raises a giant \"o\" and powers up, local and unstoppable."
+"desc": "\"ollama serve\": raises a giant \"o\" and powers up, local and unstoppable.",
+"fx": [
+{
+"name": "serve_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -10400,7 +10430,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Hot-swaps back to where it stood a second ago, afterimage trail and a giant \"L\"."
+"desc": "Hot-swaps back to where it stood a second ago, afterimage trail and a giant \"L\".",
+"fx": [
+{
+"name": "hot_swap_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -12161,7 +12197,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Raises a giant \"+\" and powers up: everything runs faster."
+"desc": "Raises a giant \"+\" and powers up: everything runs faster.",
+"fx": [
+{
+"name": "overclock_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -13909,7 +13951,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Vanishes back a second in a swirl of petals, a giant \"x\" where she stood."
+"desc": "Vanishes back a second in a swirl of petals, a giant \"x\" where she stood.",
+"fx": [
+{
+"name": "vanish_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -15667,7 +15715,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Raises the greatsword under a giant \"T\" and steels itself."
+"desc": "Raises the greatsword under a giant \"T\" and steels itself.",
+"fx": [
+{
+"name": "valor_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -17420,7 +17474,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Roars under a giant \"V\" and goes berserk."
+"desc": "Roars under a giant \"V\" and goes berserk.",
+"fx": [
+{
+"name": "berserk_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -19176,7 +19236,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Centres itself under a giant \"O\"; the aura flares."
+"desc": "Centres itself under a giant \"O\"; the aura flares.",
+"fx": [
+{
+"name": "meditate_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -20930,7 +20996,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Slips back a second like a heat mirage, a giant \"Y\" left behind."
+"desc": "Slips back a second like a heat mirage, a giant \"Y\" left behind.",
+"fx": [
+{
+"name": "mirage_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -22690,7 +22762,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Swells under a giant \"H\", eyes blazing."
+"desc": "Swells under a giant \"H\", eyes blazing.",
+"fx": [
+{
+"name": "rampage_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -24452,7 +24530,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "\"/reverse\": rewinds to where it stood a second ago, dodging everything. Afterimage trail."
+"desc": "\"/reverse\": rewinds to where it stood a second ago, dodging everything. Afterimage trail.",
+"fx": [
+{
+"name": "reverse_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -26216,7 +26300,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "\"$reverse\": raises a giant $ and powers up with elevated permissions."
+"desc": "\"$reverse\": raises a giant $ and powers up with elevated permissions.",
+"fx": [
+{
+"name": "sudo_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -28021,7 +28111,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Flash-steps back a second in time, leaving a sparkle and an afterimage trail."
+"desc": "Flash-steps back a second in time, leaving a sparkle and an afterimage trail.",
+"fx": [
+{
+"name": "twin_flash_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -29800,7 +29896,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Raises a giant \">\" and powers up: the whole line completes itself."
+"desc": "Raises a giant \">\" and powers up: the whole line completes itself.",
+"fx": [
+{
+"name": "autocomplete_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -31570,7 +31672,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "\"ollama serve\": raises a giant \"o\" and powers up, local and unstoppable."
+"desc": "\"ollama serve\": raises a giant \"o\" and powers up, local and unstoppable.",
+"fx": [
+{
+"name": "serve_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -33332,7 +33440,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Hot-swaps back to where it stood a second ago, afterimage trail and a giant \"L\"."
+"desc": "Hot-swaps back to where it stood a second ago, afterimage trail and a giant \"L\".",
+"fx": [
+{
+"name": "hot_swap_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -35105,7 +35219,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Raises a giant \"+\" and powers up: everything runs faster."
+"desc": "Raises a giant \"+\" and powers up: everything runs faster.",
+"fx": [
+{
+"name": "overclock_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -36863,7 +36983,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Vanishes back a second in a swirl of petals, a giant \"x\" where she stood."
+"desc": "Vanishes back a second in a swirl of petals, a giant \"x\" where she stood.",
+"fx": [
+{
+"name": "vanish_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -38630,7 +38756,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Raises the greatsword under a giant \"T\" and steels itself."
+"desc": "Raises the greatsword under a giant \"T\" and steels itself.",
+"fx": [
+{
+"name": "valor_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -40393,7 +40525,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Roars under a giant \"V\" and goes berserk."
+"desc": "Roars under a giant \"V\" and goes berserk.",
+"fx": [
+{
+"name": "berserk_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -42161,7 +42299,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Centres itself under a giant \"O\"; the aura flares."
+"desc": "Centres itself under a giant \"O\"; the aura flares.",
+"fx": [
+{
+"name": "meditate_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -43927,7 +44071,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Slips back a second like a heat mirage, a giant \"Y\" left behind."
+"desc": "Slips back a second like a heat mirage, a giant \"Y\" left behind.",
+"fx": [
+{
+"name": "mirage_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {
@@ -45698,7 +45848,13 @@
 "meta": {
 "loop": false,
 "cat": "super",
-"desc": "Swells under a giant \"H\", eyes blazing."
+"desc": "Swells under a giant \"H\", eyes blazing.",
+"fx": [
+{
+"name": "rampage_burst",
+"at": 3
+}
+]
 }
 },
 "handoff_give": {

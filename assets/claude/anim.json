@@ -1720,6 +1720,12 @@
      "ms": 260,
      "dx": 0
     }
+   ],
+   "fx": [
+    {
+     "name": "reverse_burst",
+     "at": 3
+    }
    ]
   },
   "handoff_give": {

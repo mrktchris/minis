@@ -1729,6 +1729,12 @@
      "ms": 110,
      "dx": 0
     }
+   ],
+   "fx": [
+    {
+     "name": "overclock_burst",
+     "at": 3
+    }
    ]
   },
   "handoff_give": {

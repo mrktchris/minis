@@ -1731,6 +1731,12 @@
      "ms": 110,
      "dx": 0
     }
+   ],
+   "fx": [
+    {
+     "name": "rampage_burst",
+     "at": 3
+    }
    ]
   },
   "handoff_give": {

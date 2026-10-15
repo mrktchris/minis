@@ -1735,6 +1735,12 @@
      "ms": 110,
      "dx": 0
     }
+   ],
+   "fx": [
+    {
+     "name": "autocomplete_burst",
+     "at": 3
+    }
    ]
   },
   "handoff_give": {
