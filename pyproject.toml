@@ -30,8 +30,13 @@ classifiers = [
 dependencies = ["Pillow>=9.1"]
 
 [project.optional-dependencies]
-# Same floor as the mac port's requirements; keep in step with requirements-mac.txt once it lands (docs/PACKAGING.md).
-mac = ["pyobjc-framework-Cocoa>=10.3", "pyobjc-framework-Quartz>=10.3"]
+# macOS backend (AppKit / Quartz through PyObjC).  Same pins as requirements-mac.txt; the marker keeps a Windows
+# `pip install "taskbar-fighters[mac]"` from pulling PyObjC.
+mac = [
+    "pyobjc-core>=11.1,<13; sys_platform == 'darwin'",
+    "pyobjc-framework-Cocoa>=11.1,<13; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=11.1,<13; sys_platform == 'darwin'",
+]
 
 [project.scripts]
 taskbar-fighters = "minis:main"
@@ -44,15 +49,23 @@ Changelog = "https://github.com/mrktchris/taskbar-fighters/blob/master/CHANGELOG
 
 [tool.setuptools]
 py-modules = ["minis"]
-include-package-data = true
+include-package-data = false
+# The art lives at the repo root (assets/, assets_hd/) and installs INSIDE the package taskbar_fighters_assets, never
+# as top-level site-packages/assets.  minis_core/paths.py resolves checkout, PyInstaller, py2app and wheel alike.
+packages = [
+    "minis_core",
+    "minis_win",
+    "minis_mac",
+    "minis_platform",
+    "taskbar_fighters_assets",
+    "taskbar_fighters_assets.assets",
+    "taskbar_fighters_assets.assets_hd",
+]
 
-[tool.setuptools.packages.find]
-where = ["."]
-# Only the runtime.  minis_mac / minis_platform are picked up when they exist at build time.
-# assets* and assets_hd* are data-only (namespace) directories: they install next to minis.py in site-packages, which is
-# exactly where minis.py / minis_core look for them (ROOT = the folder holding minis.py).  See docs/PACKAGING.md.
-include = ["minis_core", "minis_win", "minis_mac", "minis_platform", "assets*", "assets_hd*"]
-namespaces = true
+[tool.setuptools.package-dir]
+"taskbar_fighters_assets.assets" = "assets"
+"taskbar_fighters_assets.assets_hd" = "assets_hd"
 
 [tool.setuptools.package-data]
-"*" = ["*.png", "*.json", "*.ico"]
+"taskbar_fighters_assets.assets" = ["**/*.png", "**/*.json", "**/*.ico"]
+"taskbar_fighters_assets.assets_hd" = ["**/*.png", "**/*.json"]

@@ -2,7 +2,7 @@ name: Release
 
 # Push a tag like v1.0.0 (after CI is green on master) and this builds every download and drafts nothing by hand:
 #   TaskbarFighters-windows.zip   one-click Windows bundle (PyInstaller onedir: TaskbarFighters.exe + assets)
-#   TaskbarFighters-macos.zip     experimental macOS bundle (source + setup_mac.sh when present)
+#   TaskbarFighters-macos.zip     experimental macOS bundle (the tagged source; run scripts/setup_mac.sh)
 #   taskbar-fighters-<ver>-source.zip
 #   taskbar_fighters-<ver>-py3-none-any.whl + .tar.gz   (pip install)
 # The release body is docs/release-notes/<tag>.md.
@@ -70,6 +70,8 @@ jobs:
         run: |
           ./dist/TaskbarFighters/TaskbarFighters-cli.exe --help
           ./dist/TaskbarFighters/TaskbarFighters-cli.exe detect
+          ./dist/TaskbarFighters/TaskbarFighters-cli.exe doctor --headless
+          ./dist/TaskbarFighters/TaskbarFighters-cli.exe fighters | grep -q "barbarian, claude, codex"
       - name: Zip
         shell: pwsh
         run: |
@@ -120,7 +122,7 @@ jobs:
         run: |
           mkdir -p out/TaskbarFighters-macos
           git archive HEAD | tar -x -C out/TaskbarFighters-macos
-          if [ -f setup_mac.sh ]; then chmod +x out/TaskbarFighters-macos/setup_mac.sh; fi
+          if [ -f scripts/setup_mac.sh ]; then chmod +x out/TaskbarFighters-macos/scripts/setup_mac.sh; fi
           cd out && zip -qr ../TaskbarFighters-macos.zip TaskbarFighters-macos
       - uses: actions/upload-artifact@v4
         with:
