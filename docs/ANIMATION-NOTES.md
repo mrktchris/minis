@@ -111,3 +111,41 @@ edge-light trim, and holographic (dithered neon) afterimages on its flash-steps.
   and the whole overlay in the arena for that frame; never true on a looping effect). `art/fx.py` holds
   `FX_SCHEMA_NOTES`; `minis_core/fx.py` / `effects.py` read them, and an engine that does not know the keys ignores
   them. `python art/qa_v5.py beams` renders every beam, wave and burst at 4x with real timings to `qa/v5/beams.gif`.
+
+## 6. Lessons from two fight-animation videos (2026-10-14)
+
+Sources, studied only (nothing copied): "STRENGTH VS SPEED" by StickNodes (21 s stick-figure fight; frame-stepped at 6 fps) and
+"I Animated a FULL FIGHT SCENE in Just 7 Days" by RJ Animations Too (transcript read in full, 14 min).
+
+What the stick-figure clip does that ours does not (SEEN in the frames):
+1. **Long anticipation, short action.** Fighters crouch, coil or hold a pose for many frames, then the strike lands in one or two
+   frames. Our strikes spend their frames evenly, so nothing "pops".
+2. **Held keyframes with sparse inbetweens.** Big gaps between poses, with a smear or blur between them, read faster than smooth
+   tweening. Silhouette first: every key pose reads as a black shape.
+3. **The ground is a stage.** Characters are thrown across it, skid, roll, spring up. Movement covers distance; ours stay in place.
+4. **Smears are streaks, not shapes.** A thin curved trail from the limb's path (red arc on a kick, blue speed lines when a character
+   dashes) plus a ghosted copy of the previous pose. Speed lines fill the whole frame on a rush.
+5. **Camera and framing change.** Cuts between wide and close, and the world scrolls when someone dashes.
+6. **Variety of rhythm.** Not every hit is the same length: a counter, a juggle in the air, a dash-through, a grapple, a finisher.
+
+What the 7-day video teaches (SEEN in transcript):
+1. **Key poses first, inbetweens last.** 35 keys for a whole fight; draw rough and loose ("scribbly") so gesture stays dynamic, stiffness
+   comes from drawing too carefully.
+2. **Retime the reference.** Copying real or 3D motion looks floaty; change the timing, widen the shot to show the silhouette, hold a
+   key for several frames (they used a 6-frame hold), then speed up.
+3. **Impact frames are the 2D trick.** On the biggest hit: a pose in silhouette with radial lines inside it (white background), then the
+   inverse (black with white lines, lines longer and more chaotic), then short outline lines on white, then a blank white or black frame.
+   Slow-motion plus an impact frame replaces a plain slow-mo.
+4. **Simplify anatomy.** Generic characters with a simple face; inbetweens can be drawn as silhouettes only to save time.
+5. **Use a colour per character** while roughing, so overlap stays readable.
+
+How this turns into work for minis (the order is by payoff):
+- **Impact frames.** A 2-4 frame sequence on heavy hits and ultimates: whole-sprite silhouette on white, inverse on black, radial lines
+  clipped to the silhouette, then one blank frame. At 64 px that is a 100-160 ms flash; it must not read as a glitch, so it plays on
+  contact only and never on every hit.
+- **Anticipation and holds in `art/moves.py`.** Longer wind-ups (4-6 frames at the slow end), a one-frame contact, a smear frame, a 3-6
+  frame hold after the big hits; shorter hits stay snappy. Vary durations per move instead of one flat 100 ms.
+- **Travel.** Dash-through, slide, lunge and knockback that cover real distance on the strip, with dust and speed-line streaks.
+- **Streak smears** drawn from the limb path (thin, tapered, one colour), plus one ghosted previous pose, instead of blobs.
+- **Silhouette test.** Each key pose has to read as a black shape on `#202020` at 1x; if two poses look the same, redraw one.
+- **No long trailing cloth** (owner: the cape/scarf "doesn't look good"). Short hanging parts that lag one frame only.
