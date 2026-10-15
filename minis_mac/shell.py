@@ -285,6 +285,23 @@ def _cg_windows():
     return list(infos or ())
 
 
+def _notch_left(s):
+    """Cocoa x where the camera notch starts on screen `s` (macOS 12+ auxiliaryTopLeftArea), or None without a notch."""
+    try:
+        if float(s.safeAreaInsets().top) <= 0:
+            return None
+        r = s.auxiliaryTopLeftArea()
+        return float(r.origin.x + r.size.width) if r is not None and r.size.width > 0 else None
+    except Exception:
+        return None
+
+
+def menubar_plate_origin(slot, w, h, gap):
+    """(x, y) of a HUD plate placed in the menu bar of the menu-bar screen (see geometry.menubar_plate_origin)."""
+    s = _screens()[0]
+    return G.menubar_plate_origin(slot, _frame(s.frame()), _frame(s.visibleFrame()), _notch_left(s), w, h, gap)
+
+
 def menubar_icon_shown(pid):
     """geometry.status_item_shown for process `pid` (the director): True, False (hidden by macOS) or None (unknown)."""
     try:

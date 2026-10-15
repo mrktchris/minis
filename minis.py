@@ -430,7 +430,8 @@ def cmd_status(args=None):
         print('assign.json: missing (fighters fall back to a=claude, b=codex)')
     else:
         print(f'assign.json: written {round(now - float(data.get("ts", 0)), 1)}s ago')
-    print('animations:', 'PAUSED' if control.paused() else 'running', '| HUD plates:', 'on' if control.plates_on() else 'off',
+    print('animations:', 'PAUSED' if control.paused() else 'running', '| HUD plates:',
+          ('on' if control.plates_on() else 'off') + (' (menu bar)' if plat.is_mac() and control.hud_position() == 'menubar' else ''),
           '| winners:', control.winners(), '| flash effects:', 'on' if control.flashes_on() else 'off')
     lu = control.lineup()
     print(f"lineup: a={lu['a']} b={lu['b']}" + (' | looks: ' + ', '.join(f'{k}->{v}' for k, v in sorted(lu['skins'].items())) if lu['skins'] else ''))
@@ -460,6 +461,14 @@ def cmd_resume(args=None):
 
 def cmd_plates(args):
     from minis_core import control
+    if args.state in control.HUD_POSITIONS:
+        if not plat.is_mac():
+            print('plates menubar|dock: macOS only (on Windows the plates live in the taskbar)')
+            return 2
+        ok = control.set_hud_position(args.state)
+        where = 'in the menu bar' if args.state == 'menubar' else 'above the Dock'
+        print(f'HUD plates: {where}' if ok else 'could not write control.json')
+        return 0 if ok else 1
     ok = control.set_plates(args.state == 'on')
     print(f'HUD plates {args.state}' if ok else 'could not write control.json')
     return 0 if ok else 1
@@ -1420,6 +1429,7 @@ class Fighter:
         self.ov = None                # the fighter window (sprite + projectile), moves with the fighter
         self.pov = None               # the HUD plate window, fixed at the left end of the zone
         self.hud_k = 1                # HUD pixel density (2 on a Retina Mac)
+        self.hud_pos = 'dock'         # macOS: 'dock' or 'menubar' (control.json hud_position); Windows: always the taskbar
         self.g = None
         self.last = dict(tele=-1e9, bus=-1e9, top=-1e9, tb=-1e9, draw=-1e9, sig=None, pbus=-1e9, assign=-1e9, ctl=-1e9, pubkey=None, evkey=None,
                          psig=None, demo=None, notes=0)
@@ -1443,6 +1453,15 @@ class Fighter:
 
     def plate_x(self):
         return cfgmod.plate_left(self.cfg, self.slot) * self.g['scale']
+
+    def plate_xy(self):
+        """(x, y) of this side's plate window: the taskbar / Dock strip, or (macOS, `plates menubar`) the menu bar."""
+        if self.hud_pos == 'menubar':
+            try:
+                return self.shell.menubar_plate_origin(self.slot, cfgmod.PLATE_W, cfgmod.PLATE_H, cfgmod.PLATE_SPACING)
+            except Exception:
+                pass
+        return self.plate_x(), self.g['plate_y']
 
     def resolve_size(self):
         """fighter_size from control.json (`minis.py size N`, the menu) or the config.  Applied at setup; a change restarts."""
@@ -1491,7 +1510,9 @@ class Fighter:
         self.ov = self.shell.Overlay(f'minis-{self.slot}', int(self.cfg['zone'][0]), self.g['y'], 64, self.cell, scale=self.g['scale'],
                                      on_event=self.on_event, on_timer=self.menu_tick)
         self.ov.show(False)
-        self.pov = self.shell.Overlay(f'minis-{self.slot}-plate', self.plate_x(), self.g['plate_y'], cfgmod.PLATE_W, cfgmod.PLATE_H,
+        if plat.is_mac():
+            self.hud_pos = control.hud_position(self.control_path)
+        self.pov = self.shell.Overlay(f'minis-{self.slot}-plate', *self.plate_xy(), cfgmod.PLATE_W, cfgmod.PLATE_H,
                                       scale=self.g['scale'], on_event=self.on_plate_event, on_timer=self.menu_tick)
         self.pov.show(False)
         self.hud_k = hud_density(self.shell)
@@ -1622,6 +1643,8 @@ class Fighter:
         if self.assigned and not director.slot_assignment(data, self.slot):
             data = dict(data, **{self.slot: self.assigned})
         flags['size'] = self.size
+        if plat.is_mac():
+            flags['hud_pos'] = self.hud_pos                # adds the Plates position submenu
         items, actions = L.fighter_menu(self.slot, data, lu, flags, L.characters())
         choice = self.ov.menu(items)
         self.last['ctl'] = -1e9
@@ -1645,6 +1668,8 @@ class Fighter:
             control.hide(self.slot, 3600, cp, now=self.wall())
         elif choice == L.PLATES:
             control.set_plates(not flags['plates'], cp)
+        elif choice in (L.HUD_DOCK, L.HUD_MENUBAR):
+            control.set_hud_position('dock' if choice == L.HUD_DOCK else 'menubar', cp)
         elif choice == L.PAUSE:
             control.set_paused(not flags['paused'], cp)
         elif choice == L.FLASH:
@@ -1728,6 +1753,12 @@ class Fighter:
                 self.plates = pl
                 self.last['psig'] = None
                 self._show_plate()
+            if plat.is_mac():
+                hp = control.hud_position(self.control_path)
+                if hp != self.hud_pos:                    # the menu or `plates menubar|dock`: move the plate right away
+                    self.hud_pos = hp
+                    self.pov.move(*self.plate_xy())
+                    self.last['psig'] = None
             b.winners = control.winners(self.control_path)
             self.flash = control.flashes_on(self.control_path, default=self.cfg.get('flashes', True))
             if hasattr(b, 'flashes'):
@@ -1780,9 +1811,13 @@ class Fighter:
                 ov.move(ov.x, g2['y'])
                 self.g = g2
                 self.pov.set_scale(g2['scale'])
-                self.pov.move(self.plate_x(), g2['plate_y'])
+                self.pov.move(*self.plate_xy())
                 self.last['sig'] = self.last['psig'] = None
             self.g = g2
+            if self.hud_pos == 'menubar':                  # the menu bar moves with the screen (resolution, display change)
+                xy = self.plate_xy()
+                if xy != (self.pov.x, self.pov.y):
+                    self.pov.move(*xy)
             hidden = (self.assigned is None or self.ctl_hidden is not None or not g2['usable'] or self.shell.fullscreen_busy() or self.arena)
             if not hidden and not ov.visible:
                 self.last['sig'] = None
@@ -1823,7 +1858,7 @@ class Fighter:
         psig = (name, self.brain.character, snap.state, render.shown_pct(snap.ctx_pct), render.shown_pct(snap.plan_pct), snap.plan_label,
                 render.blink_phase(snap, now))
         if psig != self.last['psig']:
-            self.pov.present(render.plate(self.brain.atlas, snap, now, name=name, k=self.hud_k), x=self.plate_x())
+            self.pov.present(render.plate(self.brain.atlas, snap, now, name=name, k=self.hud_k), x=self.plate_xy()[0])
             self.last['psig'] = psig
 
     def _log_bout_notes(self):
@@ -2377,8 +2412,8 @@ def main(argv=None):
     ar.add_argument('--seconds', type=float, default=None, help='leave on its own after this long')
     ar.add_argument('--seed', type=int, default=None, help='fix the choreography seed (captures, previews)')
     ar.set_defaults(fn=cmd_arena)
-    p = sub.add_parser('plates', help='show or hide both HUD plates')
-    p.add_argument('state', choices=('on', 'off'))
+    p = sub.add_parser('plates', help='show or hide both HUD plates; macOS: put them in the menu bar or above the Dock')
+    p.add_argument('state', choices=('on', 'off', 'menubar', 'dock'))
     p.set_defaults(fn=cmd_plates)
     d = sub.add_parser('demo', help='start one bout now')
     d.add_argument('kind', nargs='?', default='spar', choices=('spar', 'clash', 'ranged', 'match'))

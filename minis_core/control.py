@@ -59,6 +59,20 @@ def set_plates(flag: bool, path=None) -> bool:
     return _update(path, plates=bool(flag))
 
 
+HUD_POSITIONS = ('dock', 'menubar')
+
+
+def hud_position(path=None) -> str:
+    """macOS: where the HUD plates sit - 'dock' (above the Dock, the default) or 'menubar' (in the menu bar, beside the
+    notch).  `minis.py plates menubar|dock` or the fighter menu.  Windows keeps them in the taskbar and never reads it."""
+    v = read(path).get('hud_position')
+    return v if v in HUD_POSITIONS else 'dock'
+
+
+def set_hud_position(pos: str, path=None) -> bool:
+    return _update(path, hud_position=pos if pos in HUD_POSITIONS else 'dock')
+
+
 def rival_on(path=None, default=True) -> bool:
     """Rival mode (V5.1): a sleeping partner is woken for a match now and then.  `minis.py rival on|off` or the menu;
     `default` is the config value when control.json has no say."""

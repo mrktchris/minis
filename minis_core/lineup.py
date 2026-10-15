@@ -130,6 +130,7 @@ def look_of(source_id, lu, assign=None) -> str:
 
 # ---------------------------------------------------------------- the right-click menu, as data
 QUIT_ALL, HIDE_1H, PLATES, PAUSE, BOUT, MATCH, WIN_DECIDED, ARENA, RIVAL, HIDE, SELECT, WIN_RANDOM, FLASH = range(1, 14)
+HUD_DOCK, HUD_MENUBAR = 14, 15                     # macOS only: the Plates position submenu
 PICK_AUTO, PICK_BASE = 100, 101
 LOOK_DEFAULT, LOOK_BASE = 300, 301
 SIZE_BASE = 400                                    # SIZE_BASE + px: the Fighter size submenu (464 / 496 / 528)
@@ -139,7 +140,7 @@ def fighter_menu(slot, assign, lu, flags, chars):
     """-> (items, actions).  items is the menu for minis_win.shell.Overlay.menu:
          (id, label[, {'checked','radio','disabled'}]) | None (separator) | (label, [items]) (submenu)
        actions: {id: (kind, value)} for the Fighter and Look submenus.  flags: paused, plates, rival, flash, arena (bools),
-       winners ('decided'|'random')."""
+       winners ('decided'|'random'), and on macOS hud_pos ('dock'|'menubar': adds the Plates position submenu)."""
     me = (assign or {}).get(slot) if isinstance(assign, dict) else None
     me = me if isinstance(me, dict) else {}
     src = me.get('source')
@@ -184,6 +185,10 @@ def fighter_menu(slot, assign, lu, flags, chars):
               (ARENA, 'Arena mode', {'checked': bool(flags.get('arena'))}),
               None,
               (HIDE, f'Hide this fighter ({name})'), (HIDE_1H, 'Hide for 1 hour'), (QUIT_ALL, 'Quit Taskbar Fighters (stops everything)')]
+    if flags.get('hud_pos') in ('dock', 'menubar'):
+        at = next(i for i, it in enumerate(items) if it and it[0] == PLATES) + 1
+        items.insert(at, ('Plates position', [(HUD_DOCK, 'Above the Dock', {'radio': True, 'checked': flags['hud_pos'] == 'dock'}),
+                                              (HUD_MENUBAR, 'In the menu bar', {'radio': True, 'checked': flags['hud_pos'] == 'menubar'})]))
     return items, actions
 
 
