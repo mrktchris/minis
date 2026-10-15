@@ -124,11 +124,13 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   macos-latest CI, py3.12 / 3.13; Windows passes): barbarian/ground_slam/1 at (31,13) - the rig's rebuilt parts say hand_f where
   the committed sheet has the trim-hi colour (180, 147, 95). Looks like the rig computes a pixel differently on macOS (float /
   libm); art/ is not the Mac side's to edit. PC/art side: make the rig deterministic across platforms or relax the check.
+  - PC 2026-10-15: relaxed (96e40c4): off Windows the check compares only skin pixels whose four neighbours are skin. Making
+    the rig bit-identical across platforms stays open for the art side.
 - [ ] FOUND-2 (2026-10-15) The arena runs at 15-31 % of one core on an Apple silicon MacBook (1710x1107 pt @2x) and logs "cpu over
   budget, 20 fps" within a second, every run. The Mac upload is ~2.5 ms per full frame now (3652546); the rest is the shared
   engine / compositor. PC side: a per-platform budget, or profile `minis_core/arena.py` compose at 30 fps.
 - [ ] FOUND-3 (2026-10-15) On a MacBook with a full menu bar the status item is created but macOS keeps it behind the notch (x 743,
   never on screen). `status` says so and the fighter menu has every control. Idea for PC side: a `Select fighters...` /
   `Arena` entry point that does not depend on the icon (e.g. scoreboard name click already opens select).
-- [ ] FOUND-4 (2026-10-15) `doctor` / `minis_platform.label()` still print "macOS ... - experimental"; README calls macOS beta. PC side:
+- [x] FOUND-4 (2026-10-15) DONE (PC, 2026-10-15: one word, "experimental"; the README badges no longer say beta) `doctor` / `minis_platform.label()` still print "macOS ... - experimental"; README calls macOS beta. PC side:
   pick one word.

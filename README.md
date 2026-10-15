@@ -12,7 +12,7 @@ Claude Code, Codex, Gemini, Cursor, Ollama, LM Studio and more, auto-detected an
 [![Release](https://img.shields.io/github/v/release/mrktchris/taskbar-fighters?color=f0a184)](https://github.com/mrktchris/taskbar-fighters/releases/latest)
 [![PyPI](https://img.shields.io/pypi/v/taskbar-fighters?color=3776ab)](https://pypi.org/project/taskbar-fighters/)
 [![License: MIT](https://img.shields.io/github/license/mrktchris/taskbar-fighters?color=blue)](https://github.com/mrktchris/taskbar-fighters/blob/master/LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2011%20%7C%20macOS%20(beta)-0078d4)](#install-and-run)
+[![Platform](https://img.shields.io/badge/platform-Windows%2011%20%7C%20macOS%20(experimental)-0078d4)](#install-and-run)
 [![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/downloads/)
 
 <img src="https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/demo.gif" alt="Claude Code and Codex fighting on the Windows taskbar: a clash, a beam, a K.O., with the scoreboard underneath" width="820">
@@ -29,7 +29,7 @@ Claude Code, Codex, Gemini, Cursor, Ollama, LM Studio and more, auto-detected an
 
 [![Download for Windows](https://img.shields.io/badge/Download-Windows%20.zip-0078d4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/mrktchris/taskbar-fighters/releases/latest/download/TaskbarFighters-windows.zip)
 [![pip install](https://img.shields.io/badge/pip-install%20taskbar--fighters-3776ab?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/taskbar-fighters/)
-[![macOS beta](https://img.shields.io/badge/macOS-beta-555555?style=for-the-badge&logo=apple&logoColor=white)](#macos-experimental)
+[![macOS experimental](https://img.shields.io/badge/macOS-experimental-555555?style=for-the-badge&logo=apple&logoColor=white)](#macos-experimental)
 
 **⭐ Star it if your agents deserve a fight.**
 

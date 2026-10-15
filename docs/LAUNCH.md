@@ -32,7 +32,7 @@ remain (a `git grep` over the tree is clean). Left for you:
       SECURITY.md, CODE_OF_CONDUCT.md and the issue chooser link to it.
 - [ ] **Pin the repo** on your profile: profile > Customize your pins.
 - [ ] Description, already set: "Pixel-art fighters for your AI coding agents, living in the Windows 11 taskbar..."
-      Consider adding "and macOS (beta)" once the mac job is green.
+      Consider adding "and macOS (experimental)" once the mac job is green.
 - [ ] Topics are set: claude, claude-code, codex, ai-agents, pixel-art, taskbar, windows, macos, desktop-pet, python,
       game, llm.
 - [ ] Optional: turn on Discussions (Settings > Features) for "show your fight" posts.
