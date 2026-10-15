@@ -9,9 +9,10 @@ import json
 from pathlib import Path
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent
-ASSETS = ROOT / 'assets'
-ASSETS_HD = ROOT / 'assets_hd'                       # RES 2 build (128 px cells); absent until the art build lands
+from . import paths as _paths
+ROOT = _paths.bundle_root()                         # the clone, or the PyInstaller / py2app / wheel location (paths.py)
+ASSETS = _paths.assets_dir()
+ASSETS_HD = _paths.assets_hd_dir()                   # RES 2 build (128 px cells); absent until the art build lands
 
 # Plate tag / accent before the roster wrote them into anim.json.
 LEGACY_TAG = {'claude': '/reverse', 'codex': '$reverse'}

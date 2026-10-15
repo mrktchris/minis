@@ -1,0 +1,9 @@
+# macOS (EXPERIMENTAL): Pillow plus PyObjC for the windows, the menu-bar icon and the window list.
+#   python3 -m pip install --upgrade pip      (an old pip may not find the macOS wheels and try to compile PyObjC)
+#   python3 -m pip install -r requirements-mac.txt
+# PyObjC 11.1 is the first release with wheels for Python 3.14; it also covers 3.12 and 3.13, on Apple silicon and Intel.
+# The upper bound keeps a future major release from changing the API under us.
+-r requirements.txt
+pyobjc-core>=11.1,<13
+pyobjc-framework-Cocoa>=11.1,<13
+pyobjc-framework-Quartz>=11.1,<13

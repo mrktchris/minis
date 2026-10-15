@@ -3,7 +3,8 @@ from __future__ import annotations
 import json, os
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from . import paths as _paths
+ROOT = _paths.settings_dir()                    # where minis.json is read: the clone, or next to a frozen executable
 
 DEFAULTS = {
     # roam zone on the primary display (screen x). Measured on the author's PC (2560x1440, 100% DPI,
@@ -62,7 +63,24 @@ DEFAULTS = {
     "arena_fps": 30,
     "arena_cpu_budget_pct": 10.0,          # of one core; above it the arena drops to 20 fps
     "arena_min_window_px": [160, 100],     # smaller window rects are not platforms
+    "fighter_size": 128,                   # taskbar fighter height in px: 64 (V1-V6 look), 96 or 128 (HD art). `minis.py size N`
 }
+FIGHTER_SIZES = (64, 96, 128)
+
+
+def fighter_size_of(value, default=128) -> int:
+    """A valid fighter size (64 | 96 | 128) from a config / control.json value; anything else falls back to `default`."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return default
+    return v if v in FIGHTER_SIZES else default
+
+
+def feet_drop(size) -> int:
+    """How far (logical px) a size-`size` fighter window reaches below the taskbar bottom so its feet stay on the line the
+    64 px fighter stands on: the HD art keeps 7 RES-1 px under the feet, which grows with the size."""
+    return int(round(7 * (size / 64.0 - 1)))
 
 
 PLATE_W, PLATE_H, PLATE_SPACING = 128, 26, 4
@@ -87,9 +105,21 @@ def fight_zone(cfg) -> tuple:
     return float(z0 + 2 * PLATE_W + PLATE_SPACING + PLATE_CLEAR_PX), float(z1)
 
 
+def data_base(platform=None, environ=None, home=None) -> Path:
+    """Where the data folder lives.  Windows: %LOCALAPPDATA% (unchanged); macOS: ~/Library/Application Support.
+    MINIS_DATA_BASE overrides both (the process-level tests and harnesses set it to a temp dir on any OS)."""
+    import sys
+    env = os.environ if environ is None else environ
+    home = Path(home) if home is not None else Path.home()
+    if env.get("MINIS_DATA_BASE"):
+        return Path(env["MINIS_DATA_BASE"])
+    if (platform or sys.platform) == "darwin":
+        return home / "Library" / "Application Support"
+    return Path(env.get("LOCALAPPDATA") or str(home / "AppData" / "Local"))
+
+
 def data_dir() -> Path:
-    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-    d = Path(base) / "minis"
+    d = data_base() / "minis"
     d.mkdir(parents=True, exist_ok=True)
     return d
 

@@ -25,7 +25,8 @@ class Plate(unittest.TestCase):
         # the label the plate chose contains the countdown (rendered through the same candidate list)
         from PIL import ImageDraw
         d = ImageDraw.Draw(Image.new('RGBA', (4, 4)))
-        self.assertLessEqual(d.textlength('40% wk 12% · 2d 4h', font=render.font(9, False)), render.PLATE_W - 5 - (5 + 10 * 4 + 3) - 3 + 40)
+        if sys.platform == 'win32':                     # Segoe UI metrics; other systems draw the plate with another font
+            self.assertLessEqual(d.textlength('40% wk 12% · 2d 4h', font=render.font(9, False)), render.PLATE_W - 5 - (5 + 10 * 4 + 3) - 3 + 40)
         self.assertEqual(render.plate(a, Snapshot('codex', 'idle', 40.0, None, '', resets_in='2d 4h'), 0.0).tobytes(),
                          render.plate(a, Snapshot('codex', 'idle', 40.0), 0.0).tobytes())          # no plan figure: no countdown
 
@@ -96,8 +97,8 @@ class Micro(Isolated):
         self.shift = False
         self.shell.cursor_pos = lambda: self.cursor
         self.shell.shift_down = lambda: self.shift
-        self.f = minis.Fighter('a', dict(CFG), self.shell, mono=lambda: self.t['mono'], wall=lambda: self.t['wall'],
-                               detector_for=lambda src, cfg: FakeDetector(src))
+        self.f = minis.Fighter('a', dict(CFG, fighter_size=64), self.shell, mono=lambda: self.t['mono'], wall=lambda: self.t['wall'],
+                               detector_for=lambda src, cfg: FakeDetector(src))      # 64 px geometry (test_fighter_size covers 96 / 128)
         self.f.setup()
         self.go(0.5)
 

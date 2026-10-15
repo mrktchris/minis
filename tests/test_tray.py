@@ -323,6 +323,7 @@ class Shortcut(Isolated):
         self.assertEqual(written[0][1], minis.shortcut_spec())
         self.assertTrue(any(minis.PIN_HINT in str(c) for c in pr.call_args_list))
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Start menu: Windows only (macOS uses `autostart`)')
     def test_default_dirs(self):
         with mock.patch.dict(os.environ, {'APPDATA': r'C:\Users\x\AppData\Roaming'}):
             self.assertEqual(minis.start_menu_dir(), Path(r'C:\Users\x\AppData\Roaming\Microsoft\Windows\Start Menu\Programs'))

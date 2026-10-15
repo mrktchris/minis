@@ -17,7 +17,8 @@ class Identity(unittest.TestCase):
     def test_exact_argv_only(self):
         ok = minis.argv_is_ours
         self.assertTrue(ok([PY, SCRIPT, 'run', 'a'], 'a'))
-        self.assertTrue(ok([r'C:\Python314\python.exe', SCRIPT.upper(), 'director'], 'director'))
+        if sys.platform == 'win32':                                                       # Windows paths ignore case; macOS paths do not
+            self.assertTrue(ok([r'C:\Python314\python.exe', SCRIPT.upper(), 'director'], 'director'))
         self.assertTrue(ok([PY, SCRIPT, 'run', 'claude'], 'claude'))                     # v2 fighters
         self.assertFalse(ok([PY, SCRIPT, 'run', 'b'], 'a'))
         self.assertFalse(ok([PY, SCRIPT, 'run', 'a', '--x'], 'a'))
@@ -46,7 +47,8 @@ class Stop(Isolated):
             return mock.Mock(returncode=0)
         out = io.StringIO()
         with mock.patch.object(minis, 'pid_alive', alive), mock.patch.object(minis, 'proc_argv', lambda pid: argvs.get(pid)), \
-                mock.patch.object(minis.subprocess, 'run', fake_run), redirect_stdout(out):
+                mock.patch.object(minis.subprocess, 'run', fake_run), redirect_stdout(out), \
+                mock.patch('minis_platform.current', lambda platform=None: 'win'):        # the Windows (taskkill) path, on any OS
             rc = minis.cmd_stop()
         return rc, out.getvalue()
 
@@ -243,7 +245,8 @@ class FighterLoop(Isolated):
             self.dets[src] = FakeDetector(src)
             return self.dets[src]
         self.shell = FakeShell()
-        self.f = minis.Fighter('a', dict(CFG), self.shell, mono=lambda: self.t['mono'], wall=lambda: self.t['wall'], detector_for=det)
+        self.f = minis.Fighter('a', dict(CFG, fighter_size=64), self.shell, mono=lambda: self.t['mono'], wall=lambda: self.t['wall'],
+                               detector_for=det)                  # 64 px geometry (test_fighter_size covers 96 / 128)
 
     def assign(self, a=None, b=None):
         director.write_assign({'a': a, 'b': b, 'ts': self.t['wall']})

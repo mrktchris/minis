@@ -23,25 +23,73 @@ INTERPRETERS = {'node.exe', 'bun.exe', 'deno.exe', 'python.exe', 'pythonw.exe', 
 # First match wins, so claims come first.  exe: lower-case image names.  path_has: required substring of the image path.
 # cmd: names matched against the first few argv tokens of an interpreter (basename without .js/.cmd/.exe/.mjs/.py),
 # or a package path fragment.
+# macOS names (experimental, untested on a real Mac): mac_exe = lower-case executable basenames as `ps -o comm` shows them;
+# mac_bundle = app bundles whose MAIN executable (<Name>.app/Contents/MacOS/...) counts, never their helper processes.
+# `cmd` is shared: npm / pip CLIs have the same names on both systems.  rules_for() picks the fields for this OS.
 RULES = [
-    dict(source='codex', exe=('chatgpt.exe',), path_has='openai.codex_'),
-    dict(source='codex', exe=('codex.exe',)),
+    dict(source='codex', exe=('chatgpt.exe',), path_has='openai.codex_', mac_bundle=('codex.app',)),
+    dict(source='codex', exe=('codex.exe',), mac_exe=('codex',)),
     dict(source='codex', cmd=('codex', '@openai/codex')),
-    dict(source='claude', exe=('claude.exe',)),
+    dict(source='claude', exe=('claude.exe',), mac_exe=('claude',), mac_bundle=('claude.app',)),
     dict(source='claude', cmd=('claude', '@anthropic-ai/claude-code')),
-    dict(source='cursor', program='Cursor', character='cursor', exe=('cursor.exe',)),
-    dict(source='windsurf', program='Windsurf', character='generic', exe=('windsurf.exe',)),
-    dict(source='ollama', program='Ollama', character='ollama', exe=('ollama.exe', 'ollama app.exe')),
-    dict(source='lmstudio', program='LM Studio', character='lmstudio', exe=('lm studio.exe',)),
-    dict(source='gemini', program='Gemini', character='gemini', exe=('gemini.exe',), cmd=('gemini', '@google/gemini-cli')),
-    dict(source='aider', program='aider', character='generic', exe=('aider.exe',), cmd=('aider',)),
-    dict(source='opencode', program='opencode', character='generic', exe=('opencode.exe',), cmd=('opencode', 'opencode-ai')),
+    dict(source='cursor', program='Cursor', character='cursor', exe=('cursor.exe',), mac_exe=('cursor',), mac_bundle=('cursor.app',)),
+    dict(source='windsurf', program='Windsurf', character='generic', exe=('windsurf.exe',), mac_exe=('windsurf',), mac_bundle=('windsurf.app',)),
+    dict(source='ollama', program='Ollama', character='ollama', exe=('ollama.exe', 'ollama app.exe'), mac_exe=('ollama',),
+         mac_bundle=('ollama.app',)),
+    dict(source='lmstudio', program='LM Studio', character='lmstudio', exe=('lm studio.exe',), mac_exe=('lm studio',),
+         mac_bundle=('lm studio.app',)),
+    dict(source='gemini', program='Gemini', character='gemini', exe=('gemini.exe',), cmd=('gemini', '@google/gemini-cli'), mac_exe=('gemini',)),
+    dict(source='aider', program='aider', character='generic', exe=('aider.exe',), cmd=('aider',), mac_exe=('aider',)),
+    dict(source='opencode', program='opencode', character='generic', exe=('opencode.exe',), cmd=('opencode', 'opencode-ai'), mac_exe=('opencode',)),
     # V5.1: found installed on the author's PC and missed before (npm shims run under node.exe: matched by package path)
     dict(source='copilot', program='Copilot CLI', character='generic', cmd=('copilot', '@github/copilot')),
     dict(source='qwen', program='Qwen Code', character='generic', cmd=('qwen', '@qwen-code/qwen-code')),
-    dict(source='perplexity', program='Perplexity', character='generic', exe=('perplexity.exe',)),
-    dict(source='grok', program='Grok', character='generic', exe=('grok bot.exe',)),
+    dict(source='perplexity', program='Perplexity', character='generic', exe=('perplexity.exe',), mac_exe=('perplexity',),
+         mac_bundle=('perplexity.app',)),
+    dict(source='grok', program='Grok', character='generic', exe=('grok bot.exe',), mac_exe=('grok',), mac_bundle=('grok.app',)),
 ]
+MAC_INTERPRETERS = {'node', 'bun', 'deno', 'python', 'python3', 'uv', 'uvx'}
+_MAC_RULES = None
+
+
+def is_mac_interpreter(name) -> bool:
+    """node, bun, deno, uv, python, python3 and python3.N (Homebrew / python.org names)."""
+    n = str(name).lower()
+    return n in MAC_INTERPRETERS or (n.startswith('python3.') and n[8:].isdigit())
+
+
+def rules_for(platform=None):
+    """The detection table for one OS.  Windows gets RULES itself (unchanged); macOS a view with exe / bundle taken from
+    the mac_* fields (path_has is a Windows package path and is dropped)."""
+    global _MAC_RULES
+    import sys
+    if (platform or sys.platform) != 'darwin':
+        return RULES
+    if _MAC_RULES is None:
+        out = []
+        for r in RULES:
+            m = {k: v for k, v in r.items() if k in ('source', 'program', 'character', 'cmd')}
+            if r.get('mac_exe'):
+                m['exe'] = tuple(r['mac_exe'])
+            if r.get('mac_bundle'):
+                m['bundle'] = tuple(r['mac_bundle'])
+            if m.get('exe') or m.get('bundle') or m.get('cmd'):
+                out.append(m)
+        _MAC_RULES = out
+    return _MAC_RULES
+
+
+def bundle_hit(path, bundles) -> bool:
+    """True when `path` is the main executable of one of `bundles` (.../Name.app/Contents/MacOS/<exe>), not a helper."""
+    p = (path or '').replace(chr(92), '/').lower()
+    for b in bundles or ():
+        key = '/' + b.lower() + '/contents/macos/'
+        i = p.find(key)
+        if i >= 0 and '/' not in p[i + len(key):]:
+            return True
+    return False
+
+
 SPARRING = 'sparring'                                 # the director's stand-in partner: no detector ever reports it
 PROGRAM = {'claude': 'Claude Code', 'codex': 'Codex', SPARRING: 'Sparring bot'}
 for _r in RULES:
@@ -138,11 +186,15 @@ class ProcessScanner:
     """One pass over the process list classifies every process by RULES, builds each program's tree (children included,
     claimed and other programs' processes excluded) and measures its CPU over a sliding window."""
 
-    def __init__(self, cfg, info=None, rules=None):
+    def __init__(self, cfg, info=None, rules=None, platform=None):
+        import sys
+        mac = (platform or sys.platform) == 'darwin'
         if info is None:
-            from minis_win import procs
-            info = procs.Info
-        self.cfg, self.info, self.rules = cfg, info, rules or RULES
+            import minis_platform
+            info = minis_platform.module('procs', platform).Info
+        self.cfg, self.info, self.rules = cfg, info, rules or rules_for(platform)
+        self._is_interp = is_mac_interpreter if mac else INTERPRETERS.__contains__
+        self._bundles = any(r.get('bundle') for r in self.rules)          # mac only: Windows rules have none
         self._cls = {}           # (pid, create) -> source or None   (command lines are read once per process)
         self._cpu = {}           # (pid, create) -> last cpu seconds
         self.groups = {}         # source -> dict(samples=deque[(t, cum)], cum, last_active, first_seen, tr)
@@ -164,7 +216,10 @@ class ProcessScanner:
                         continue
                 src = r['source']
                 break
-            if r.get('cmd') and name in INTERPRETERS:
+            if r.get('bundle') and bundle_hit(self.info.path(pid), r['bundle']):
+                src = r['source']
+                break
+            if r.get('cmd') and self._is_interp(name):
                 if argv is None:
                     argv = self.info.argv(pid) or []
                 if cmd_matches(argv, r['cmd']):
@@ -182,7 +237,8 @@ class ProcessScanner:
         names = {pid: name for pid, _, name in plist}
         owner = {}
         for pid, ppid, name in plist:
-            if name not in INTERPRETERS and not any(name in r.get('exe', ()) for r in self.rules):
+            if not self._is_interp(name) and not any(name in r.get('exe', ()) for r in self.rules) and not (
+                    self._bundles and bundle_hit(self.info.path(pid), [b for r in self.rules for b in r.get('bundle', ())])):
                 continue
             t = self.info.times(pid)
             if not t:
@@ -339,7 +395,8 @@ def describe(cfg, now=None, srcs=None):
             how = 'transcript sources not polled'
         rows.append(dict(source=sid, program=PROGRAM[sid], character=CHARACTER.get(sid, sid), state=a.state if a else '-', how=how))
     seen_rules = set()
-    for r in RULES:
+    table = rules_for()
+    for r in table:
         sid = r['source']
         if sid in TRANSCRIPT_SOURCES or sid in seen_rules:
             continue
@@ -352,8 +409,9 @@ def describe(cfg, now=None, srcs=None):
             if a.last_active:
                 how += f', last working {_age(now - a.last_active)} ago'
         else:
-            by = [f"exe {' / '.join(r2['exe'])}" for r2 in RULES if r2['source'] == sid and r2.get('exe')]
-            by += [f"command {' / '.join(r2['cmd'])}" for r2 in RULES if r2['source'] == sid and r2.get('cmd')]
+            by = [f"exe {' / '.join(r2['exe'])}" for r2 in table if r2['source'] == sid and r2.get('exe')]
+            by += [f"app {' / '.join(r2['bundle'])}" for r2 in table if r2['source'] == sid and r2.get('bundle')]
+            by += [f"command {' / '.join(r2['cmd'])}" for r2 in table if r2['source'] == sid and r2.get('cmd')]
             how = 'not running (would match ' + '; '.join(by) + ')'
         rows.append(dict(source=sid, program=PROGRAM.get(sid, sid), character=CHARACTER.get(sid, 'generic'), state=a.state if a else '-', how=how))
     return rows

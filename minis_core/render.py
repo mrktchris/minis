@@ -14,13 +14,17 @@ PLATE_GAP = 18
 SEGS = 10
 
 _font_cache = {}
+# Windows first (unchanged order); then macOS, where Arial lives under these names (Supplemental since macOS 10.15)
+BOLD_FONTS = ('segoeuib.ttf', 'arialbd.ttf', 'Arial Bold.ttf', '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+              '/Library/Fonts/Arial Bold.ttf')
+REGULAR_FONTS = ('segoeui.ttf', 'arial.ttf', 'Arial.ttf', '/System/Library/Fonts/Supplemental/Arial.ttf', '/Library/Fonts/Arial.ttf')
 
 
 def font(size, bold=True):
     k = (size, bold)
     if k not in _font_cache:
         f = None
-        for n in (('segoeuib.ttf', 'arialbd.ttf') if bold else ('segoeui.ttf', 'arial.ttf')):
+        for n in (BOLD_FONTS if bold else REGULAR_FONTS):
             try:
                 f = ImageFont.truetype(n, size)
                 break
