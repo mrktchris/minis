@@ -39,7 +39,20 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
 
 ## DONE
 
-- [x] **MAC-1 (2026-10-15) DONE 3652546 2026-10-15 Art moved into the wheel package; paths.py resolves every install.**
+- [x] **MAC-9 (2026-10-15) DONE 58b3fdd 2026-10-15 Art renders one pixel differently on macOS.**
+  - PC change: `tests/test_art.py` `test_left_facing_redraw_never_paints_over_skin_or_hands` failed on the macOS runners
+    (barbarian/ground_slam/1, pixel (31,13)): the rig re-rendered skin where the committed (Windows-built) sheet has the
+    sigil colour. Off Windows the test now skips pixels where the committed right-facing frame disagrees.
+  - Test: `python art/build_fighters.py --all` into a scratch copy (`--out /tmp/tf-art`), then compare with the committed
+    `assets/` (`cmp` or a pixel diff); report how many frames differ and by how much.
+  - Expected: no visible difference; if whole frames differ, the rig depends on float rounding the PC side should remove.
+  - Mac 2026-10-15: `build_fighters.py --res 1` and `--res 2` into scratch folders (Python 3.14.8, Pillow 12.3.0, Apple silicon),
+    compared with the committed art. anim.json / fx.json: identical content (line endings only). PNGs are not identical:
+    assets/ 802 px differ over 53 sheets (barbarian 123 px in 2 cells, knight 3 px, ...), assets_hd/ 7,661 px (claude 228 px
+    in 26 cells, gemini 731 px in 18 cells, ...). Single-pixel rounding differences between platforms, no visible change in
+    the Dock-strip captures (MAC-4). (This item was dropped from the file by a Mac-side rebase and is restored here.)
+
+- [x] **MAC-1 (2026-10-15) DONE 58b3fdd 2026-10-15 Art moved into the wheel package; paths.py resolves every install.**
   - PC change: the wheel ships `assets/` and `assets_hd/` inside the package `taskbar_fighters_assets` (pyproject
     `package-dir` mapping; the repo layout is unchanged). `minis_core/paths.py` picks a real checkout first, then the
     installed package. Files: `pyproject.toml`, `MANIFEST.in`, `taskbar_fighters_assets/__init__.py`, `minis_core/paths.py`,
@@ -53,12 +66,12 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - Expected: tests OK; `fighters` lists 13 characters; doctor PASS; the menu-bar icon and both fighters appear (the icon
     is `taskbar_fighters_assets/assets/icon/minis-256.png` in the pip case); PyObjC was pulled in by the `[mac]` extra.
   - Mac 2026-10-15: Test A (fresh clone, `setup_mac.sh --no-start`, `fighters`, `start`/`status`/`stop`) OK; the suite had 2 macOS-only
-    failures: `test_arena.VisualOnly7` (imports minis_win.shell: now skipped off Windows, 3652546) and `test_art` (FOUND-1). Test B
+    failures: `test_arena.VisualOnly7` (imports minis_win.shell: now skipped off Windows, 58b3fdd) and `test_art` (FOUND-1). Test B
     (Homebrew Python 3.14 venv, `pip install "<clone>[mac]"`, run from another folder): PyObjC 12.2.2 pulled in by `[mac]`,
     `doctor` PASS with `code:` = site-packages, `fighters` lists 13, `start`/`stop` clean, icon resolves to
     `site-packages/taskbar_fighters_assets/assets/icon/minis-256.png`.
 
-- [x] **MAC-2 (2026-10-15) DONE 3652546 2026-10-15 fighter_size 128 is the default; selftest-gui draws the configured size.**
+- [x] **MAC-2 (2026-10-15) DONE 58b3fdd 2026-10-15 fighter_size 128 is the default; selftest-gui draws the configured size.**
   - PC change: `selftest_mac` in `minis.py` now loads the HD library when `fighter_size` > 64 and shrinks to 96 like
     `Fighter.compose`. Test: `tests/test_mac_procs.py::test_mac_selftest_uses_the_configured_fighter_size`.
   - Test: `python minis.py selftest-gui` at the default; then `python minis.py size 96`, `selftest-gui`; `size 64`,
@@ -68,7 +81,7 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - Mac 2026-10-15: `size 128/96/64/128` + `selftest-gui`: each prints `fighter size N px` and PASS, windows N pt tall with bottoms on
     the Dock top (y 1044). Running fighters at 128 checked on a Dock-strip capture: crisp HD art, not an upscale.
 
-- [x] **MAC-3 (2026-10-15) DONE 3652546 2026-10-15 Arena V7 in the macOS arena window.**
+- [x] **MAC-3 (2026-10-15) DONE 58b3fdd 2026-10-15 Arena V7 in the macOS arena window.**
   - PC change: the arena now has a zoom punch (a lens region rewritten every frame), letterbox bars, colour / white flashes,
     ink frames, speed lines, beam clashes, set pieces and an intro / outro. They all reach `minis_mac/arena_window.py`
     through the same `write` / `flush` / `offset` calls as on Windows; full-screen flash frames re-upload every 256-pt tile.
@@ -86,9 +99,9 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
     clean end; `--intensity calm --no-intro`, `flash off`, `--rounds endless` + `arena stop` all end cleanly, no errors in
     arena.log; `--freeze` refuses with the Screen Recording message. No permission prompt. CPU is over budget (FOUND-2). Not
     checked by me (no full-screen capture, no synthetic input): zoom/letterbox seams, perch/dive visuals, ESC and EXIT clicks.
-    The frame upload is ~2x faster per tile (3652546).
+    The frame upload is ~2x faster per tile (58b3fdd).
 
-- [x] **MAC-4 (2026-10-15) DONE 3652546 2026-10-15 New moves and set pieces at 128 px on Retina.**
+- [x] **MAC-4 (2026-10-15) DONE 58b3fdd 2026-10-15 New moves and set pieces at 128 px on Retina.**
   - PC change: V7 art (8-10 weapon moves per character, new reactions, contact sparks) and eight taskbar set pieces
     (`minis_core/setpieces.py`). Files: `assets_hd/*`, `minis_core/choreo.py`, `rounds.py`, `brain.py`, `setpieces.py`.
   - Test: `python minis.py demo match` a few times; `python minis.py fighters set a knight` and `set b kunoichi`, then
@@ -99,7 +112,7 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - Mac 2026-10-15: knight vs kunoichi `demo match`, 24 Dock-strip captures at 0.5 s: ROUND 1 / FIGHT banners, dash-through cuts with
     sparks, aerial frames, hits and reactions landing together, nothing clipped at the 128-pt window top. `fighters auto` after.
 
-- [x] **MAC-6 (2026-10-15) DONE 3652546 2026-10-15 doctor on the integrated build.**
+- [x] **MAC-6 (2026-10-15) DONE 58b3fdd 2026-10-15 doctor on the integrated build.**
   - Test: `python minis.py doctor` and `python minis.py doctor --headless`, from the clone and from the pip install.
   - Expected: PASS both ways; `code:` shows the clone or `site-packages`; the test window appears and closes in the non-headless
     run; home shown as `~`.
@@ -107,7 +120,7 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
     (`code:` = site-packages); the test window opens in the non-headless run only. (The backend label still says
     "experimental": FOUND-4.)
 
-- [x] **MAC-7 (2026-10-15) DONE 3652546 2026-10-15 No TaskbarCreated equivalent: menu-bar icon after a menu-bar restart.**
+- [x] **MAC-7 (2026-10-15) DONE 58b3fdd 2026-10-15 No TaskbarCreated equivalent: menu-bar icon after a menu-bar restart.**
   - PC change: none. Windows re-adds the tray icon on the `TaskbarCreated` broadcast; `minis_mac/tray.py`
     `register_message` returns 0 because macOS has no such broadcast.
   - Test: with fighters running, `killall SystemUIServer` (the menu bar restarts), and separately log out / in with
@@ -127,7 +140,7 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - PC 2026-10-15: relaxed (96e40c4): off Windows the check compares only skin pixels whose four neighbours are skin. Making
     the rig bit-identical across platforms stays open for the art side.
 - [ ] FOUND-2 (2026-10-15) The arena runs at 15-31 % of one core on an Apple silicon MacBook (1710x1107 pt @2x) and logs "cpu over
-  budget, 20 fps" within a second, every run. The Mac upload is ~2.5 ms per full frame now (3652546); the rest is the shared
+  budget, 20 fps" within a second, every run. The Mac upload is ~2.5 ms per full frame now (58b3fdd); the rest is the shared
   engine / compositor. PC side: a per-platform budget, or profile `minis_core/arena.py` compose at 30 fps.
 - [ ] FOUND-3 (2026-10-15) On a MacBook with a full menu bar the status item is created but macOS keeps it behind the notch (x 743,
   never on screen). `status` says so and the fighter menu has every control. Idea for PC side: a `Select fighters...` /
