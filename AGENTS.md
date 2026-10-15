@@ -19,6 +19,8 @@ The command-line tool is `minis.py` ("minis" is the internal short name: package
   `python minis.py stop`, which only stops what it started.
 - Do not print the contents of the user's transcripts or `%LOCALAPPDATA%\minis` files into the chat.
 
+**On a Mac?** Skip to [macOS (experimental)](#macos-experimental) below; sections 1-6 are the Windows runbook.
+
 ## 1. Preflight
 
 Run these and check every answer before going on.
@@ -88,6 +90,49 @@ python minis.py stop
 To remove everything: run `stop`, `python minis.py shortcut remove` (if a shortcut was added), delete the clone folder, delete `%LOCALAPPDATA%\minis`, and if a startup task was added,
 `schtasks /Delete /TN "MinisFighters" /F` (the exact line `print-startup` printed).
 
+## macOS (experimental)
+
+The macOS backend is **untested on real Mac hardware**. Tell the user that before you start, and follow
+[docs/MAC-TESTING.md](docs/MAC-TESTING.md), which is the full checklist; this is the short form. The rules at the top apply
+unchanged (no network beyond clone and pip, no edits to AI tool settings, ask before a login item).
+
+**Preflight** (Terminal):
+
+| check | command | must be |
+| --- | --- | --- |
+| macOS 13+ | `sw_vers -productVersion` | 13.0 or newer |
+| chip | `uname -m` | `arm64` (Apple silicon) or `x86_64` (Intel); both are supported |
+| Python 3.12+ | `python3 --version` (also try `python3.12`, `python3.13`) | 3.12 or newer. The system `python3` is too old: with the user's yes, they install it from python.org or `brew install python@3.12` |
+| git | `git --version` | any (macOS may offer to install the command line tools: that needs the user's yes) |
+
+**Install, test, start:**
+
+```
+git clone https://github.com/mrktchris/taskbar-fighters
+cd taskbar-fighters
+./scripts/setup_mac.sh --no-start
+.venv/bin/python -m unittest discover -s tests
+.venv/bin/python minis.py start
+.venv/bin/python minis.py status
+```
+
+`setup_mac.sh` is idempotent: it checks macOS and Python, creates `.venv` in the clone, upgrades pip and installs
+`requirements-mac.txt` (Pillow and PyObjC), and runs `python minis.py doctor`. If the doctor ends with `FAIL`, stop and show the
+user its output. Do not use `sudo`, and do not install into the system Python.
+
+**Tell the user what to look for:** two fighters standing on the top edge of the Dock (or at the bottom of the screen when the
+Dock is on a side or auto-hides), and a Taskbar Fighters icon in the menu bar. No permission prompt should appear; if one does,
+they should decline it and you should report it.
+
+**Report back:** run `.venv/bin/python minis.py selftest-gui` (shows two fighters for 5 s and prints their frames, no capture)
+and give the user the doctor and selftest output to paste into an issue, together with the questions in docs/MAC-TESTING.md.
+
+**Optional, only with the user's yes:** `.venv/bin/python minis.py autostart on` writes one LaunchAgent plist so it starts at
+login (`print-startup` shows it first; `autostart off` removes it). There is no Start-menu shortcut on macOS.
+
+**Stop and uninstall:** `.venv/bin/python minis.py stop`; `autostart off` if it was turned on; delete the clone folder and
+`~/Library/Application Support/minis`.
+
 ## Troubleshooting
 
 | symptom | what to do |
@@ -99,6 +144,8 @@ To remove everything: run `stop`, `python minis.py shortcut remove` (if a shortc
 | a program is shown that the user does not want | `"ignore_sources": ["<id from detect>"]` in `minis.json` |
 | flashing bothers the user | `python minis.py flash off` |
 | `start` says it is already running | `python minis.py restart` |
+| anything else, either OS | `python minis.py doctor` and show the user its report (it ends with PASS or FAIL) |
+| fighters too big or too small | `python minis.py size 64`, `96` or `128` (default 128) |
 
 ## Adapt it
 

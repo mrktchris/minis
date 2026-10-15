@@ -164,3 +164,9 @@ one of these; the file and function are named so an agent can go straight there.
     If pip tries to compile PyObjC, upgrade pip first (`python -m pip install --upgrade pip`).
 14. **Fonts**: the plates use Arial from `/System/Library/Fonts/Supplemental` when Segoe UI is missing; text metrics differ
     slightly from Windows.
+15. **Background launch**: `start` launches the three roles with `start_new_session=True` and stdio on `/dev/null`. They stay
+    in your login (GUI) session, so they can open windows after the Terminal window closes; if they do not appear when started
+    from an SSH session, that is expected (no window server there).
+16. **Non-framework Python** (some pyenv builds): AppKit works, but such a process may not be allowed to take keyboard focus,
+    so the fighter-select screen's arrow keys might not work (the mouse still does). The python.org installer and Homebrew
+    builds are framework builds.

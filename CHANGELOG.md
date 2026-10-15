@@ -2,6 +2,23 @@
 
 Taskbar Fighters (internal short name: minis). Summarised from the git history and the build logs in [RESULT.md](RESULT.md).
 
+## Unreleased - macOS port (experimental), fighter size, doctor
+
+- **macOS backend (experimental, untested on real hardware).** `minis_platform` picks `minis_win` (unchanged) or the new
+  `minis_mac` (PyObjC AppKit + Quartz): borderless non-activating panels above the Dock, click-through except opaque pixels,
+  a menu-bar status item with the tray menu, Dock-strip geometry (bottom Dock; side or auto-hiding Dock falls back to the
+  bottom of the visible frame), Retina-aware monitors, window bounds from the Quartz window list (never names, no Screen
+  Recording), a `/bin/ps` process table, lock-file single instance, SIGTERM-then-SIGKILL `stop` for proven-own pids only,
+  `~/Library/Application Support/minis`. `autostart on|off|status` (LaunchAgent, only on request), `scripts/setup_mac.sh`,
+  `requirements-mac.txt`, `docs/MAC-TESTING.md`. No arena `--freeze` / `arena capture` on macOS.
+- **Fighter size.** `fighter_size` 64 / 96 / 128 (default 128): 128 draws the real HD art, 96 is the HD render reduced with a
+  box filter; the brain keeps working in RES 1 px inside the scaled zone, so spacing and reach keep their proportions.
+  `python minis.py size N` and a *Fighter size* submenu (both restart the fighters).
+- **`python minis.py doctor [--headless]`**: versions, backend, screen and taskbar / Dock geometry, data folder, detected
+  programs and a test window, ending in PASS / FAIL; the home folder is shown as `~`.
+- **Packaging groundwork.** `minis_core/paths.py` finds the art and `minis.json` in a checkout, PyInstaller, py2app or wheel
+  install; frozen builds re-launch themselves (`self_argv`) and their ownership checks accept that form.
+
 ## V6 - 2026-10-15 (`744d818`)
 
 - **Armed roster.** The seven program fighters redrawn as taller (~4.5 heads), armed characters: ronin (Claude), ninja (Codex),
@@ -9,7 +26,7 @@ Taskbar Fighters (internal short name: minis). Summarised from the git history a
   selectable extras: Kunoichi, Knight, Barbarian, Monk, Nomad, Oni. Real HD (1 px outline, 5 tones), weapon crescents and streak
   smears, longer wind-ups and holds, impact frames transparent outside the figure.
 - **Fighter select.** `control.json` lineup (program per side, look per program), `minis.py fighters set|pin|auto|reset`, `pick`,
-  `skin`, right-click submenus and a Smash-style select screen (WHO row, LOOK grid, VS card).
+  `skin`, right-click submenus and an arcade-style select screen (WHO row, LOOK grid, VS card).
 - **Fight feel.** 30 fps during fights, knockdown get-up fix, a 3.4 s KO finisher beat (was 6 s), ultimates 1.7 -> 0.3 per match,
   spacing from sprite reach, brace on charge-ups, TIME banner, comebacks, task-finished super. Arena: same rules, pacing fixed (KO
   rounds 52% -> 85%).

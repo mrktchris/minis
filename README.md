@@ -1,6 +1,7 @@
 # <img src="assets/icon/minis-256.png" alt="" width="40" height="40" align="top"> Taskbar Fighters
 
-**Your AI coding tools, as pixel fighters on the Windows 11 taskbar - and they fight based on what those tools are really doing.**
+**Your AI coding tools, as pixel fighters on the Windows 11 taskbar (and, experimentally, on the macOS Dock) - and they fight
+based on what those tools are really doing.**
 
 ![Two fighters, Claude Code and Codex, in a best-of-3 bout in the empty stretch of the taskbar, with HUD plates on the left and the scoreboard on the right](docs/img/hero-bout.gif)
 
@@ -13,8 +14,9 @@
 > Install and run Taskbar Fighters from https://github.com/mrktchris/taskbar-fighters - follow AGENTS.md.
 > ```
 >
-> The agent follows [AGENTS.md](AGENTS.md): it checks your PC, installs one Python package, runs the tests, starts the fighters and
-> asks you before adding a startup entry or a Start-menu shortcut. Prefer to do it yourself? See [Install and run](#install-and-run).
+> The agent follows [AGENTS.md](AGENTS.md) on Windows and on macOS: it checks your computer, installs the Python packages (Pillow;
+> on a Mac also PyObjC, into a `.venv`), runs the tests, starts the fighters and asks you before adding a startup entry or a
+> shortcut. Prefer to do it yourself? See [Install and run](#install-and-run) (Windows) or [macOS](#macos-experimental).
 
 ## What it does
 
@@ -51,7 +53,7 @@ network.
   Winners are weighted by a health score (`decided`) or a coin flip (`random`).
 - **Rival mode.** A sleeping partner (a program that went quiet, or the sparring bot) is woken now and then for a match, then
   goes back to sleep. The plate keeps saying `sleeping`.
-- **Fighter select.** Pick which program fights on each side, and which character any program wears, from a Smash-style select
+- **Fighter select.** Pick which program fights on each side, and which character any program wears, from an arcade-style select
   screen, the right-click menu or the CLI.
 - **Arena mode.** The fight breaks out onto a whole monitor: fighters jump between the top edges of your windows, crack and
   "shatter" them, throw letters and explode. Visual only - nothing real happens to your windows.
@@ -66,13 +68,13 @@ network.
 
 | fighter | plays | weapon | strike / special / super / ultimate |
 | --- | --- | --- | --- |
-| Claude | Claude Code | katana | spin_kick / slash_wave / reverse / kamehameha |
-| Codex | Codex (CLI and desktop app) | twin kunai | ground_pound / deploy / sudo / rasengan |
-| Gemini | Gemini (app and CLI) | twin short blades | spin_kick / star_shot / twin_flash / getsuga |
-| Cursor | Cursor | spear | ground_pound / tab_bolt / autocomplete / odm_strike |
-| Ollama | Ollama | staff | ground_pound / pull_shot / serve / wind_scar |
-| LM Studio | LM Studio | energy katana | spin_kick / load_wave / hot_swap / bankai |
-| Agent | aider, opencode, Windsurf, Copilot CLI, Qwen Code, Perplexity, Grok, the sparring bot | bow and dagger | spin_kick / energy_bolt / overclock / spirit_bomb |
+| Claude | Claude Code | katana | spin_kick / slash_wave / reverse / radiant_beam |
+| Codex | Codex (CLI and desktop app) | twin kunai | ground_pound / deploy / sudo / spiral_orb |
+| Gemini | Gemini (app and CLI) | twin short blades | spin_kick / star_shot / twin_flash / crescent_fang |
+| Cursor | Cursor | spear | ground_pound / tab_bolt / autocomplete / grapple_strike |
+| Ollama | Ollama | staff | ground_pound / pull_shot / serve / gale_rend |
+| LM Studio | LM Studio | energy katana | spin_kick / load_wave / hot_swap / awakening |
+| Agent | aider, opencode, Windsurf, Copilot CLI, Qwen Code, Perplexity, Grok, the sparring bot | bow and dagger | spin_kick / energy_bolt / overclock / star_core |
 | Kunoichi, Knight, Barbarian, Monk, Nomad, Oni | selectable extras: any program can wear them | fans, greatsword, axe, tonfa, chakrams, kanabo | see [MOVELIST.md](MOVELIST.md) |
 
 ### Moves
@@ -137,7 +139,7 @@ images above are headless renders on a desktop drawn for the picture, not a scre
 ## Install and run
 
 **Requirements:** Windows 11 (tested; Windows 10 should work but is untested) with the taskbar at the bottom, Python 3.12 or newer (tested on 3.12 and 3.14), and Pillow.
-Nothing else: no services, no network, no startup entries unless you add one.
+Nothing else: no services, no network, no startup entries unless you add one. On a Mac, see [macOS](#macos-experimental).
 
 ```
 git clone https://github.com/mrktchris/taskbar-fighters
@@ -156,6 +158,41 @@ you can use; it also prints the command to remove the task again.
 **Stop and uninstall.** `python minis.py stop` ends only the processes it started (it checks each one's exact command line).
 `python minis.py shortcut remove` deletes the shortcuts it made. Delete the `taskbar-fighters` folder and `%LOCALAPPDATA%\minis`
 to remove everything; remove a startup task you added with the `schtasks /Delete` line `print-startup` shows.
+
+`python minis.py doctor` prints a report of this machine (versions, screen and taskbar geometry, detected programs, a test
+window) that ends with PASS or FAIL; paste it to your AI agent or into an issue when something is off. Fighters are 128 px tall
+by default (HD art); `python minis.py size 64` (or 96) makes them smaller, also from the right-click menu's *Fighter size*.
+
+## macOS (experimental)
+
+> **Untested on real Mac hardware.** The macOS backend was written and unit-tested on Windows. Until someone runs
+> [docs/MAC-TESTING.md](docs/MAC-TESTING.md) on a Mac and reports back, treat it as a preview: it may not start, or may draw
+> in the wrong place.
+
+**Requirements:** macOS 13 (Ventura) or newer, Apple silicon or Intel, Python 3.12 or newer (from python.org or
+`brew install python@3.12`; the `python3` that ships with macOS is too old), Pillow and PyObjC (`requirements-mac.txt`).
+
+```
+git clone https://github.com/mrktchris/taskbar-fighters
+cd taskbar-fighters
+./scripts/setup_mac.sh
+```
+
+The script checks your macOS version and chip, finds Python 3.12+, creates `.venv` in the clone, runs
+`pip install --upgrade pip` and `pip install -r requirements-mac.txt`, then `python minis.py doctor` and `python minis.py start`.
+By hand: `python3.12 -m venv .venv`, `.venv/bin/python -m pip install --upgrade pip` (an old pip may try to compile PyObjC),
+`.venv/bin/python -m pip install -r requirements-mac.txt`, `.venv/bin/python minis.py start`.
+
+- **Where they stand:** in a strip on top of the Dock's top edge, plates and scoreboard placed as on Windows. A Dock on the left
+  or right, or one that auto-hides, falls back to a strip at the bottom of the screen.
+- **Menu-bar icon** instead of the tray icon, with the same menu (left click: fighter select; right click or Control-click: the
+  menu). No Dock icon: it runs as a background (accessory) app.
+- **No permissions needed:** no Accessibility, no Screen Recording, no Input Monitoring. The arena reads window *bounds* only.
+- **What differs:** no arena `--freeze` and no `arena capture` (both would need a screen capture); start at login is
+  `python minis.py autostart on` (one LaunchAgent plist; `autostart off` removes it; `print-startup` only shows it); no Start
+  menu, so `shortcut` only explains; `selftest-gui` shows two fighters for 5 s and reports their window frames instead of
+  comparing screenshots; data lives in `~/Library/Application Support/minis`.
+- **Stop:** `.venv/bin/python minis.py stop` (SIGTERM, then SIGKILL only for a process still proven ours).
 
 ### Taskbar and tray icon
 
@@ -199,9 +236,12 @@ Every command below was checked against `python minis.py --help` and each subcom
 | `python minis.py monitors` | list monitors for `arena --monitor N` |
 | `python minis.py arena [--monitor N] [--freeze] [--seconds S] [--seed K]` | arena mode; `arena stop` ends it |
 | `python minis.py arena capture <png>` | PrintWindow of the arena's own window only (refused with `--freeze`; writes only under `qa/` or the data folder) |
-| `python minis.py print-startup` | print (never run) the commands to start at logon |
+| `python minis.py print-startup` | print (never run) the commands to start at logon (macOS: the LaunchAgent plist) |
+| `python minis.py autostart on\|off\|status` | macOS only: start at login with a LaunchAgent (written only when you run `on`) |
+| `python minis.py size 64\|96\|128` | fighter height in px (default 128, HD art); running fighters restart to apply it |
+| `python minis.py doctor [--headless]` | a report to paste to your AI agent or an issue; `--headless` skips the test window (CI) |
 | `python minis.py director` / `run a\|b` | run the director or one slot in the foreground (debugging) |
-| `python minis.py selftest-gui [--keep]` | real-desktop check: both windows draw over the taskbar and survive a taskbar raise |
+| `python minis.py selftest-gui [--keep]` | real-desktop check: both windows draw over the taskbar and survive a taskbar raise (macOS: frames, no capture) |
 | `python -m unittest discover -s tests` | the test suite (the process-level tests are skipped unless `MINIS_INTEGRATION=1`) |
 
 ### Right-click menu
@@ -248,6 +288,7 @@ flash, rival, winners, lineup) live in `%LOCALAPPDATA%\minis\control.json` and a
 | `claude_window` | `1000000` | context window used for Claude's context % |
 | `tray_icon` | `true` | the notification-area icon (left click: select, right click: menu) |
 | `scoreboard` / `scoreboard_x` | `true` / `null` | show the widget; its screen x (default: just left of the icons) |
+| `fighter_size` | `128` | taskbar fighter height: 64, 96 or 128 px (`minis.py size N` overrides it at runtime) |
 | `arena_monitor` | `null` | monitor for the Arena button (default: the one non-primary monitor) |
 | `fps_active` / `fps_fight` / `fps_idle` | `10` / `30` / `4` | redraw rates |
 
@@ -266,8 +307,8 @@ Fighters hide while a fullscreen app is up, while the taskbar is not at the bott
   written to disk.
 - **Arena never touches real windows.** It reads window rectangles (`EnumWindows` / `GetWindowRect`), never titles, never sends
   input; cracks and shatters are paint on its own overlay.
-- **Files written:** `%LOCALAPPDATA%\minis\` (bus files, `assign.json`, `control.json`, `record.json`, `history.json`, `seen.json`,
-  pid files, small rotating logs).
+- **Files written:** `%LOCALAPPDATA%\minis\` on Windows, `~/Library/Application Support/minis/` on macOS (bus files,
+  `assign.json`, `control.json`, `record.json`, `history.json`, `seen.json`, pid and lock files, small rotating logs).
 
 ## How it works
 
@@ -293,12 +334,15 @@ minis_core/       sources, director, telemetry, brain,    tools/    previews, do
                   choreo, rounds, fx, arena, scoreboard,  tests/    unittest; synthetic, content-free fixtures
                   select, lineup, render, sim, config     docs/     notes, credits, work orders, docs/img/
 minis_win/        layered windows, arena window, process table (all ctypes)
+minis_mac/        macOS: NSPanel windows, menu-bar item, Dock geometry, ps process table, LaunchAgent (experimental)
+minis_platform/   picks minis_win or minis_mac at run time (nothing imports a desktop library at import time)
 ```
 
 ## Known limits and roadmap
 
-- **Windows only**, bottom taskbar only. Only 100% DPI on the primary display has been seen; integer scaling is unit-tested, not
-  observed at 150% or 200%.
+- **Windows tested; macOS experimental and untested on real hardware** ([docs/MAC-TESTING.md](docs/MAC-TESTING.md)). Windows:
+  bottom taskbar only. Only 100% DPI on the primary display has been seen; integer scaling is unit-tested, not observed at 150%
+  or 200%.
 - The default `zone` was measured on one 2560x1440 display with centred icons; other layouts need a `zone` in `minis.json`.
 - Fighters stand about 11 px above the taskbar's top edge (the 64 px cell's top rows sit over the desktop), and long weapons tilt to
   fit the cell.
