@@ -49,8 +49,8 @@ Task Manager or `ps` shows.
 
 1. Add a `Body(...)` and an `_c(...)` entry to `art/roster.py`. Copy an existing one and change the proportions,
    weapon, palette and signature moves (strike, special, super, ultimate).
-2. Build the sheets with `python art/build_fighters.py --all --only <name>`. This writes `assets/<name>` (64 px) and
-   `assets_hd/<name>` (128 px).
+2. Build the sheets with `python art/build_fighters.py --all --only <name>`. This writes `assets/<name>` and
+   `assets_hd/<name>`.
 3. Run `python -m unittest tests.test_art`.
 4. The new character appears in the fighter select LOOK grid without further changes. Try it with
    `python minis.py skin <program> <name>`.

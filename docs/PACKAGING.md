@@ -136,6 +136,6 @@ a pending publisher on pypi.org, a `pypi` environment on GitHub, and uncommentin
 ## Launch media
 
 `python packaging/launch_media.py` rebuilds `docs/social-preview.png` (1280x640, the sprite sheets' idle frames
-nearest-neighbour upscaled), `docs/demo.gif` and `docs/demo.mp4`. The gif and mp4 are an 8 s window of the same
+nearest-neighbour upscaled to a fixed on-card height, so it follows the art at any cell size), `docs/demo.gif` and `docs/demo.mp4`. The gif and mp4 are an 8 s window of the same
 offline taskbar render `tools/doc_images.py` uses, at 20 fps, with DEMO numbers. The mp4 needs ffmpeg. The script
 never captures the screen.

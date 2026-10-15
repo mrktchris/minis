@@ -99,32 +99,33 @@ def social_preview(out=DOCS / 'social-preview.png'):
     d.rectangle([0, bar_top, W, H], fill=(30, 32, 42, 255))
     d.line([(0, bar_top), (W, bar_top)], fill=(78, 82, 100, 255), width=2)
 
-    # ---- the lineup: 7 program fighters in front (4x), the 6 extras one step back (3x) in the gaps;
+    # ---- the lineup: 7 program fighters in front (~212 px tall), the 6 extras one step back (~160 px) in the gaps;
     # left half faces right, right half faces left (they square up in the middle)
     front_y, back_y = 628, 560
     n = len(PROGRAMS)
     xs = [96 + i * (1088 / (n - 1)) for i in range(n)]                        # front centres
     back_xs = [(xs[i] + xs[i + 1]) / 2 for i in range(n - 1)]                 # back centres, in the gaps
 
-    def place(char, cx, feet_y, facing, k, dim=1.0):
+    def place(char, cx, feet_y, facing, target_h, dim=1.0):
         spr, ground = idle_frame(char, facing)
+        k = max(1, round(target_h / spr.height))          # integer scale, whatever the sheet's cell size
         spr = up(spr, k)
         if dim != 1.0:
             rgb = ImageEnhance.Brightness(spr.convert('RGB')).enhance(dim)
             rgb.putalpha(spr.split()[3])
             spr = rgb
-        sh, pad = shadow(spr, k=2)
+        sh, pad = shadow(spr, k=max(1, k // 2))
         x, y = int(cx - spr.width / 2), int(feet_y - ground * k)
         im.alpha_composite(sh, (x - pad, y - pad))
         im.alpha_composite(spr, (x, y))
 
     for i, c in enumerate(EXTRAS):
-        place(c, back_xs[i], back_y, 'R' if back_xs[i] < W / 2 else 'L', 3, dim=0.72)
+        place(c, back_xs[i], back_y, 'R' if back_xs[i] < W / 2 else 'L', 160, dim=0.72)
     for i, c in enumerate(PROGRAMS):
-        place(c, xs[i], front_y, 'R' if xs[i] < W / 2 else 'L', 4)
+        place(c, xs[i], front_y, 'R' if xs[i] < W / 2 else 'L', 212)
 
     im.convert('RGB').save(out, optimize=True)
-    print(f'wrote {out.relative_to(ROOT)} {im.size}')
+    print(f'wrote {out} {im.size}')
 
 
 # ------------------------------------------------------------------ demo loop (gif + mp4)

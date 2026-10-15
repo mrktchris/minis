@@ -11,6 +11,11 @@ These are drafts. Nothing here has been posted, tagged or published. Each step i
       removes them. Stop your git-checkout copy first: both share `%LOCALAPPDATA%\minis`.
 - [ ] Apply PACKAGING.md items 2-6 (ROOT from `_MEIPASS`, `minis.json` beside the exe, `qa/`, shortcut commands, help
       text).
+- [ ] After the 128 px art and the cinematic set pieces land, rebuild the card and the loop with
+      `python packaging/launch_media.py`. Check that the loop shows a set piece, then commit `docs/social-preview.png`,
+      `docs/demo.gif` and `docs/demo.mp4`. The card scales to a fixed height, so it follows any cell size.
+- [ ] Release notes, tweets and the README patch must use no franchise or IP names (move ids are generic). Re-check with
+      `git grep -i -E "smash|anime|kamehameha|rasengan|getsuga|bankai|dragon ball|naruto|bleach|goku"`.
 - [ ] Merge `README_VIRAL_PATCH.md` into the top of `README.md`, then delete the patch file.
 - [ ] CI is green on master (the Windows jobs must pass; the macOS job is allowed to fail while the port is
       experimental).

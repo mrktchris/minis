@@ -52,7 +52,7 @@ jobs:
 
       # The only real-Mac check before the owner tests on his own machine: print what the doctor sees, never fail on it.
       - name: macOS doctor (informational)
-        if: runner.os == 'macOS'
+        if: ${{ always() && runner.os == 'macOS' }}
         shell: bash
         run: |
           python minis.py doctor --headless || echo "::warning::'minis.py doctor --headless' exited $? (not supported yet, or it found a problem - see the output above)"
