@@ -14,10 +14,13 @@ PLATE_GAP = 18
 SEGS = 10
 
 _font_cache = {}
-# Windows first (unchanged order); then macOS, where Arial lives under these names (Supplemental since macOS 10.15)
+# Windows first (unchanged order); then macOS, where Arial lives under these names (Supplemental since macOS 10.15).
+# Regular text on macOS is PT Sans (ships with macOS in Supplemental/): Arial 9 px runs ~15% wider than Segoe UI and pushed
+# the plate's reset countdown off; PT Sans matches Segoe UI's width.  An absolute path: on Windows it never loads.
 BOLD_FONTS = ('segoeuib.ttf', 'arialbd.ttf', 'Arial Bold.ttf', '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
               '/Library/Fonts/Arial Bold.ttf')
-REGULAR_FONTS = ('segoeui.ttf', 'arial.ttf', 'Arial.ttf', '/System/Library/Fonts/Supplemental/Arial.ttf', '/Library/Fonts/Arial.ttf')
+REGULAR_FONTS = ('segoeui.ttf', '/System/Library/Fonts/Supplemental/PTSans.ttc', 'arial.ttf', 'Arial.ttf', '/System/Library/Fonts/Supplemental/Arial.ttf',
+                 '/Library/Fonts/Arial.ttf')
 
 
 def font(size, bold=True):
