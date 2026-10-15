@@ -160,6 +160,23 @@ def platforms_from_cg(infos, own_pid, exclude=()):
     return out
 
 
+def menubar_plate_origin(slot, frame, visible, notch_left, w, h, gap, margin=8):
+    """App point (x, y) of HUD plate `slot` ('a' | 'b') in the menu bar.  frame / visible: the screen's Cocoa frame and
+    visibleFrame (x, y, w, h); notch_left: Cocoa x where the camera notch starts, or None.  The pair sits right-aligned just
+    left of the notch (MacBooks with one: the free stretch between the app menus and the notch), else centred; vertically
+    centred in the menu bar (24 pt when it is hidden)."""
+    fx, fy, fw, fh = frame
+    vx, vy, vw, vh = visible
+    bar = (fy + fh) - (vy + vh)
+    if bar <= 0:
+        bar = 24
+    total = 2 * w + gap
+    x0 = (notch_left - margin - total) if notch_left else fx + (fw - total) / 2.0
+    x0 = max(fx + margin, x0)
+    x = x0 if slot == 'a' else x0 + w + gap
+    return int(round(x)), int(max(0, (bar - h) // 2))
+
+
 STATUS_LAYER = 25                                       # kCGStatusWindowLevel: menu-bar status items (and our panels)
 
 

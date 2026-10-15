@@ -312,6 +312,8 @@ By hand: `python3.12 -m venv .venv`, `.venv/bin/python -m pip install --upgrade 
 - **Where they stand:** on top of the Dock's top edge, with the scoreboard at the right end of the strip. A Dock on the left or
   right, or one that auto-hides, falls back to a strip at the bottom of the screen. Plates and the scoreboard are drawn at the
   screen's Retina scale and fade out of the way while the mouse is over them.
+- **Plates in the menu bar (optional):** right-click a fighter > *Plates position* > *In the menu bar*, or
+  `python minis.py plates menubar` (`plates dock` puts them back); they sit just left of the notch.
 - **Menu-bar icon** instead of the tray icon, with the same menu (left click: fighter select; right click or Control-click: the
   menu). No Dock icon: it runs as a background (accessory) app. On a notched MacBook with a full menu bar, macOS may hide the
   icon behind the notch; `status` says so, and the fighter's right-click menu has everything.

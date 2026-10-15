@@ -326,3 +326,35 @@ class RealAppKit(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class MenuBarPlates(unittest.TestCase):
+    """`plates menubar`: geometry (pure), the control.json setting and the fighter-menu submenu (macOS only)."""
+
+    def test_pair_sits_left_of_the_notch_or_centred(self):
+        frame, visible = (0, 0, 1710, 1107), (0, 63, 1710, 1005)                    # 39 pt menu bar, Dock below
+        a, b = (G.menubar_plate_origin(s, frame, visible, 763, 128, 26, 4) for s in 'ab')
+        self.assertEqual((a, b), ((495, 6), (627, 6)))
+        self.assertLessEqual(b[0] + 128, 763 - 8)                                     # never under the notch
+        a, b = (G.menubar_plate_origin(s, (0, 0, 1440, 900), (0, 0, 1440, 876), None, 128, 26, 4) for s in 'ab')
+        self.assertEqual(a[0] + 260 // 2, 720)                                        # no notch: centred
+        self.assertEqual(a[1], 0)                                                     # 24 pt bar: top-aligned
+        self.assertEqual(G.menubar_plate_origin('a', (0, 0, 800, 600), (0, 0, 800, 600), 100, 128, 26, 4)[0], 8)
+
+    def test_setting_and_menu(self):
+        from minis_core import control, lineup as L
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / 'control.json'
+            self.assertEqual(control.hud_position(p), 'dock')
+            control.set_hud_position('menubar', p)
+            self.assertEqual(control.hud_position(p), 'menubar')
+            control.set_hud_position('nonsense', p)
+            self.assertEqual(control.hud_position(p), 'dock')
+        flags = dict(paused=False, plates=True, rival=True, flash=True, arena=False, winners='decided', size=128)
+        win, _ = L.fighter_menu('a', {}, control.lineup(Path('/nonexistent/control.json')), flags, L.characters())
+        mac, _ = L.fighter_menu('a', {}, control.lineup(Path('/nonexistent/control.json')), dict(flags, hud_pos='menubar'), L.characters())
+        self.assertNotIn('Plates position', L.labels_of(win))                         # Windows menu unchanged
+        sub = dict((it[0], it[1]) for it in mac if it and isinstance(it[1], list))['Plates position']
+        self.assertEqual([(i, l, o['checked']) for i, l, o in sub], [(L.HUD_DOCK, 'Above the Dock', False), (L.HUD_MENUBAR, 'In the menu bar', True)])
+        labels = L.labels_of(mac)
+        self.assertEqual(labels.index('Plates position'), labels.index('HUD plates') + 1)
