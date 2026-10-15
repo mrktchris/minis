@@ -333,6 +333,20 @@ class SelftestAndDoctor(Isolated):
         self.assertIn('[FAIL] desktop backend loads', '\n'.join(out))
         self.assertTrue(out[-2].startswith('FAIL'))
 
+    def test_headless_still_fails_a_backend_that_cannot_import(self):
+        out = []
+        with mock.patch('minis_platform.shell', lambda: (_ for _ in ()).throw(ImportError('objc.BadPrototypeError'))):
+            rc = minis.cmd_doctor(mock.Mock(headless=True), describe=lambda: [], out=out.append)
+        self.assertEqual(rc, 1)
+        self.assertIn('[FAIL] desktop backend loads', chr(10).join(out))
+
+    def test_headless_skips_only_the_window(self):
+        out = []
+        rc = minis.cmd_doctor(mock.Mock(headless=True), shell=FakeMacShell(), probe=lambda: self.fail('opened a window'),
+                              describe=lambda: [], out=out.append)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('[skip] test overlay window (headless)', chr(10).join(out))
+
     def test_redact(self):
         self.assertEqual(minis.redact('/Users/me/x/y', home='/Users/me'), '~/x/y')
         self.assertEqual(minis.redact('/', home='/'), '/')

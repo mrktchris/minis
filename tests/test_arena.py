@@ -245,9 +245,8 @@ class Composing(unittest.TestCase):
         self.assertEqual(len(hud), 1)
         self.assertTrue(ar.state()['hp'] == {'a': 100, 'b': 100} or ar.state()['hp'])
 
-    @unittest.skipUnless(sys.platform == 'win32', 'Win32 only (the macOS arena re-uploads tiles, it merges no rects)')
     def test_merge_rects(self):
-        from minis_win.arena_window import merge_rects
+        from minis_platform.rects import merge_rects                    # pure: runs on every OS
         self.assertEqual(sorted(merge_rects([(0, 0, 10, 10), (5, 5, 20, 20), (100, 100, 110, 110)])), [(0, 0, 20, 20), (100, 100, 110, 110)])
         many = [(i * 50, 0, i * 50 + 10, 10) for i in range(30)]
         self.assertLessEqual(len(merge_rects(many, limit=12)), 12)

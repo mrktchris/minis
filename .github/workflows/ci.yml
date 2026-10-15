@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, mac-port]
   pull_request:
   workflow_dispatch:
 
@@ -50,12 +50,25 @@ jobs:
         shell: bash
         run: python -m unittest discover -s tests -v
 
-      # The only real-Mac check before the owner tests on his own machine: print what the doctor sees, never fail on it.
-      - name: macOS doctor (informational)
-        if: ${{ always() && runner.os == 'macOS' }}
+      # Environment + geometry + detection, no window. A backend that cannot even be imported fails this step.
+      - name: doctor --headless
+        if: ${{ always() }}
         shell: bash
-        run: |
-          python minis.py doctor --headless || echo "::warning::'minis.py doctor --headless' exited $? (not supported yet, or it found a problem - see the output above)"
+        run: python minis.py doctor --headless
+
+      # The runner has a GUI session: try real windows. Reported, not (yet) gating: a runner without a window server says so.
+      - name: macOS doctor with a real test window (informational)
+        if: ${{ always() && runner.os == 'macOS' }}
+        continue-on-error: true
+        shell: bash
+        run: python minis.py doctor
+
+      - name: macOS selftest-gui (informational)
+        if: ${{ always() && runner.os == 'macOS' }}
+        continue-on-error: true
+        timeout-minutes: 3
+        shell: bash
+        run: python minis.py selftest-gui
 
   package:
     name: package smoke test (wheel + sdist)

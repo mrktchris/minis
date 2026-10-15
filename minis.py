@@ -2224,10 +2224,12 @@ def cmd_doctor(args=None, shell=None, probe=None, describe=None, out=print):
         try:
             shell = plat.shell()
         except Exception as e:
-            check('desktop backend loads', False, f'{type(e).__name__}: {str(e)[:300]}', soft=True)
+            check('desktop backend loads', False, f'{type(e).__name__}: {str(e)[:300]}')   # importing needs no display: always a FAIL
             shell = None
     if shell is not None:
         check('desktop backend loads', True, plat.label())
+        if plat.is_mac() and hasattr(shell, 'MinisView'):
+            out(f'  AppKit classes: {shell.MinisPanel.__name__}, {shell.MinisView.__name__} defined')
         try:
             sw, sh = shell.screen_size()
             l, t, r, b, edge = shell.taskbar_rect()
