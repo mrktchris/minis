@@ -24,7 +24,7 @@ def read(path=None) -> dict:
     p = Path(path) if path else control_path()
     try:
         st = p.stat()
-        sig = (st.st_mtime_ns, st.st_size)
+        sig = (st.st_mtime_ns, st.st_size, st.st_ino, st.st_ctime_ns)   # os.replace makes a new file: a same-size rewrite in one mtime tick still misses
         hit = _cache.get(str(p))
         if hit and hit[0] == sig:
             return hit[1]
