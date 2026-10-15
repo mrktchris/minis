@@ -1,0 +1,36 @@
+name: Feature request
+description: A new move, mode, setting or idea.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What would you like the fighters (or the app) to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What would it make better or more fun?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Fights / moves / animation
+        - New character
+        - Scoreboard / HUD plates
+        - Arena mode
+        - Fighter select / settings
+        - macOS port
+        - Install / packaging
+        - Other
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: This does not need the app to read message content, window titles or file names, or to use the network.
+          required: true

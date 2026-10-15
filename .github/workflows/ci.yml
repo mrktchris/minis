@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    # The macOS port is experimental: its job reports but does not turn the whole run (and the README badge) red.
+    # Flip this to `false` once the mac job is green.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        python: ["3.12", "3.13"]
+    env:
+      PYTHONUTF8: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          if [ "$RUNNER_OS" = "macOS" ] && [ -f requirements-mac.txt ]; then
+            pip install -r requirements-mac.txt
+          fi
+
+      - name: Run tests
+        shell: bash
+        run: python -m unittest discover -s tests -v
+
+      # The only real-Mac check before the owner tests on his own machine: print what the doctor sees, never fail on it.
+      - name: macOS doctor (informational)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python minis.py doctor --headless || echo "::warning::'minis.py doctor --headless' exited $? (not supported yet, or it found a problem - see the output above)"
+
+  package:
+    name: package smoke test (wheel + sdist)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - name: Check the wheel carries the code and the art
+        run: |
+          python - <<'EOF'
+          import glob, zipfile
+          whl = glob.glob('dist/*.whl')[0]
+          names = zipfile.ZipFile(whl).namelist()
+          need = ['minis.py', 'minis_core/atlas.py', 'assets/icon/minis.ico', 'assets/claude/anim.json', 'assets_hd/claude/sheet.png']
+          missing = [n for n in need if n not in names]
+          assert not missing, f'missing from {whl}: {missing}'
+          print(f'{whl}: {len(names)} files, ok')
+          EOF

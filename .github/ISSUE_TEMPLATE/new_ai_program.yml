@@ -1,0 +1,48 @@
+name: Detect a new AI program
+description: Ask for an AI tool to get its own fighter.
+title: "Detect: "
+labels: ["detector"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Taskbar Fighters recognises AI programs from the process table (and Claude Code / Codex from their session files). Tell us how your tool shows up and we can add one row to `RULES` in `minis_core/sources.py` - or send the PR yourself, see CONTRIBUTING.md.
+  - type: input
+    id: name
+    attributes:
+      label: Program name
+      placeholder: e.g. Windsurf, Zed AI, Continue, Amp
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Homepage
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of program is it?
+      options:
+        - Desktop app (its own .exe / .app)
+        - CLI run with node / npx / bun
+        - CLI run with python / uv / pipx
+        - Native CLI binary
+        - IDE extension (runs inside VS Code / JetBrains)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: process
+    attributes:
+      label: How it appears in the process list
+      description: |
+        Windows: Task Manager > Details (image name), or `Get-CimInstance Win32_Process | ? Name -like '*node*' | select Name,CommandLine`.
+        macOS: `ps -axo comm,args | grep -i <name>`. Only the program's own name and first arguments are needed - trim anything private.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: character
+    attributes:
+      label: Which fighter should it be? (optional)
+      description: generic Agent, an existing character (claude, codex, gemini, cursor, ollama, lmstudio, kunoichi, knight, barbarian, monk, nomad, oni), or an idea for a new one.

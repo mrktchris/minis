@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "taskbar-fighters"
+version = "1.0.0"
+description = "Pixel-art fighters for your AI coding agents (Claude Code, Codex, Gemini, Cursor, Ollama...), living in your taskbar and battling from real usage."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Christian Sierra" }]
+keywords = ["claude", "codex", "ai-agents", "pixel-art", "taskbar", "windows", "macos", "game", "desktop-pet"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Desktop Environment",
+    "Topic :: Games/Entertainment",
+    "Topic :: Software Development",
+]
+dependencies = ["Pillow>=9.1"]
+
+[project.optional-dependencies]
+# Same floor as the mac port's requirements; keep in step with requirements-mac.txt once it lands (docs/PACKAGING.md).
+mac = ["pyobjc-framework-Cocoa>=10.3", "pyobjc-framework-Quartz>=10.3"]
+
+[project.scripts]
+taskbar-fighters = "minis:main"
+
+[project.urls]
+Homepage = "https://github.com/mrktchris/taskbar-fighters"
+Source = "https://github.com/mrktchris/taskbar-fighters"
+Issues = "https://github.com/mrktchris/taskbar-fighters/issues"
+Changelog = "https://github.com/mrktchris/taskbar-fighters/blob/master/CHANGELOG.md"
+
+[tool.setuptools]
+py-modules = ["minis"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+# Only the runtime.  minis_mac / minis_platform are picked up when they exist at build time.
+# assets* and assets_hd* are data-only (namespace) directories: they install next to minis.py in site-packages, which is
+# exactly where minis.py / minis_core look for them (ROOT = the folder holding minis.py).  See docs/PACKAGING.md.
+include = ["minis_core", "minis_win", "minis_mac", "minis_platform", "assets*", "assets_hd*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+"*" = ["*.png", "*.json", "*.ico"]
