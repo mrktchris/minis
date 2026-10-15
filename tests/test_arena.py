@@ -858,6 +858,7 @@ class VisualOnly7(Isolated):
     """The arena never touches another window: run the real arena process body against a recording shell and a recording
     user32, and require that the only shell call is the single-instance mutex and that user32 is never called at all."""
 
+    @unittest.skipUnless(sys.platform == 'win32', 'records the Win32 backend (minis_win needs ctypes.WinDLL); the macOS arena window is checked on a real Mac: docs/MAC-HANDOFF.md MAC-3')
     def test_no_window_api_is_ever_called(self):
         import minis
         from unittest import mock
