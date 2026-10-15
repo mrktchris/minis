@@ -452,5 +452,9 @@ section 8, [docs/ARENA.md](docs/ARENA.md), [docs/MAC-TESTING.md](docs/MAC-TESTIN
 - `start` from the Windows bundle (the owner's live checkout was running; both share the data folder). LAUNCH.md has the
   one manual check.
 - The top-level module is still `minis` in the wheel.
-- `PLATE_CLEAR_PX` (40) was sized for the 64 px art's reach (at most 33 px from the hip); at 128 px the reach is about twice
-  that. Not yet checked live whether a fighter at the right end of the zone can overlap the scoreboard.
+- Seen live after the restart (taskbar-rows capture of a demo match, 128 px): a knocked-down fighter's sprite reached over
+  the right HUD plate. `PLATE_CLEAR_PX` (40) and the scoreboard gap were sized for the 64 px art's reach (at most 33 px from
+  the hip); at 128 px the reach is about twice that, and `Fighter.logic_zone` only divides the zone by k. Fix: scale the
+  clearances with the fighter size in `config.fight_zone`. Not fixed in this pass.
+- `docs/img/live-taskbar.png` and `live-bout.gif` were not refreshed: the only allowed capture is the 48 taskbar rows, which
+  at 128 px shows the fighters from the knees down. They still show the V6 64 px fighters.
