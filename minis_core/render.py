@@ -34,7 +34,55 @@ def font(size, bold=True):
             except Exception:
                 pass
         _font_cache[k] = f or ImageFont.load_default()
+        _font_key[id(_font_cache[k])] = k
     return _font_cache[k]
+
+
+_font_key = {}                                    # id(font) -> (size, bold): lets KDraw find the k-times-larger face
+
+
+class KDraw:
+    """An ImageDraw stand-in that takes the same logical-px calls the HUD code makes and draws them k times finer
+    (macOS Retina: a 2x image shown at 1x points).  Boxes keep their exact pixel area; text is the k-times face,
+    antialiased, which at 2x reads like the system's own text.  Never used at k=1, so Windows draws exactly as before."""
+
+    def __init__(self, im, k):
+        self.d, self.k, self.fontmode = ImageDraw.Draw(im), int(k), '1'
+
+    def _box(self, b):
+        k = self.k
+        return [b[0] * k, b[1] * k, b[2] * k + k - 1, b[3] * k + k - 1]
+
+    def _font(self, f):
+        size, bold = _font_key.get(id(f), (9, False))
+        return font(size * self.k, bold)
+
+    def rectangle(self, box, fill=None, outline=None, width=1):
+        self.d.rectangle(self._box(box), fill=fill, outline=outline, width=width * self.k)
+
+    def rounded_rectangle(self, box, radius=0, fill=None, outline=None, width=1):
+        self.d.rounded_rectangle(self._box(box), radius * self.k, fill=fill, outline=outline, width=width * self.k)
+
+    def polygon(self, xy, fill=None, outline=None):
+        self.d.polygon([(x * self.k, y * self.k) for x, y in xy], fill=fill, outline=outline)
+
+    def textlength(self, s, font=None):
+        return self.d.textlength(s, font=self._font(font)) / self.k
+
+    def text(self, xy, s, fill=None, font=None):
+        self.d.fontmode = 'L'
+        self.d.text((xy[0] * self.k, xy[1] * self.k), s, fill=fill, font=self._font(font))
+
+
+def canvas(w, h, k=1):
+    """-> (image, draw) for a HUD element of w x h logical px.  k > 1: a k-times image tagged info['density'] = k (the
+    macOS overlay shows it at w x h points) and a KDraw.  k = 1: a plain image and ImageDraw, exactly as before."""
+    if k <= 1:
+        im = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        return im, ImageDraw.Draw(im)
+    im = Image.new('RGBA', (w * k, h * k), (0, 0, 0, 0))
+    im.info['density'] = int(k)
+    return im, KDraw(im, k)
 
 
 def text(d, xy, s, fill, size=9, bold=True):
@@ -84,17 +132,18 @@ def filled_segments(ctx):
 _plate_cache = {}
 
 
-def plate(style, snap, t, width=PLATE_W, name=None):
+def plate(style, snap, t, width=PLATE_W, name=None, k=1):
+    """k: pixel density (1 everywhere but a macOS Retina screen, where the plate is drawn 2x and nearly opaque)."""
     tag, accent = style_of(style)
     tag = name or tag
     key = (tag, accent, snap.state if snap else None, shown_pct(snap.ctx_pct) if snap else None,
            shown_pct(snap.plan_pct) if snap else None, snap.plan_label if snap else '', getattr(snap, 'resets_in', '') if snap else '',
-           blink_phase(snap, t), width)
+           blink_phase(snap, t), width) + ((k,) if k > 1 else ())
     im = _plate_cache.get(key)
     if im is None:
         if len(_plate_cache) > 96:
             _plate_cache.clear()
-        im = _plate_cache[key] = _plate(tag, accent, snap, blink_phase(snap, t), width)
+        im = _plate_cache[key] = _plate(tag, accent, snap, blink_phase(snap, t), width, k)
     return im
 
 
@@ -108,14 +157,14 @@ def _fit(d, s, maxw, size, bold):
     return s + '.'
 
 
-def _plate(tag, accent, snap, phase, width=PLATE_W):
+def _plate(tag, accent, snap, phase, width=PLATE_W, k=1):
     """Fighting-game HUD plate, two lines.  Shows state + numbers only, never titles or content."""
     h = PLATE_H
-    im = Image.new('RGBA', (width, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
+    im, d = canvas(width, h, k)
     state = snap.state if snap else 'sleeping'
     waiting = state == 'waiting'                  # needs your approval: amber border + amber state word, visible at a glance
-    d.rounded_rectangle([0, 0, width - 1, h - 1], 4, fill=(18, 18, 22, 200), outline=(AMBER + (255,)) if waiting else accent + (150,),
+    # k > 1 is macOS, where the plate floats over app windows (no dark taskbar behind it): nearly opaque, so nothing shows through
+    d.rounded_rectangle([0, 0, width - 1, h - 1], 4, fill=(18, 18, 22, 200 if k == 1 else 242), outline=(AMBER + (255,)) if waiting else accent + (150,),
                         width=2 if waiting else 1)
     sw = STATE_WORD.get(state, state)
     sww = int(d.textlength(sw, font=font(9, False)))

@@ -47,7 +47,9 @@ python3.12 -m venv .venv
 2. **After `start`**, within about 3 seconds:
    - two pixel fighters stand on the top edge of the Dock (Dock at the bottom), or at the bottom of the screen (Dock on the
      side or auto-hiding). They are 128 px tall by default; `python minis.py size 64` makes them small again.
-   - two small HUD plates and the scoreboard sit in the same strip.
+   - two small HUD plates sit at the left end of the strip and the scoreboard at the right end. On a Retina screen both
+     are drawn at 2x (sharp text) and nearly opaque, since they float over app windows rather than a taskbar. Move the
+     mouse over a plate and it fades and lets clicks through to the window under it.
    - a Taskbar Fighters icon in the menu bar. Left-click it: the fighter-select screen. Right-click (or Control-click): the
      menu (Pause, Flash effects, Plates, Rival mode, arena, Bout now, Restart, Quit).
      macOS hides menu-bar icons that do not fit: on a MacBook with a notch and a busy menu bar the icon can sit behind the

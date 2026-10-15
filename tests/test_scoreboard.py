@@ -88,7 +88,8 @@ class Hosted(Isolated):
         self.go(0.5)
         ov = self.board.ov
         self.assertTrue(ov.visible)
-        self.assertEqual({x for _, x in ov.presented}, {SB.left_x(CFG)})
+        want = SB.left_x(CFG) if not minis.plat.is_mac() else 2560 - SB.W - 12        # macOS: the right end of the strip
+        self.assertEqual({x for _, x in ov.presented}, {want})
         self.assertEqual(ov.presented[-1][0], (SB.W, SB.H))
         self.assertTrue(1392 <= ov.y and ov.y + SB.H <= 1440)
         n = len(ov.presented)

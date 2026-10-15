@@ -1170,6 +1170,16 @@ class Watchdog:
         return done
 
 
+def hud_density(shell):
+    """How many times finer the HUD (plates, scoreboard) is drawn: macOS draws it at the screen's backing scale (2 on
+    Retina, so the text is sharp); Windows and anything without the call: 1, i.e. unchanged."""
+    fn = getattr(shell, 'hud_density', None) if plat.is_mac() else None
+    try:
+        return max(1, min(3, int(fn()))) if fn else 1
+    except Exception:
+        return 1
+
+
 class Scoreboard:
     """The right-side widget (minis_core.scoreboard draws it): names + records per program, HP bars / result line /
     status, three buttons.  Lives in the director process; solid to the mouse only on its names, buttons and a visible
@@ -1193,6 +1203,20 @@ class Scoreboard:
         self.quit = False
         self.select = None                                # the open SelectWindow, or None
         self.stopper = ArenaStopper()
+        self.hud_k = 1                                    # HUD pixel density (2 on a Retina Mac)
+
+    def left(self):
+        """Logical x of the widget.  Windows: left of the icon cluster (SB.left_x).  macOS, unless scoreboard_x is set: the
+        right end of the strip, over the Dock's trash end, instead of the middle of the screen (the roam zone was
+        measured on a 2560 px Windows taskbar)."""
+        x = self.SB.left_x(self.cfg)
+        if plat.is_mac() and self.cfg.get('scoreboard_x') is None:
+            try:
+                sw = int(self.shell.screen_size()[0]) // max(1, self.g['scale'] if self.g else 1)
+                x = max(x, sw - self.SB.W - 12)
+            except Exception:
+                pass
+        return x
 
     def geometry(self):
         l, t, r, b, edge = self.shell.taskbar_rect()
@@ -1208,7 +1232,8 @@ class Scoreboard:
     def setup(self):
         from minis_core import control
         self.g = self.geometry()
-        self.ov = self.shell.Overlay('minis-scoreboard', self.SB.left_x(self.cfg) * self.g['scale'], self.g['y'], self.SB.W, self.SB.H,
+        self.hud_k = hud_density(self.shell)
+        self.ov = self.shell.Overlay('minis-scoreboard', self.left() * self.g['scale'], self.g['y'], self.SB.W, self.SB.H,
                                      scale=self.g['scale'], on_event=self.on_event,
                                      on_hittest=lambda x, y: self.SB.hit(x, y, self.state) is not None)
         self.ov.show(False)
@@ -1268,6 +1293,11 @@ class Scoreboard:
         model = select.Model(slots, rows, lu, lineup.characters(), select.Portraits(self.lib), now=self.mono())
         sc = max(2, self.g['scale'] * 2 if self.g else 2)
         centre = (self.cfg['zone'][0] + self.cfg['zone'][1]) // 2 * (self.g['scale'] if self.g else 1)
+        if plat.is_mac():                                  # the zone is a Windows-taskbar measurement: centre on the screen
+            try:
+                centre = int(self.shell.screen_size()[0]) // 2
+            except Exception:
+                pass
         self.select = SelectWindow(self.shell, model, self.mono, self.select_done, scale=sc, centre_x=centre)
 
     def select_done(self, model):
@@ -1312,7 +1342,7 @@ class Scoreboard:
             g2 = self.geometry()
             if g2['scale'] != self.g['scale'] or g2['y'] != self.g['y']:
                 self.ov.set_scale(g2['scale'])
-                self.ov.move(self.SB.left_x(self.cfg) * g2['scale'], g2['y'])
+                self.ov.move(self.left() * g2['scale'], g2['y'])
                 self.last['sig'] = None
             self.g = g2
             hidden = not g2['usable'] or self.shell.fullscreen_busy() or not self.cfg.get('scoreboard', True)
@@ -1336,7 +1366,7 @@ class Scoreboard:
             self.state = self.read_state()
             sig = self.SB.signature(self.state)
             if sig != self.last['sig']:
-                self.ov.present(self.SB.render(self.state), x=self.SB.left_x(self.cfg) * self.g['scale'])
+                self.ov.present(self.SB.render(self.state, k=self.hud_k), x=self.left() * self.g['scale'])
                 self.last['sig'] = sig
         elif not self.ov.visible and now - self.last['read'] >= 0.25:
             self.last['read'] = now
@@ -1386,6 +1416,7 @@ class Fighter:
         self.brain = None
         self.ov = None                # the fighter window (sprite + projectile), moves with the fighter
         self.pov = None               # the HUD plate window, fixed at the left end of the zone
+        self.hud_k = 1                # HUD pixel density (2 on a Retina Mac)
         self.g = None
         self.last = dict(tele=-1e9, bus=-1e9, top=-1e9, tb=-1e9, draw=-1e9, sig=None, pbus=-1e9, assign=-1e9, ctl=-1e9, pubkey=None, evkey=None,
                          psig=None, demo=None, notes=0)
@@ -1460,6 +1491,10 @@ class Fighter:
         self.pov = self.shell.Overlay(f'minis-{self.slot}-plate', self.plate_x(), self.g['plate_y'], cfgmod.PLATE_W, cfgmod.PLATE_H,
                                       scale=self.g['scale'], on_event=self.on_plate_event, on_timer=self.menu_tick)
         self.pov.show(False)
+        self.hud_k = hud_density(self.shell)
+        if plat.is_mac():                                  # over app windows, not a taskbar: see-through + click-through on hover
+            self.pov.fade_on_hover = True                  # (the fighter's own right-click menu stays)
+            self.pov.on_hittest = lambda x, y: False
         d = control.demo(self.control_path, now=self.wall())
         self.last['demo'] = d and d.get('id')                # a demo asked for before this process started is not replayed
 
@@ -1785,7 +1820,7 @@ class Fighter:
         psig = (name, self.brain.character, snap.state, render.shown_pct(snap.ctx_pct), render.shown_pct(snap.plan_pct), snap.plan_label,
                 render.blink_phase(snap, now))
         if psig != self.last['psig']:
-            self.pov.present(render.plate(self.brain.atlas, snap, now, name=name), x=self.plate_x())
+            self.pov.present(render.plate(self.brain.atlas, snap, now, name=name, k=self.hud_k), x=self.plate_x())
             self.last['psig'] = psig
 
     def _log_bout_notes(self):

@@ -12,7 +12,7 @@ Numbers, short program names and enums only: never window titles or content.
 from __future__ import annotations
 from PIL import Image, ImageDraw
 
-from .render import font, text, TRACK, AMBER, RED
+from .render import canvas, font, text, TRACK, AMBER, RED
 
 W, H = 190, 44
 BTN_Y0, BTN_Y1 = 23, 42                                   # 20 px tall at scale 1 (a 48 px taskbar band)
@@ -92,15 +92,16 @@ def signature(state):
             tuple(None if v is None else int(v) for v in (state.get('spark') or ())))
 
 
-def render(state) -> Image.Image:
+def render(state, k=1) -> Image.Image:
     """state: names {a,b}, records {a: (w, l), b: (w, l)}, mode, arena, paused, hp {a, b} | None, wins {a, b}, pressed,
-    result (str | None), hidden {slot: seconds left | inf}, spark [7 values | None]."""
-    key = signature(state)
+    result (str | None), hidden {slot: seconds left | inf}, spark [7 values | None].
+    k: pixel density (1 everywhere but a macOS Retina screen: drawn 2x and nearly opaque; the layout is the same)."""
+    key = signature(state) + ((k,) if k > 1 else ())
     im = _cache.get(key)
     if im is None:
         if len(_cache) > 64:
             _cache.clear()
-        im = _cache[key] = _render(state)
+        im = _cache[key] = _render(state, k)
     return im
 
 
@@ -108,10 +109,9 @@ def _caret(d, x, y, col):
     d.polygon([(x, y), (x + 4, y), (x + 2, y + 2)], fill=col)
 
 
-def _render(state):
-    im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    d.rounded_rectangle([0, 0, W - 1, H - 1], 5, fill=BG, outline=EDGE)
+def _render(state, k=1):
+    im, d = canvas(W, H, k)
+    d.rounded_rectangle([0, 0, W - 1, H - 1], 5, fill=BG if k == 1 else BG[:3] + (242,), outline=EDGE)
     names = state.get('names') or {}
     recs = state.get('records') or {}
     hp = state.get('hp') or {}

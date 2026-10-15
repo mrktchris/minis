@@ -303,6 +303,26 @@ class RealAppKit(unittest.TestCase):
         ok, detail = plat.shell().probe_overlay(0.5)
         self.assertTrue(ok, detail)
 
+    def test_a_2x_hud_image_shows_at_logical_size_and_plates_fade_under_the_mouse(self):
+        from minis_core import render
+        from minis_core.atlas import Atlas
+        from minis_core.telemetry import Snapshot
+        sh = plat.shell()
+        im = render.plate(Atlas('claude'), Snapshot('claude', 'working', 40.0), 0.0, k=2)
+        ov = sh.Overlay('minis-test-plate', 300, 300, cfgmod.PLATE_W, cfgmod.PLATE_H, on_hittest=lambda x, y: False)
+        try:
+            ov.fade_on_hover = True
+            ov.present(im)
+            self.assertEqual((ov.w, ov.h), (cfgmod.PLATE_W, cfgmod.PLATE_H))                 # points, not image pixels
+            self.assertEqual(ov._alpha.size, (cfgmod.PLATE_W, cfgmod.PLATE_H))
+            ov.update_ignore((310, 310))                                                     # over the plate
+            self.assertTrue(ov.panel.ignoresMouseEvents())
+            self.assertLess(ov.panel.alphaValue(), 0.5)
+            ov.update_ignore((10, 10))                                                       # elsewhere
+            self.assertEqual(ov.panel.alphaValue(), 1.0)
+        finally:
+            ov.close()
+
 
 if __name__ == '__main__':
     unittest.main()

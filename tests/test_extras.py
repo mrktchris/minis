@@ -30,6 +30,18 @@ class Plate(unittest.TestCase):
         self.assertEqual(render.plate(a, Snapshot('codex', 'idle', 40.0, None, '', resets_in='2d 4h'), 0.0).tobytes(),
                          render.plate(a, Snapshot('codex', 'idle', 40.0), 0.0).tobytes())          # no plan figure: no countdown
 
+    def test_retina_plate_and_scoreboard_are_2x_images_tagged_with_their_density(self):
+        a = Atlas('claude')
+        s = Snapshot('claude', 'working', 40.0, 12.0, 'wk', resets_in='2d 4h')
+        p1, p2 = render.plate(a, s, 0.0), render.plate(a, s, 0.0, k=2)
+        self.assertEqual(p2.size, (2 * render.PLATE_W, 2 * render.PLATE_H))
+        self.assertEqual((p1.info.get('density'), p2.info.get('density')), (None, 2))
+        self.assertGreater(p2.getpixel((render.PLATE_W, render.PLATE_H))[3], p1.getpixel((render.PLATE_W // 2, render.PLATE_H // 2))[3])
+        st = {'names': {'a': 'Claude', 'b': 'Codex'}, 'records': {'a': (1, 0), 'b': (0, 1)}}
+        b2 = SB.render(st, k=2)
+        self.assertEqual((b2.size, b2.info.get('density')), ((2 * SB.W, 2 * SB.H), 2))
+        self.assertIsNot(SB.render(st), b2)                                         # separate cache entries per density
+
     def test_waiting_is_loud_amber_border_and_word(self):
         a = Atlas('claude')
         w, i = render.plate(a, Snapshot('claude', 'waiting', 40.0), 0.0), render.plate(a, Snapshot('claude', 'idle', 40.0), 0.0)

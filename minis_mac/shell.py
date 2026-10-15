@@ -63,6 +63,8 @@ STATE_OFF = _k(AppKit, 'NSControlStateValueOff', _k(AppKit, 'NSOffState', 0))
 DEFAULT_MODE = _k(Foundation, 'NSDefaultRunLoopMode', 'kCFRunLoopDefaultMode')
 COMMON_MODES = _k(Foundation, 'NSRunLoopCommonModes', 'kCFRunLoopCommonModes')
 FILTER_NEAREST = _k(Quartz, 'kCAFilterNearest', 'nearest')
+FILTER_LINEAR = _k(Quartz, 'kCAFilterLinear', 'linear')
+FADED_ALPHA = 0.18                                     # a fade_on_hover window under the mouse: see-through, click-through
 CG_ONSCREEN = _k(Quartz, 'kCGWindowListOptionOnScreenOnly', 1)
 CG_NO_DESKTOP = _k(Quartz, 'kCGWindowListExcludeDesktopElements', 16)
 CG_NULL_WINDOW = _k(Quartz, 'kCGNullWindowID', 0)
@@ -259,6 +261,14 @@ def taskbar_rect():
 
 def taskbar_autohide():
     return False                                      # an auto-hiding Dock falls back to the visible frame's bottom
+
+
+def hud_density():
+    """The menu-bar screen's backing scale (2 on Retina): the HUD (plates, scoreboard) is drawn that many times finer."""
+    try:
+        return max(1, min(3, int(round(float(_screens()[0].backingScaleFactor())))))
+    except Exception:
+        return 1
 
 
 def screen_size():
@@ -494,6 +504,8 @@ class Overlay:
         self._dragging = False
         self._alpha = None
         self._ignoring = None
+        self.fade_on_hover = False                     # plates: fade and let clicks through while the mouse is over them
+        self._faded = False
         self._timer = None
         self._closed = False
         self.x, self.y, self.w, self.h = int(x), int(y), int(w) * self.scale, int(h) * self.scale
@@ -556,15 +568,19 @@ class Overlay:
         moved = x is not None and int(x) != self.x
         if x is not None:
             self.x = int(x)
-        w, h = img.width * self.scale, img.height * self.scale
+        dens = max(1, int(getattr(img, 'info', {}).get('density', 1)))   # a HUD image drawn k times finer (Retina)
+        lw, lh = img.width // dens, img.height // dens
+        w, h = lw * self.scale, lh * self.scale
         resized = (w, h) != (self.w, self.h)
         self.w, self.h = w, h
-        self._alpha = img.getchannel('A') if img.mode == 'RGBA' else None
+        a = img.getchannel('A') if img.mode == 'RGBA' else None
+        self._alpha = a.reduce(dens) if a is not None and dens > 1 else a      # hit-testing stays in logical px
         cg = cgimage(img)
 
         def apply():
             if moved or resized:
                 self._set_frame()
+            self.layer.setMinificationFilter_(FILTER_LINEAR if dens > 1 else FILTER_NEAREST)   # a 2x HUD on a 1x screen
             self.layer.setContents_(cg)
         _no_anim(apply)
         return True
@@ -576,13 +592,19 @@ class Overlay:
     def update_ignore(self, mouse):
         if self._closed:
             return
+        rect = (self.x, self.y, self.x + self.w, self.y + self.h)
         if self._dragging:
             want = False
         else:
-            want = not G.window_solid_at(mouse, (self.x, self.y, self.x + self.w, self.y + self.h), self.scale, self._alpha, self.on_hittest)
+            want = not G.window_solid_at(mouse, rect, self.scale, self._alpha, self.on_hittest)
         if want != self._ignoring:
             self.panel.setIgnoresMouseEvents_(want)
             self._ignoring = want
+        if self.fade_on_hover:
+            fade = bool(want and mouse is not None and rect[0] <= mouse[0] < rect[2] and rect[1] <= mouse[1] < rect[3])
+            if fade != self._faded:
+                self.panel.setAlphaValue_(FADED_ALPHA if fade else 1.0)
+                self._faded = fade
 
     def reassert_topmost(self):
         if self.visible and not self._closed:
