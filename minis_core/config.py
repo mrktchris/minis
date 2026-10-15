@@ -56,6 +56,7 @@ DEFAULTS = {
     "match_min_s": 180,                    # both awake: a best-of-3 match this often (on top of clashes / spars)
     "match_max_s": 360,
     "scoreboard": True,                    # the right-side widget (director process)
+    "tray_icon": True,                     # the notification-area icon (director process): left click = select, right click = menu
     "scoreboard_x": None,                  # screen x of the widget; None = just left of the icon cluster (zone end + 36 - width)
     "arena_monitor": None,                 # monitor index for the Arena button / menu item; None = the one non-primary monitor
     "arena_fps": 30,

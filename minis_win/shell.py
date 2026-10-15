@@ -4,6 +4,7 @@ re-raises itself, so the owner must call reassert_topmost() every <= 250 ms."""
 from __future__ import annotations
 import ctypes
 from ctypes import wintypes as wt
+from pathlib import Path
 from PIL import Image, ImageChops
 
 user32 = ctypes.WinDLL('user32', use_last_error=True)
@@ -113,6 +114,44 @@ _instances = {}
 _class_registered = False
 _wndproc_ref = None
 
+# ---------------------------------------------------------------- the app icon (assets/icon/minis.ico)
+ICON_PATH = Path(__file__).resolve().parent.parent / 'assets' / 'icon' / 'minis.ico'
+user32.LoadImageW.argtypes = [wt.HINSTANCE, wt.LPCWSTR, wt.UINT, ctypes.c_int, ctypes.c_int, wt.UINT]
+user32.LoadImageW.restype = wt.HANDLE
+_class_icons = None
+
+
+def load_icon(path=None, size=16):
+    """HICON of `size` px from the .ico (Windows picks the matching entry; every size is hand-drawn), or None."""
+    p = Path(path) if path else ICON_PATH
+    if not p.exists():
+        return None
+    # IMAGE_ICON, LR_LOADFROMFILE
+    return user32.LoadImageW(None, str(p), 1, int(size), int(size), 0x10) or None
+
+
+def class_icons():
+    """(hIcon, hIconSm) for window classes, loaded once at the system icon sizes (kept for the process lifetime:
+    a class icon must outlive every window of the class).  (None, None) when the .ico is missing."""
+    global _class_icons
+    if _class_icons is None:
+        try:
+            big = user32.GetSystemMetrics(11) or 32                     # SM_CXICON
+            small = user32.GetSystemMetrics(49) or 16                   # SM_CXSMICON
+            _class_icons = (load_icon(None, big), load_icon(None, small))
+        except Exception:
+            _class_icons = (None, None)
+    return _class_icons
+
+
+def make_tray(tip, flags, on_choice, on_left, log=None, icon_path=None):
+    """The director's notification-area icon (minis_win.tray), created and added.  Tests never reach this: their fake
+    shells have no make_tray."""
+    from minis_win import tray
+    t = tray.Tray(tray.Win32Api(), str(icon_path or ICON_PATH), tip, flags, on_choice, on_left, log=log)
+    t.create()
+    return t
+
 
 def _wndproc(hwnd, msg, wparam, lparam):
     ov = _instances.get(hwnd)
@@ -188,6 +227,7 @@ def _register():
     wc.lpfnWndProc = _wndproc_ref
     wc.hInstance = kernel32.GetModuleHandleW(None)
     wc.lpszClassName = CLASS_NAME
+    wc.hIcon, wc.hIconSm = class_icons()              # alt-tab / task manager; fighters are tool windows (no taskbar button)
     user32.RegisterClassExW(ctypes.byref(wc))
     _class_registered = True
 

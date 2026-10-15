@@ -1,4 +1,4 @@
-# RESULT - Claude & Codex pixel fighters (2026-10-12)
+# RESULT - Taskbar Fighters build log (started 2026-10-12 as "Claude & Codex pixel fighters")
 
 Who built it: **Claude wrote this**, as the failover. The planned writer was Codex (BRIEF.md), but the headless Codex CLI rejected its model on this ChatGPT login
 (`gpt-6.1-sol` "not supported"; two probes with other models hung), nothing was started in the Codex app, and the author asked for it finished. Under the pairing rules
@@ -199,7 +199,7 @@ anchor + offset, `hand` from the move's `hand` key, flipped for left-facing.
 | freeze backdrop never hits disk | test: a 20 s freeze arena with shatter / holes under a temp cwd: no new file under the project, the data dir, or the cwd |
 | arena window | real window test: full synthetic rect, layered + topmost, `WM_NCHITTEST` HTTRANSPARENT on the stage and HTCLIENT on EXIT, ESC reaches `on_key`, a click on EXIT reaches `on_click`, premultiplied write + dirty flush, shake moves the window, PrintWindow capture of it is 640x360 |
 | live taskbar | `stop`, `start`, `selftest-gui --keep`: PASS (3,265 px visible incl. the scoreboard; 0 right after a raise, 3,265 after the tick) |
-| live arena (monitor 2, no freeze, 45 s) | captures of the arena's OWN window only (PrintWindow): `arena-1-entry-intro.png` (outside the repo; `docs/img/arena-fight.png` is the annotated `arena-2-fight.png`) (round 1 start, HP bars, EXIT), `arena-2-fight.png` (K.O. text, explosion, knockdown), `arena-3-fight.png` (round 2 clinch, afterimage), `arena-4-late.png`; `scoreboard-live.png` (widget in ARENA mode with *Exit arena*).  Heartbeats: round 1 hp 76/100 -> 16/64, round 2 88/76; the arena left on its own at 45 s and the taskbar fighters came back (`status`: arena stopped, a + b running) |
+| live arena (monitor 2, no freeze, 45 s) | captures of the arena's OWN window only (PrintWindow): `arena-1-entry-intro.png` (outside the repo; `docs/img/arena-fight.png`, removed in the V6 docs refresh and kept in git history, was the annotated `arena-2-fight.png`) (round 1 start, HP bars, EXIT), `arena-2-fight.png` (K.O. text, explosion, knockdown), `arena-3-fight.png` (round 2 clinch, afterimage), `arena-4-late.png`; `scoreboard-live.png` (widget in ARENA mode with *Exit arena*).  Heartbeats: round 1 hp 76/100 -> 16/64, round 2 88/76; the arena left on its own at 45 s and the taskbar fighters came back (`status`: arena stopped, a + b running) |
 | CPU | arena process self-measured 13.9 % of one core at 30 fps in the first 2 s -> dropped to 20 fps; headless 1920x1080 compositing is 2.4 ms / frame (7 % at 30 fps) before the window blit |
 | every ultimate plays in rounds, both facings | 7 characters x 2 sides x 40 seeds: each ultimate's `fx` list (`*_charge` / `*_orb` + the beam / burst) appears in the match timeline for the attacking side; `qa/previews/13-hd-ultimates.png` shows all 7 at HD with effects facing right and left |
 
@@ -262,7 +262,7 @@ appeared; the kamehameha played as one static frame set with no extension or tra
 | beams | growing beam keeps its anchor edge on the hand in both facings while the far end extends 16 -> 256 px, holds, retracts and fades; `reach` 256 at RES 2 / 128 on the taskbar; flash 0.6 on the hit frame and 0 after; real `kamehameha` (art: grow 56 -> 256 over 100 ms, 7 frames, flash) traced at 112 / 312 / 512 px in the arena player |
 | arena beam contact | test: Claude's beam fired from range (>= REACH_PX, <= reach + 8), 40 damage, knockdown, knockback > 900 px/s along the beam, both bodies' clocks stand still for the hitstop, flash > 0, impact burst present, the compositor writes the flash as a full frame and clears it the next |
 | live taskbar | `stop`, `start`, `selftest-gui --keep`: PASS (2,932 px visible, 2,895 after the raise tick); fighters left RUNNING |
-| live arena, monitor 2, PrintWindow of its own window only | `python tools/arena_capture.py --monitor 2 --out <dir> --prefix v5` (the annotated copies are `docs/img/v5-kamehameha.png`, `v5-flash.png`, `v5-air.png`): `v5-kamehameha.png` (Claude's beam 13 ms after it fires: the head 56 px out of the hand, mid-extension, fired from range on the floor), `v5-rasengan_burst.png` (Codex's ultimate effect), `v5-flash.png` (the white frame: the whole overlay at 60 %), `v5-air.png` (both fighters airborne mid-strike), `v5-knockdown.png` (the defender going down under the impact burst), `v5-last.png`; `v5-match.gif` = the taskbar match through the real planner (484 frames) |
+| live arena, monitor 2, PrintWindow of its own window only | `python tools/arena_capture.py --monitor 2 --out <dir> --prefix v5` (the annotated copies `docs/img/v5-kamehameha.png`, `v5-flash.png`, `v5-air.png` were removed in the V6 docs refresh; they are in git history): `v5-kamehameha.png` (Claude's beam 13 ms after it fires: the head 56 px out of the hand, mid-extension, fired from range on the floor), `v5-rasengan_burst.png` (Codex's ultimate effect), `v5-flash.png` (the white frame: the whole overlay at 60 %), `v5-air.png` (both fighters airborne mid-strike), `v5-knockdown.png` (the defender going down under the impact burst), `v5-last.png`; `v5-match.gif` = the taskbar match through the real planner (484 frames) |
 | what the captures fixed | the first live run showed the fighters standing on a window top inside the HUD band, a beam knockback punting the defender off the top edge, the hover pinned under the HUD, a sprite-only flash and round-1 `ko_stars` looping into round 2: fixed (MIN_PLATFORM_Y, ceiling, flat beam knockback, floor-relative hover, full-window flash, fades) and re-captured |
 
 ### Not done / not verified
@@ -376,3 +376,38 @@ are not installed on this PC, so their rules could only be checked against the s
   the live and two-process runs used shortened timers.
 - Arenas were started on monitor 2 by someone else during this session (06:55 and 07:01, `arena.log`); the `claude > codex` arena
   record at 06:56 is theirs, not from any test here.
+
+---
+
+## V6 (2026-10-15): armed roster, fighter select, fight feel, scoreboard and safety fixes
+
+Summary of commit `744d818` (details in [CHANGELOG.md](CHANGELOG.md) and the commit message).
+
+- Art: the seven program fighters redrawn as armed, taller characters plus six selectable extras (13 in all), real HD, weapon smears,
+  impact frames transparent outside the figure.
+- Fighter select: `control.json` lineup, `minis.py fighters set|pin|auto|reset`, `pick`, `skin`, menu submenus, the select screen.
+- Fight feel: 30 fps fights, KO finisher beat 3.4 s, ultimates about 0.3 per match, spacing from sprite reach, comebacks, task-finished
+  super; arena pacing (KO rounds 52% -> 85%).
+- Resolved from the V5.1 list above: the scoreboard no longer shortens names with a dot (short labels such as `Bot`, `Claude`), and
+  W-L is kept per program (`record.json` `programs`), so generic-skin programs no longer share one line.
+
+### Verified
+
+| claim | evidence |
+| --- | --- |
+| unit suite at `744d818` | clean detached worktree, `python -m unittest discover -s tests`: **398 tests OK, 11 skipped** (the opt-in process tests), Python 3.14 |
+| Python 3.12 | the suite under `py -3.12` passes too (run against the working tree; the only failure was a test of uncommitted tray work being written in parallel, not V6 code) |
+| docs images | every image in `docs/img/` rendered by `tools/doc_images.py` from the real renderer, planner, select screen, scoreboard and arena (headless, synthetic desktop, temp data folder), and viewed one by one |
+
+### Not done / known gaps
+
+- The arena does not get the task-finished super boost the taskbar has.
+- Fighters stand about 11 px above the taskbar's top edge (the 64 px cell's top rows sit over the desktop); long weapons tilt to fit
+  the cell.
+- Every signature super asks for an effect named after the move (`reverse`, `sudo`, `twin_flash` ...). None of those names has art on
+  the sheets (the sheets have e.g. `reverse_burst`, `sudo_burst`, not wired to the move), so the engine plays its procedural
+  stand-in, a beam-like burst with a shake. Seen in an offline render of the move sheet (`tools/doc_images.py` leaves it out of
+  `moves-*.png`); not checked on the live taskbar.
+- No live taskbar capture was taken for the 2026-10-15 docs: Taskbar Fighters was not running then, and the docs work does not start
+  or stop it. The hero images are offline renders and say so; `tools/taskbar_capture.py` + `tools/doc_images.py --annotate-live`
+  make the live version.

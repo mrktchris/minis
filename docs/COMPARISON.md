@@ -1,4 +1,4 @@
-# Minis vs. the field (research pass, 2026-10-13)
+# Taskbar Fighters (minis) vs. the field (research pass, 2026-10-13)
 
 Read-only research against official repos/pages. Stars as fetched today; GitHub pages rarely show a last-commit date, so "activity" is what the page or press stated. Ideas only; no code or art copied, licences noted.
 

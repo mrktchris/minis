@@ -1,374 +1,326 @@
-# minis
+# <img src="assets/icon/minis-256.png" alt="" width="40" height="40" align="top"> Taskbar Fighters
 
-Pixel-art fighters for your AI coding agents, living on the Windows taskbar.
+**Your AI coding tools, as pixel fighters on the Windows 11 taskbar - and they fight based on what those tools are really doing.**
 
-![Live taskbar capture: two fighters sparring in the empty stretch of the Windows 11 taskbar](docs/img/hero-taskbar.gif)
+![Two fighters, Claude Code and Codex, in a best-of-3 bout in the empty stretch of the taskbar, with HUD plates on the left and the scoreboard on the right](docs/img/hero-bout.gif)
 
-Small pixel fighters stand in the empty part of the Windows 11 taskbar. A director notices which AI programs you
-are using (Claude Code, Codex, Cursor, Gemini, Ollama, LM Studio, aider, opencode, Windsurf), gives at most two of
-them a fighter, and the two spar, hand work over, console each other and fight best-of-3 matches based on what
-those programs are really doing. Each fighter carries a fighting-game HUD plate with real numbers when they exist.
+<sub>Rendered offline by the app's own planner and renderer with DEMO numbers (`python tools/doc_images.py`). The command-line tool is
+`minis.py`; "minis" is the internal short name you will see in commands, folders and the data directory.</sub>
 
-Everything is visual. It reads numbers, it never touches your agents, your windows or the network.
+> **Install with your AI agent.** Paste this into Claude Code, Codex, Cursor or any coding agent:
+>
+> ```
+> Install and run Taskbar Fighters from https://github.com/mrktchris/taskbar-fighters - follow AGENTS.md.
+> ```
+>
+> The agent follows [AGENTS.md](AGENTS.md): it checks your PC, installs one Python package, runs the tests, starts the fighters and
+> asks you before adding a startup entry or a Start-menu shortcut. Prefer to do it yourself? See [Install and run](#install-and-run).
+
+## What it does
+
+Every AI coding program running on your PC - Claude Code, Codex, Gemini, Cursor, Ollama, LM Studio, Copilot CLI and more - is
+detected automatically and gets a pixel fighter. At most two stand in the empty part of your taskbar. They spar while both
+programs are idle, clash while one is working, hand work over when a task finishes, get knocked out when a program hits its
+context limit, and fight best-of-3 matches with HP bars, banners and one anime-style ultimate each. Each fighter has a small HUD
+plate with the program's state and context fill, and a scoreboard keeps the record.
+
+It is all visual. It reads numbers from local files and the process table; it never touches your agents, your windows or the
+network.
+
+![The taskbar strip annotated: HUD plates on the left, two fighters in the middle, the scoreboard on the right](docs/img/hero-taskbar.png)
 
 ## Features
 
-- **Auto-detection**: Claude Code and Codex from their local session transcripts (numbers and enums only), eleven
-  other programs from the process table. No hooks, no config edits, nothing installed into your agents.
-  `python minis.py detect` shows what is seen right now and how.
-- **Two slots, a director**: at most two fighters at a time, assigned by recency, kept stable; a program that vanishes
-  keeps its slot for a few seconds. **Dormant partner** (V5.1): the most recently used other program keeps its slot
-  for 24 h after it went quiet, asleep and dimmed, until a different program becomes active; with nothing else to
-  show, a generic **sparring bot** takes the empty side, so one fighter is never alone on the stage.
-- **Live HUD plate** per fighter: program name, state (`working idle done waiting? sleeping limit`), context fill of
-  the active session as a 10-segment bar, and a plan figure with a reset countdown when it can be trusted.
-- **Bouts from usage**: clash when either is working, spar or ranged duel when neither is, a handoff when one
-  finishes a task, a KO and a consoling visit when one hits its limit. **Rival mode** (V5.1, on by default): a
-  sleeping partner is woken every 8-15 min for a best-of-3 and goes back to sleep; while you are working, a short
-  exchange every 3-6 min instead. The plate keeps saying `sleeping` throughout.
-- **Matches**: best-of-3 rounds with HP, `ROUND / FIGHT! / K.O. / WINNER` banners, hit, block, dust and KO effects,
-  and one anime-homage ultimate per character. Winners are drawn by a health score (`decided`) or evenly (`random`).
-- **Fighter select** (V6): pick which program fights on each side (or leave it on auto) and what each program looks
-  like (any character on disk), from the CLI, the right-click menu or a Smash-style select screen above the taskbar.
-- **Scoreboard widget**: short names and W-L per program, readable HP bars during a match, a plain result line after
-  it ("CLAUDE WINS 2-1"), a 7-day context sparkline, three 20 px buttons; click a name to pick that side's fighter.
-- **Arena mode**: a full-monitor click-through overlay where the HD fighters jump between the top edges of your
-  windows, crack and shatter them, throw letters and shake the screen. All of it is drawn on the overlay; no real
-  window is moved, focused or closed.
-- **Pause**, **hide plates**, **drag**, double-click for a victory pose, a right-click menu, pupils that follow the
-  cursor, a dizzy spell after a fast drag, Shift-drag to throw.
-- **Seven original characters**, 48 moves each, built by a 2-bone rig from pose data; the V5.1 redesign gives each
-  one a silhouette feature, an accent colour and an HD rim light. Every frame is generated and reproducible with one
-  command.
-- **Choreographed fights** (V5): a seeded no-repeat planner picks openers, combos, defence, spacing, specials, a super
-  when the meter fills and one ultimate per match; beams extend from the hands, hits freeze both fighters for a
-  hitstop, and an ultimate landing flashes the frame white.
+- **Auto-detect.** Claude Code and Codex from their local session transcripts (numbers and enums only); a dozen other programs
+  from the process table. No hooks, no config edits, nothing installed into your agents. `python minis.py detect` shows what is
+  seen right now and how.
+- **Thirteen armed fighters (V6).** One per program (Claude, Codex, Gemini, Cursor, Ollama, LM Studio, and a generic Agent for
+  everything else) plus six selectable extras (Kunoichi, Knight, Barbarian, Monk, Nomad, Oni). Every frame is generated by a rig
+  from pose data.
+- **Battles from real usage.** Clash when either program is working, spar or ranged duel when neither is, a handoff when one
+  finishes a task, a KO and a consoling visit when one hits its limit, timed best-of-3 matches.
+- **HUD plates.** Program name, state (`working idle done waiting? sleeping limit`), a 10-segment context meter and the context
+  %, plus a plan figure with a reset countdown when it can be trusted. Unknown is always `-`.
+- **Scoreboard.** Names and W-L per program, HP bars during a match, a result line ("CLAUDE WINS 2-1"), a 7-day context
+  sparkline, and Pause / Arena / Bout now buttons.
+- **Rounds and winners.** Best-of-3, 100 HP, supers from a meter, one ultimate per match, impact frames and a KO finisher.
+  Winners are weighted by a health score (`decided`) or a coin flip (`random`).
+- **Rival mode.** A sleeping partner (a program that went quiet, or the sparring bot) is woken now and then for a match, then
+  goes back to sleep. The plate keeps saying `sleeping`.
+- **Fighter select.** Pick which program fights on each side, and which character any program wears, from a Smash-style select
+  screen, the right-click menu or the CLI.
+- **Arena mode.** The fight breaks out onto a whole monitor: fighters jump between the top edges of your windows, crack and
+  "shatter" them, throw letters and explode. Visual only - nothing real happens to your windows.
+- **Tray icon and Start-menu shortcut.** Left-click the tray icon for fighter select, right-click for the menu (Restart, Quit);
+  `python minis.py shortcut` adds Taskbar Fighters to Start so you can pin it.
+- **Controls.** Pause, hide plates, flash effects on/off (no white flashes or impact frames for anyone who dislikes strobing),
+  hide a fighter, drag, double-click for a victory pose, Shift-drag to throw.
 
-## Screenshots
+## The roster
 
-![Live taskbar with callouts: HUD plate, slot A fighter, slot B fighter asleep, plan figure, start button untouched](docs/img/taskbar-live.png)
+![All 13 V6 fighters at 4x: the seven program characters with the programs they play and their weapons, and the six selectable extras](docs/img/roster.png)
 
-![HUD plates for every program and state, with callouts explaining each state row](docs/img/plates.png)
+| fighter | plays | weapon | strike / special / super / ultimate |
+| --- | --- | --- | --- |
+| Claude | Claude Code | katana | spin_kick / slash_wave / reverse / kamehameha |
+| Codex | Codex (CLI and desktop app) | twin kunai | ground_pound / deploy / sudo / rasengan |
+| Gemini | Gemini (app and CLI) | twin short blades | spin_kick / star_shot / twin_flash / getsuga |
+| Cursor | Cursor | spear | ground_pound / tab_bolt / autocomplete / odm_strike |
+| Ollama | Ollama | staff | ground_pound / pull_shot / serve / wind_scar |
+| LM Studio | LM Studio | energy katana | spin_kick / load_wave / hot_swap / bankai |
+| Agent | aider, opencode, Windsurf, Copilot CLI, Qwen Code, Perplexity, Grok, the sparring bot | bow and dagger | spin_kick / energy_bolt / overclock / spirit_bomb |
+| Kunoichi, Knight, Barbarian, Monk, Nomad, Oni | selectable extras: any program can wear them | fans, greatsword, axe, tonfa, chakrams, kanabo | see [MOVELIST.md](MOVELIST.md) |
 
-![V5.1 roster: seven redesigned characters, idle, victory and ultimate frames, with a one-line description each](docs/img/v5-roster.png)
+### Moves
 
-![Arena capture: Claude's kamehameha 13 ms after release, the beam head mid-extension, callouts on the grow effect](docs/img/v5-kamehameha.png)
+Every character has the full shared move set (locomotion, six strikes, defence, reactions, emotes, states) plus its own strike,
+special, super and ultimate. [MOVELIST.md](MOVELIST.md) lists every move, trigger and timing.
 
-![Arena capture: the one-frame white flash of a beam ultimate landing, K.O. banner, beam at full extent](docs/img/v5-flash.png)
+![Claude's signature strike, special, super and ultimate frame by frame with hold times, contact frames and smears](docs/img/moves-claude.png)
 
-![Arena capture: an air-to-air exchange, both fighters off the floor, a jump-in kick landing](docs/img/v5-air.png)
+<details><summary>Codex and Knight</summary>
 
-![Beam and energy FX reel: every beam, wave and burst at 4x with real timings](docs/img/v5-beams.gif)
+![Codex's signature moves frame by frame](docs/img/moves-codex.png)
 
-![HD ultimates sheet: every character's ultimate with effects, facing right and left](docs/img/ultimates.png)
+![Knight's signature moves frame by frame](docs/img/moves-knight.png)
 
-![Arena mode: HP bars, K.O. banner, explosion and knockdown on a black stage, EXIT button top right](docs/img/arena-fight.png)
+</details>
 
-The taskbar, plate, ultimates and arena-K.O. images were captured before the V5.1 costume redesign; the roster sheet
-and the three arena captures are current. The arena captures are PrintWindow shots of the overlay's own window (so
-the stage is black), taken by `tools/arena_capture.py`; nothing on the desktop is read.
+### Impact frames and the KO finisher
 
-![Scoreboard widget: W-L record, mode, sparkline, winners switch and three buttons](docs/img/scoreboard.png)
+![Six consecutive frames around a KO: one normal frame, then flat silhouettes and radial lines for about 130 ms](docs/img/impact-frames.png)
 
-![Before and after the animation rework: jab and roundhouse frames with their timings](docs/img/before-after.png)
+![The KO finisher in eight labelled frames: the deciding blow, the freeze, the slow-motion fall, the winner pose](docs/img/ko-finisher.png)
 
-## How it works
+### V5 -> V6
 
-**Detection -> director -> slots.** `minis.py start` launches three windowless processes: a director and fighter slots
-`a` (left half) and `b` (right half).
+![Side by side, each program character in V5 and in V6: idle and the signature strike's contact frame](docs/img/before-after.png)
 
-- Sources (`minis_core/sources.py`) poll every 2 s. Claude Code and Codex are read from the newest local transcript
-  (`~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/.../rollout-*.jsonl`); the other programs are matched from the
-  process table through ctypes and are *working* while their process tree uses more than 15% of one core.
-- The director (`minis_core/director.py`) picks at most two sources by recency and writes `assign.json` atomically.
-  A slot keeps its source until another one is active **and** its own has been idle for more than 60 s. A source
-  that stops being reported stays a candidate for `dormant_hours` (24) after its last activity, so the slot keeps it
-  asleep (`"dormant": true`); what the director has seen survives a restart in `seen.json` (source id, last
-  activity, character, program - nothing else). A lone fighter gets the `sparring` pseudo-source as a partner.
-- Each slot process runs a fighter (`minis.py`, `minis_core/brain.py`), draws a per-pixel-alpha layered window over
-  the taskbar, and talks to the other slot through one small JSON file each (`bus/a.json`, `bus/b.json`). Both sides
-  compute the same bout timeline from the same invite, so a strike's contact frame and the other fighter's hit
-  reaction land on the same instant without a round trip.
+## HUD plates
 
-**Telemetry trust rules.** Context = tokens of the newest assistant line over the model's context window. A tool
-call unanswered for 45 s shows `waiting?`; 10 quiet minutes is `idle`; 30 minutes is `sleeping`. A plan figure is
-shown only when its limit id, value and reset time all check out and the reset is still in the future; a window that
-expires while the file sits still disappears on time. Unknown is always `-`, never a guess, and a "task % complete"
-is not faked because it cannot be measured. Full rules: the *Telemetry* section further down.
+![The HUD plate annotated (program name, state word, context meter, numbers) and every state with an explanation](docs/img/plates.png)
 
-**Privacy guarantees.**
+Context = tokens of the newest assistant line over the model's context window. A tool call unanswered for 45 s shows `waiting?`
+(amber); 10 quiet minutes is `idle`; 30 minutes is `sleeping`. A plan figure appears only when its limit id, value and reset time
+all check out. Process-detected programs have no numbers (`ctx -`).
 
-- Only numbers and enums leave the parsers. No prompts, titles, file names or project names are read into the
-  display, logged, stored or sent anywhere. Logs carry exception types, error numbers and `file:line` of this
-  program only.
-- No network access of any kind.
-- Nothing in your agents' settings, hooks, status lines or config files is touched.
-- The arena reads window rectangles (`EnumWindows` / `GetWindowRect`), never titles, and never sends input. The
-  optional `--freeze` backdrop is a screenshot held only in that process's memory; it is never written to disk.
-- Files written: `%LOCALAPPDATA%\minis\` (bus files, `assign.json`, `control.json`, `record.json`, `history.json`,
-  pid files, small rotating logs) and, for previews and the self-test, this folder.
-- `stop` only ends processes whose exact command line it can prove are its own (an absolute path to this `minis.py`).
-- The director restarts a fighter slot that died, only one it saw running, only after proving the relaunch command is
-  its own, at most three times in ten minutes.
+## Scoreboard
+
+![The scoreboard in five states: plain, during a match, after a match, a fighter hidden, paused](docs/img/scoreboard.png)
+
+## Fighter select
+
+![The select screen: WHO row, LOOK grid and the VS card, with how to open it and the CLI equivalents](docs/img/select.png)
+
+- **Open it:** right-click a fighter > *Select fighters...*, or click a name on the scoreboard (opens that side only).
+- **Pick** a program for a side and it stays there: live when detected, asleep and dimmed when not. A side on `auto` follows the
+  director. **Look**: any program can wear any character; the plate still names the program.
+- Arrows + Enter, Backspace to go back, Esc or a click elsewhere cancels; mouse clicks and the wheel work too. It is the only
+  window that takes keyboard focus, and only while open.
+
+## Arena mode
+
+![Arena mode on a synthetic desktop: fighters on window ledges, a shattered window with flying letters, an ultimate exploding, the winner banner](docs/img/arena.png)
+
+![Arena mode animated, on a synthetic desktop](docs/img/arena.gif)
+
+`python minis.py arena [--monitor N] [--seconds S]`, the scoreboard's Arena button, or the right-click menu. HD fighters (~170 px)
+jump, air-dash and hover between the top edges of your windows; a knock-back into a window cracks it, three cracks shatter it.
+**Visual only:** the arena is one click-through overlay that reads window rectangles (never titles) and draws on itself. No real
+window is moved, focused, closed or typed into. ESC, the EXIT button, `python minis.py arena stop` or the scoreboard end it. The
+images above are headless renders on a desktop drawn for the picture, not a screen capture.
 
 ## Install and run
 
-Requirements: Windows 11 with the taskbar at the bottom, Python 3.14 (what it was built and tested on) and Pillow.
-Nothing else; no pip packages beyond Pillow, no services, no startup entries.
+**Requirements:** Windows 11 (tested; Windows 10 should work but is untested) with the taskbar at the bottom, Python 3.12 or newer (tested on 3.12 and 3.14), and Pillow.
+Nothing else: no services, no network, no startup entries unless you add one.
 
 ```
-git clone https://github.com/mrktchris/minis
-cd minis
-pip install pillow
+git clone https://github.com/mrktchris/taskbar-fighters
+cd taskbar-fighters
+python -m pip install -r requirements.txt
 python minis.py start
+python minis.py status
 ```
 
-```
-python minis.py start            director + fighter slots a and b (three processes, no console windows); after ~3 s it
-                                 prints what is on screen ("a: Claude Code, b: Sparring bot asleep") or why nothing is
-python minis.py stop             stops only the PIDs it recorded itself, after checking each one's command line
-python minis.py status           one plain line first (running?, who is on which side, rival mode), then the details
-python minis.py pause | resume   freeze every fighter on one frame (plates keep updating) / animate again
-python minis.py plates on|off    show or hide both HUD plates
-python minis.py winners decided|random   how match winners are drawn (default: decided)
-python minis.py demo [spar|clash|ranged|match]   start one bout now
-python minis.py rival on|off     rival mode: wake a sleeping partner (or the sparring bot) for a match now and then
-python minis.py flash on|off     white flashes and impact frames on big hits (off: never a flash, for anyone who dislikes strobing)
-python minis.py fighters         programs seen and their state, every character, the current lineup
-python minis.py fighters set a|b <program|character>   a program: keep it on that side; a character: that side's look
-python minis.py fighters pin a|b <program>             keep a program on that side, asleep when it is not detected
-python minis.py fighters auto    both sides back to auto (looks kept);  `fighters reset` also forgets every look
-python minis.py pick a|b <program>|auto                alias of `fighters pin` (or auto for one side)
-python minis.py skin <program> <character>|default     draw a program as another character, e.g. `skin grok codex`
-python minis.py show [a|b]       bring back a hidden fighter (the scoreboard shows "B hidden 52m [show]" meanwhile)
-python minis.py detect           which known AI programs the sources see right now, and how (names and numbers only)
-python minis.py monitors         list monitors for the arena
-python minis.py arena [--monitor N] [--freeze] [--seconds S]   arena mode (default: the Arena button's monitor); `arena stop`
-python minis.py selftest-gui     real-desktop check: both windows visible over the taskbar, survive a taskbar raise
-python -m unittest discover -s tests          384 tests (11 skipped unless MINIS_INTEGRATION=1)
-```
+`start` launches three windowless processes (a director and fighter slots `a` and `b`) and after about 3 s prints what is on
+screen, for example `a: Claude Code, b: Sparring bot asleep`.
 
-Right-click a fighter or its plate for a real Windows menu:
+**Start at logon (optional).** `python minis.py print-startup` prints - never runs - a `schtasks` command and a shortcut target
+you can use; it also prints the command to remove the task again.
 
-- **Fighter (left/right side)** submenu: *Auto* (checked while the director chooses), then every program with its state
-  (`working`, `idle`, `asleep`, `stand-in` ...); never-seen programs are greyed.
-- **Look (program)** submenu: *Default (its own character)* and every character on disk, the current one checked.
+**Stop and uninstall.** `python minis.py stop` ends only the processes it started (it checks each one's exact command line).
+`python minis.py shortcut remove` deletes the shortcuts it made. Delete the `taskbar-fighters` folder and `%LOCALAPPDATA%\minis`
+to remove everything; remove a startup task you added with the `schtasks /Delete` line `print-startup` shows.
+
+### Taskbar and tray icon
+
+![The app icon at every size on dark and light taskbars, and an illustration of the tray icon with its tooltip and right-click menu](docs/img/icon-tray.png)
+
+- `python minis.py shortcut` adds **Taskbar Fighters** to the Start menu (`--desktop` also puts one on the Desktop). Then
+  right-click Taskbar Fighters in Start > **Pin to taskbar** (Windows only lets you pin a program; it never pins itself).
+  `python minis.py shortcut remove` deletes the shortcuts it made, only if they still run this `minis.py`.
+- While it runs, its icon sits in the notification area (tray). Hover: who is fighting ("Taskbar Fighters — Claude vs Grok").
+  **Left-click**: fighter select. **Right-click**: Select fighters..., Pause animations, Flash effects, Plates, Rival mode,
+  Start/Exit arena, Bout now, Restart Taskbar Fighters, Quit Taskbar Fighters.
+- `python minis.py restart` stops everything and starts it again.
+- No tray icon: set `"tray_icon": false` in `minis.json`.
+- Rebuild the icon: `python art/build_icon.py [--preview qa/local/icon-preview.png]`.
+
+## Commands
+
+Every command below was checked against `python minis.py --help` and each subcommand's `--help`.
+
+| command | what it does |
+| --- | --- |
+| `python minis.py start` | start the director and both fighter slots (no console windows) |
+| `python minis.py stop` | stop them: only PIDs it recorded itself, after proving each one's command line |
+| `python minis.py status` | one plain line (running?, who is on which side, rival mode), then the details |
+| `python minis.py restart` | stop everything, then start again (what the tray's *Restart Taskbar Fighters* runs) |
+| `python minis.py shortcut [--desktop]` / `shortcut remove` | Start-menu (and Desktop) shortcut "Taskbar Fighters" / delete the ones it made |
+| `python minis.py pause` / `resume` | freeze every fighter on one frame (plates keep updating) / animate again |
+| `python minis.py plates on\|off` | show or hide both HUD plates |
+| `python minis.py demo [spar\|clash\|ranged\|match]` | start one bout now |
+| `python minis.py winners decided\|random` | how match winners are drawn (default `decided`) |
+| `python minis.py rival on\|off` | rival mode: wake a sleeping partner for a match now and then |
+| `python minis.py flash on\|off` | white flashes and impact frames on big hits |
+| `python minis.py fighters` | programs seen and their state, every character, the current lineup |
+| `python minis.py fighters set a\|b <program\|character>` | a program: keep it on that side; a character: that side's look |
+| `python minis.py fighters pin a\|b <program>` | keep a program on that side, asleep when not detected |
+| `python minis.py fighters auto` / `reset` | both sides back to auto (`reset` also forgets every look) |
+| `python minis.py pick a\|b <program>\|auto` | alias of `fighters pin` (or `auto` for one side) |
+| `python minis.py skin <program> <character>\|default` | draw a program as another character, e.g. `skin grok knight` |
+| `python minis.py show [a\|b]` | bring back a hidden fighter |
+| `python minis.py detect` | which known AI programs are seen right now, and how (names and numbers only) |
+| `python minis.py monitors` | list monitors for `arena --monitor N` |
+| `python minis.py arena [--monitor N] [--freeze] [--seconds S] [--seed K]` | arena mode; `arena stop` ends it |
+| `python minis.py arena capture <png>` | PrintWindow of the arena's own window only (refused with `--freeze`; writes only under `qa/` or the data folder) |
+| `python minis.py print-startup` | print (never run) the commands to start at logon |
+| `python minis.py director` / `run a\|b` | run the director or one slot in the foreground (debugging) |
+| `python minis.py selftest-gui [--keep]` | real-desktop check: both windows draw over the taskbar and survive a taskbar raise |
+| `python -m unittest discover -s tests` | the test suite (the process-level tests are skipped unless `MINIS_INTEGRATION=1`) |
+
+### Right-click menu
+
+Right-click a fighter or its plate:
+
+- **Fighter (left/right side)**: *Auto*, then every program with its state; never-seen programs are greyed.
+- **Look (program)**: *Default* and every character on disk.
 - *Select fighters...* opens the select screen.
-- Checkmarks: *Pause all animations*, *HUD plates*, *Flash effects*, *Rival mode*; *Who wins* submenu: *Healthier program
-  usually wins* / *Coin flip*.
-- *Start a bout now*, *Start a match now (best of 3)*, *Arena mode* (checked while it runs).
-- *Hide this fighter* (until `show` or the scoreboard's *show*), *Hide for 1 hour*, *Quit minis* (stops everything).
+- Checkmarks: *Pause all animations*, *HUD plates*, *Flash effects*, *Rival mode*; **Who wins**: *Healthier program usually wins*
+  / *Coin flip*.
+- *Start a bout now*, *Start a match now (best of 3)*, *Arena mode*.
+- *Hide this fighter*, *Hide for 1 hour*, *Quit Taskbar Fighters (stops everything)*.
 
-## Fighter select (V6)
+## Configuration
 
-The lineup lives in `control.json` (`lineup`: `{"a": "auto" | program id, "b": ..., "skins": {program id: character id}}`).
+Optional: a `minis.json` next to `minis.py` overrides any default in `minis_core/config.py`. Runtime toggles (pause, plates,
+flash, rival, winners, lineup) live in `%LOCALAPPDATA%\minis\control.json` and are set by the CLI and the menu.
 
-- **Pick** a program for a side and it stays there: live when it is detected, asleep and dimmed when it is not, even
-  after the 24 h dormant window. A side on `auto` follows the director's rules and never takes a picked program. Picking
-  the program the other side holds moves it over and puts the other side back on auto.
-- **Look**: any program can wear any character (`skin grok codex`), so Grok, aider and the sparring bot no longer all
-  share the generic agent. The plate still names the program ("Grok"), never the costume. A look change waits until the
-  fighter is home, so a bout is never cut off.
-- **Select screen**: *Select fighters...* in the menu, or a click on a name on the scoreboard (that side only). A small
-  layered window above the taskbar: a WHO row (AUTO, then every detected or remembered program with its portrait and
-  state) and a LOOK grid of every character on disk (read each time it opens, so a bigger roster just grows the grid,
-  seven per row). P1 (red, left) chooses, then P2 (blue, right). Arrows + Enter, Backspace to go back, Esc or a click
-  elsewhere cancels; the mouse works too (click a tile; the wheel moves through looks). Confirming flashes a short VS
-  card and writes the lineup. It is the only minis window that takes the keyboard focus, and only while it is open.
-- **Records are per program** now (`record.json` `programs`). The V5 per-character table is migrated on first read for
-  characters that belong to one program; the shared `generic` line cannot be split and stays in `characters` untouched.
+```json
+{
+  "zone": [40, 900],
+  "dormant_hours": 72,
+  "sparring_bot": true,
+  "ignore_sources": ["grok"],
+  "rival_min": 8,
+  "rival_max": 15,
+  "proc_working_cpu_pct": 15,
+  "arena_monitor": 2,
+  "scoreboard_x": null
+}
+```
 
-`python tools/ui_previews.py` renders the select screen and the scoreboard states to PNGs offscreen.
-
-The roam zone defaults to screen x 40-900, the empty stretch left of centred taskbar icons measured on the author's
-2560x1440 display at 100% DPI. A different icon layout needs a different `zone` in `minis.json` next to `minis.py`
-(see `minis_core/config.py` for every key). Fighters hide while a fullscreen app, game or presentation is up, while
-the taskbar is not at the bottom, and while it auto-hides.
-
-## Telemetry (read-only; numbers and enums only)
-
-| source | detected by | state | numbers |
-| --- | --- | --- | --- |
-| Claude Code | newest `~/.claude/projects/*/*.jsonl` changed in the last 24 h | from the transcript | context % (input + cache tokens of the newest assistant line / 1,000,000); plan % only from an optional local feed |
-| Codex | newest `rollout-*.jsonl` under `~/.codex/sessions/YYYY/MM/DD` (and `~/.codex-emdash/sessions`) | from the rollout | context % (`last_token_usage.input_tokens` / `model_context_window`), plan % when `limit_id == "codex"`, `primary` is set and `resets_at` is in the future |
-| Cursor, Gemini (app or CLI), Ollama, LM Studio, aider, opencode, Windsurf | the running process, ctypes only | *working* above 15% of one core (6 s average), else *idle* | none (`ctx -`) |
-
-- Anything not in that table never shows. VS Code / Copilot is too ambiguous to detect and is skipped.
-- A program is never counted twice: the Codex desktop app belongs to the Codex transcript source, and a claimed
-  process (with its children, e.g. Claude Code inside Cursor's terminal) is left out of every other program's CPU.
-- After the first read only the bytes appended to a transcript are read; a newest line over 256 KB is handled by
-  reading further back (up to 16 MB).
-- Claude's plan limits are not readable from outside a session. If something else writes
-  `%LOCALAPPDATA%\minis\feeds\claude-plan.json` (`{"five_hour": 35, "ts": "<iso>"}`) the plate shows it for 15 min.
-  minis never writes that file.
-
-## Characters (V5.1 redesign)
-
-Every costume is original pixel art from the rig's costume flags (`art/roster.py`). Each character got the same three
-things: one strong silhouette feature, one saturated accent against a restrained base, and an HD rim tint that reads
-as light. Signature idles and victory poses are per character too.
-
-| character | look | sigil | ultimate |
-| --- | --- | --- | --- |
-| Claude | terracotta street-monk: hood down, a long two-tone cream scarf, wrapped forearms, hoodie drawstrings, reversed cap | `/` | `kamehameha` |
-| Codex | black-and-violet hacker-ninja: hood up with a violet visor glow, loose sleeves, split-toe tabi, circuit traces, violet holographic afterimages | `$` | `rasengan` |
-| Gemini | blue-and-gold twin-tail ronin: two ponytails that whip, a haori with gold lapels, a pale-gold star-sparkle rim | `*` | `getsuga` |
-| Cursor | cyan-on-black pointer assassin: an angular cursor-arrow brim, thin sharp limbs, cyan edge light on the black suit, speed-line afterimages | `>` | `odm_strike` |
-| Ollama | cream-and-brown llama-hood brawler: hood up with little llama ears, chunky build, an earthy palette with one orange accent | `o` | `wind_scar` |
-| LM Studio | cyber-samurai: white armour plates, neon teal edge light, magenta soles, holographic (dithered neon) trail on its flash-steps | `L` | `bankai` |
-| Agent (generic) | olive field agent: tactical vest with pouches, gold headband with a knot tail, dark boots; stands in for aider, opencode, Windsurf and any character without art | `+` | `spirit_bomb` |
-
-The LM Studio direction is the one costume with a named visual inspiration (DullMesh's Cyber White Samurai, looked
-at, nothing downloaded); see [docs/CREDITS.md](docs/CREDITS.md). `python art/qa_v5.py roster` renders the contact
-sheet above, `idles` each signature idle, `beams` the FX reel.
-
-## Fights
-
-Every exchange is planned from the shared seed by `minis_core/choreo.py`, a pure function of one `random.Random` and
-the two move atlases, so both fighter processes (and the headless simulator) derive the identical exchange without
-talking. The same planner drives spar, clash, the taskbar match and the arena.
-
-- **Picker**: seeded no-repeat move picker, never the same move twice in a row, no move more than twice a round
-  (relaxed only when nothing else is left), weighted by category and situation.
-- **Openers**: dash-in jab, jump-in kick, sweep. **Defender answers**: block, crouch block under highs, parry then
-  counter, backdash whiff, or getting hit.
-- **Combos**: jab-cross-uppercut and six more strings, each hit with hitstop; then pressure or a spacing reset
-  (walk back / backdash). **Specials** at range, with projectiles where the character has one.
-- **Super meter**: damage dealt plus half the damage taken; at 72 the super unlocks (24 damage).
-- **One ultimate per match**, at a dramatic moment (round point or low HP, never in a round's first two exchanges),
-  40 damage, with a white flash and a shake; a taunt follows a whiffed one. Big hits knock down, then the fighter
-  gets up; one air-to-air exchange per round.
-- **Variety numbers** (from `tests/test_choreo.py`, 20 seeded matches over four roster pairs): the most-used move is
-  16-19% of a character's attacks (Claude `reverse` 18%, Cursor `tab_bolt` 19%, nothing over 25%) and 23-26 distinct
-  moves play per character; 42 of the 45 shared moves have a trigger (was 39).
-- **Matches**: best-of-3, both at 100 HP; damage = move power x 12 (12 / 24 / 36), a super 24, the ultimate 40; a
-  round ends at 0 HP or after 25 s. `decided` weights each exchange by `(100 - ctx%) + 20 if not at the limit + 10
-  if working`; `random` is even. W-L per character lands in `record.json`.
-
-### Dormant partner, sparring bot and rival mode (V5.1)
-
-The promise is *two fighters, battles from what is being used*. Before V5.1 the second slot emptied the moment its
-program stopped being reported (Codex's newest session file older than 24 h, a desktop app closed), and one fighter
-stood alone for hours with nothing to fight.
-
-- **Dormant partner.** The director remembers every source it has seen (`seen.json`: id, last activity, character,
-  program). A source that is no longer reported stays a candidate for `dormant_hours` (default 24) after its last
-  activity, ranked as idle since then. So the most recently used other program keeps its slot, drawn asleep and
-  dimmed with `ctx -` on its plate, and is replaced only when a *different* program becomes active (a program that
-  is merely running idle does not displace it). It takes whichever slot is empty, normally `b`.
-- **Sparring bot.** With one fighter and no dormant candidate, the pseudo-source `sparring` fills the other slot:
-  generic skin, plate `Sparring bot`, state `sleeping`, no numbers, no detector behind it. Any real program, even an
-  idle one, takes the slot back. Two empty slots stay empty (nothing is being used, nothing is shown).
-  `"sparring_bot": false` in `minis.json` turns it off; `"ignore_sources": ["grok"]` keeps a program off the stage.
-- **Rival mode** (`rival`, default on; `minis.py rival on|off`, the right-click menu). A sleeping partner, dormant
-  or bot, still fights: the awake fighter (whichever slot) invites it every `rival_min`-`rival_max` minutes (8-15)
-  to a best-of-3; the sleeper plays `wake`, walks out lit, fights with the full V5 choreography, walks home and goes
-  back to `sleep`. While the awake fighter is `working` it is a short exchange (the clash choreography) every
-  `rival_spar_min`-`rival_spar_max` minutes (3-6) instead. W-L lands in `record.json` as for any match; the plate
-  keeps telling the truth (`sleeping`, `ctx -`) before, during and after. Off means the sleeper is left alone.
-
-### Beams and energy FX
-
-Effects live in `assets_hd/fx/fx.json` (and the 64 px twin); every effect has a procedural stand-in so nothing breaks
-without the art. Two V5.1 keys, documented in the file's own `schema_notes` and in
-[docs/ANIMATION-NOTES.md](docs/ANIMATION-NOTES.md):
-
-- `grow: {from_w, to_w, ms}`: the engine draws the effect stretched from `from_w` to `to_w` px over its first `ms`
-  with the anchored end fixed on the hand, so a beam extends from the hands instead of appearing whole; it holds, then
-  retracts and fades. Claude's `kamehameha` grows 56 -> 256 px over 100 ms; `reach` is 256 px in the arena and 128 on
-  the taskbar.
-- `flash: true`: frame 0 is a one-frame white-hot release flash. In the arena the whole overlay goes 60% white for
-  that frame and clears on the next; on the taskbar only the fighter's own pixels whiten, never the HUD plate.
-- **Hitstop**: both fighters freeze on contact for a share of the move's `hitstop_ms` (defaults 150 ms for a
-  strike, 220 for a super, 300 for an ultimate; strikes and specials freeze for half of it, supers and ultimates for
-  all of it, because the sheets already hold the hit frame). The move's own `shake` shakes the window, the impact
-  burst lands at the beam's end, and a fighter hit by a beam takes `hit_heavy` and knockback straight along it. Beam
-  ultimates are fired from range so the beam reaches the defender's hurtbox; melee ultimates dash in first.
-- `travel: {speed}` sends an effect along the owner's facing (projectiles and the travelling ultimates); it is
-  what the arena waits on before the contact of a travelling beam.
-
-## Arena
-
-- `python minis.py arena --monitor N [--seed K]`. HD fighters at about 170 px jump, air-dash with afterimages
-  and hover between the top edges of your windows (a top edge inside the HUD band is not a platform, but still
-  cracks); a defender knocked into a window rectangle cracks it, three cracks shatter it (shards fall, random letters
-  spray); ultimates explode, flash and shake the overlay. The overlay is click-through except the EXIT button; ESC,
-  `arena stop`, the menu and the widget all end it. The process measures its own CPU and drops from 30 to 20 fps above
-  10% of one core. `python tools/arena_capture.py --monitor N --out <dir>` runs one match and saves PrintWindow captures
-  of the arena's own window at the beam, the flash, an air exchange and a knockdown (never a screenshot of the monitor).
-  `arena capture <png>` refuses while `--freeze` is on and writes only under `qa/` or the data folder. The menu and
-  scoreboard ask the arena to leave without waiting; the loop force-stops it after 4 s if it has not.
-
-See **[MOVELIST.md](MOVELIST.md)** for every move, trigger and timing, and **[docs/ANIMATION-NOTES.md](docs/ANIMATION-NOTES.md)**
-for the animation rules the rig follows.
-
-## How it compares
-
-Summarised from [docs/COMPARISON.md](docs/COMPARISON.md) (a read-only research pass over the official repos and
-pages, 2026-10-13). Ideas only; no code or art was taken from any of them.
-
-| project | what it does that minis does not | what minis does that it does not |
+| key | default | meaning |
 | --- | --- | --- |
-| [Clawd on Desk](https://github.com/rullerzhou-afk/clawd-on-desk) | 20+ agents through hooks, approve/deny bubbles | two agents interacting; zero config; taskbar; arena |
-| [AgentPet](https://github.com/ntd4996/agentpet) | XP and evolution, achievements, web dashboard | fights and handoffs; no sign-in; local plan window |
-| Codex Pets (built into the Codex app) | AI-generated pets from a photo; first-party | cross-vendor; Claude and Codex side by side with numbers |
-| VS Code "Blobby" | throw / dizzy / achievements inside the editor | outside the editor; real telemetry; two fighters |
-| [vscode-pets](https://github.com/tonybaloney/vscode-pets) | 20+ species, backgrounds, many pets at once | a pet means a program is actually running |
-| [CodexBar](https://github.com/steipete/CodexBar) | reset countdowns and burndown for 100+ providers | characters; taskbar; Claude context % from the transcript |
-| Desktop Goose | memorable chaos: cursor theft, dragged windows | harmless: never touches input or windows |
+| `zone` | `[40, 900]` | screen x range of the empty taskbar stretch the fighters use (measured on a 2560x1440 display with centred icons) |
+| `dormant_hours` | `24` | a program that went quiet keeps its slot (asleep, dimmed) this long |
+| `sparring_bot` | `true` | one fighter alone: a generic sparring bot takes the other side |
+| `ignore_sources` | `[]` | program ids (see `detect`) that never get a fighter |
+| `rival_min` / `rival_max` | `8` / `15` | minutes between rival matches while the active program is not working |
+| `rival_spar_min` / `rival_spar_max` | `3` / `6` | minutes between short rival exchanges while it is working |
+| `match_min_s` / `match_max_s` | `180` / `360` | seconds between timed matches when both are awake |
+| `proc_working_cpu_pct` | `15` | process sources count as working above this % of one core |
+| `claude_window` | `1000000` | context window used for Claude's context % |
+| `tray_icon` | `true` | the notification-area icon (left click: select, right click: menu) |
+| `scoreboard` / `scoreboard_x` | `true` / `null` | show the widget; its screen x (default: just left of the icons) |
+| `arena_monitor` | `null` | monitor for the Arena button (default: the one non-primary monitor) |
+| `fps_active` / `fps_fight` / `fps_idle` | `10` / `30` / `4` | redraw rates |
 
-Where minis is weaker: coverage and ecosystem. Rivals know more agents through hooks, show cost history and run on
-macOS and Linux. The edge is narrower but real: two live agents interacting from real usage, no config touched, no
-network, and the only one living in the taskbar or an arena.
+Fighters hide while a fullscreen app is up, while the taskbar is not at the bottom, and while it auto-hides.
 
-## Roadmap (honest)
+## Privacy and safety
 
-- **Art**: the V5 motion pass (anticipation, smears, uneven timing) and the V5.1 costume redesign cover all seven
-  characters, but the art is generated by a rig, not hand-drawn. Several of the screenshots above predate the
-  redesign and are due a recapture.
-- **DPI**: only 100% DPI on the primary display has been seen. Integer scaling exists and is unit-tested, not
-  observed on a 150% or 200% display.
-- **Windows only**, bottom taskbar only. No macOS or Linux plans at the moment.
-- The arena's 30 fps target is not met on the author's PC (it drops itself to 20 fps); platforms are only the top
-  edges of windows.
-- Process sources have no numbers, and "working" is a CPU heuristic; the 15% threshold is a first guess.
-- Pupils are found by a colour heuristic; two characters with a dark outfit beside the eye keep still.
-- Ideas from the comparison not built yet: importing Codex pet packs so users' pets can fight, achievements off
-  `record.json`, landing on title bars in the arena.
+- **Numbers only.** From Claude Code and Codex transcripts it reads token counts, timestamps and states - never prompt or reply
+  text, window titles, file names or project names. Nothing it reads is logged, stored or sent; logs carry exception types and
+  `file:line` of this program only.
+- **No network.** No network access of any kind.
+- **Your tools untouched.** No settings, hooks, status lines or config files of your AI tools are edited.
+- **Stops only itself.** `stop` ends only processes whose exact command line it can prove are its own; the director restarts a
+  dead slot only after the same proof, at most three times in ten minutes.
+- **No screen capture.** The only screen read is the optional arena `--freeze` backdrop, held in that process's memory and never
+  written to disk.
+- **Arena never touches real windows.** It reads window rectangles (`EnumWindows` / `GetWindowRect`), never titles, never sends
+  input; cracks and shatters are paint on its own overlay.
+- **Files written:** `%LOCALAPPDATA%\minis\` (bus files, `assign.json`, `control.json`, `record.json`, `history.json`, `seen.json`,
+  pid files, small rotating logs).
 
-Build logs with what was verified and how: [RESULT.md](RESULT.md), [BRIEF.md](BRIEF.md),
-[docs/V3-WORKORDER.md](docs/V3-WORKORDER.md), [docs/V4-WORKORDER.md](docs/V4-WORKORDER.md).
+## How it works
 
-## Layout
+![Detection diagram: programs feed transcript and process sources plus a memory of recently seen programs; the director picks two and writes assign.json; slots a and b talk through bus files](docs/img/detection.png)
+
+- **Sources** (`minis_core/sources.py`) poll every 2 s: Claude Code and Codex from the newest local transcript (only appended bytes,
+  numbers and enums), every other program from a table matched against the process list through ctypes, *working* above 15% of one
+  core.
+- **Director** (`minis_core/director.py`) picks at most two by recency and keeps them stable; a quiet program stays as a dormant
+  partner, else the sparring bot fills in; your lineup overrides a side. It writes `assign.json` and hosts the scoreboard.
+- **Fighter slots** (`minis.py run a|b`, `minis_core/brain.py`) each draw a per-pixel-alpha layered window over the taskbar and talk
+  through one small JSON bus file each. Both compute the same bout timeline from the same seed, so a hit and the other fighter's
+  reaction land on the same frame without a round trip.
+- **Choreography** (`minis_core/choreo.py`, `rounds.py`) is a pure function of a seed and the two move sets: a no-repeat move picker,
+  openers, combos, defence, specials, a super meter and one ultimate per match. The same planner drives the taskbar, the arena and
+  the headless simulator used for tests and these images.
+- **Art** (`art/`) is generated: a 2-bone rig and pose data build `assets/` (64 px) and `assets_hd/` (128 px) with
+  `python art/build_fighters.py --all`.
 
 ```
-minis.py                 CLI, the director loop, the per-slot fighter loop
-minis_core/              sources, director, telemetry, bus, control, atlas, brain, choreo (exchange grammar), rounds,
-                         fx, effects, scoreboard, arena, history, eyes, render, sim (headless simulator), config
-minis_win/               layered always-on-top window, arena window, process table (all ctypes)
-art/                     rig, move library, roster, builder -> assets/ (64 px) and assets_hd/ (128 px)
-tools/                   preview sheets and GIFs, MOVELIST generator, arena_capture (live arena moments, own window only)
-tests/                   unittest; fixtures are synthetic and content-free; nothing reads this machine's real state
-qa/                      preview sheets and reels (qa/v5/: the V5.1 roster sheet, beam reel and idle reels)
-docs/img/                the annotated images above
+minis.py          CLI, director loop, fighter loop        art/      rig, moves, roster, builder -> assets/, assets_hd/
+minis_core/       sources, director, telemetry, brain,    tools/    previews, doc images, MOVELIST generator, captures
+                  choreo, rounds, fx, arena, scoreboard,  tests/    unittest; synthetic, content-free fixtures
+                  select, lineup, render, sim, config     docs/     notes, credits, work orders, docs/img/
+minis_win/        layered windows, arena window, process table (all ctypes)
 ```
 
-Rebuild the art with `python art/build_fighters.py` (`--only gemini,cursor` for some). To hand-polish a frame, drop a
-64x64 PNG with the character's palette at `art/hand/<character>/<move>_<frameindex>.png`; the builder uses it instead
-of the generated frame.
+## Known limits and roadmap
+
+- **Windows only**, bottom taskbar only. Only 100% DPI on the primary display has been seen; integer scaling is unit-tested, not
+  observed at 150% or 200%.
+- The default `zone` was measured on one 2560x1440 display with centred icons; other layouts need a `zone` in `minis.json`.
+- Fighters stand about 11 px above the taskbar's top edge (the 64 px cell's top rows sit over the desktop), and long weapons tilt to
+  fit the cell.
+- The arena does not get the task-finished super boost the taskbar has; its 30 fps target is not met on the author's PC, so it drops
+  itself to 20 fps; platforms are only the top edges of windows.
+- Process sources have no numbers, and "working" is a CPU heuristic (the 15% threshold is a first guess).
+- Signature supers ask for an effect that has no art yet, so they play the engine's procedural stand-in burst (see RESULT.md, V6).
+- The art is generated by a rig, not hand-drawn; a hand-polish hook exists (`art/hand/<character>/<move>_<frame>.png`).
+- Ideas not built yet: importing Codex pet packs, achievements from `record.json`, landing on title bars in the arena.
+
+Build logs with what was verified and how: [RESULT.md](RESULT.md). Version history: [CHANGELOG.md](CHANGELOG.md).
+
+## Make the images yourself
+
+`python tools/doc_images.py` renders every image in `docs/img/` offline (no screen capture; the data folder is redirected to a temp
+dir). `python tools/ui_previews.py`, `python art/qa_v6.py lineup|sheet <character>` and `python tools/make_previews.py` render the
+QA sheets. `python tools/taskbar_capture.py --out <dir> --demo match` captures only the taskbar rows of the fighter zone of a live
+bout, and `python tools/doc_images.py --annotate-live <dir>` annotates it.
 
 ## Credits
 
-All seven fighters, every frame, effect and projectile are original art generated by the rig in `art/`. Three free
-packs were studied frame by frame for timing, keying, proportion and silhouette, and nothing from them was copied:
-
-- **LuizMelo, "Martial Hero"** (CC0): attack anticipation and smear structure, scarf secondary action, hit and death keys.
-- **Mattz Art / xzany, "Samurai 2D Pixel Art"**: the hold-hold-hold-snap attack timing, sub-pixel idle, run lean.
-- **GandalfHardcore, "FREE 2D Pixel Art Archer"**: the 11-frame draw-and-release as the model for charge and release,
-  8-tone colour discipline, hit flash.
-
-Links, licence terms and the visual-inspiration-only list are in [docs/CREDITS.md](docs/CREDITS.md). The same credit
-line is written into every `anim.json`.
+All thirteen fighters, every frame, effect and projectile are original art generated by the rig in `art/`. Free packs by LuizMelo
+(Martial Hero), Mattz Art / xzany (Samurai) and GandalfHardcore (Archer), plus DullMesh's Cyber White Samurai and Game Academie's
+previews, were studied for timing, proportion and silhouette only; nothing was copied. Links and licence terms:
+[docs/CREDITS.md](docs/CREDITS.md). How it compares with other desktop pets and agent monitors:
+[docs/COMPARISON.md](docs/COMPARISON.md).
 
 ## License
 

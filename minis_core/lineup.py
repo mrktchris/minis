@@ -177,7 +177,7 @@ def fighter_menu(slot, assign, lu, flags, chars):
               (BOUT, 'Start a bout now'), (MATCH, 'Start a match now (best of 3)'),
               (ARENA, 'Arena mode', {'checked': bool(flags.get('arena'))}),
               None,
-              (HIDE, f'Hide this fighter ({name})'), (HIDE_1H, 'Hide for 1 hour'), (QUIT_ALL, 'Quit minis (stops everything)')]
+              (HIDE, f'Hide this fighter ({name})'), (HIDE_1H, 'Hide for 1 hour'), (QUIT_ALL, 'Quit Taskbar Fighters (stops everything)')]
     return items, actions
 
 

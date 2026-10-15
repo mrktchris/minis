@@ -349,7 +349,7 @@ class FighterLoop(Isolated):
             self.f.st['menu'] = True
             self.go(0.1)
         self.assertEqual(quits, [1])
-        self.assertIn('Quit minis (stops everything)', L.labels_of(self.f.ov.items))
+        self.assertIn('Quit Taskbar Fighters (stops everything)', L.labels_of(self.f.ov.items))
 
     def test_plate_is_a_fixed_window_at_the_left_named_after_the_program(self):
         from minis_core import config as cfgmod

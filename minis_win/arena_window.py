@@ -42,6 +42,7 @@ def _register():
     wc.lpfnWndProc = _proc_ref
     wc.hInstance = kernel32.GetModuleHandleW(None)
     wc.lpszClassName = ARENA_CLASS
+    wc.hIcon, wc.hIconSm = shell.class_icons()
     user32.RegisterClassExW(ctypes.byref(wc))
     _registered = True
 

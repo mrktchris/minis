@@ -1,0 +1,3 @@
+# The only third-party package. Everything else is the Python standard library + ctypes.
+# 9.1+ for the Image.Dither / Image.Quantize enums; tested with Pillow 12.3.
+Pillow>=9.1

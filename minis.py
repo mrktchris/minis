@@ -29,6 +29,9 @@
   python minis.py run arena ...  the arena process body (what `arena` launches)
   python minis.py selftest-gui   real-desktop check: draws over the taskbar, survives a taskbar raise   [--keep]
   python minis.py print-startup  print (never run) the commands to start at logon
+  python minis.py restart        stop everything, then start again (what the tray's "Restart Taskbar Fighters" runs)
+  python minis.py shortcut [--desktop]   Start-menu shortcut "Taskbar Fighters" (then: right-click it in Start > Pin to taskbar)
+  python minis.py shortcut remove        delete the shortcut(s) it made (also an old Minis.lnk), only if they run this minis.py
 """
 from __future__ import annotations
 import argparse, atexit, logging, logging.handlers, os, random, subprocess, sys, time, traceback
@@ -715,6 +718,132 @@ def quit_all():
     return True
 
 
+def restart_all():
+    """Tray "Restart Taskbar Fighters": a detached `minis.py restart` (stop proves every pid ours, then start).  Its own process,
+    because it stops the director that asked for it.  Refused under tests."""
+    if os.environ.get('MINIS_TESTING'):
+        return False
+    subprocess.Popen([str(python_exe()), str(ROOT / 'minis.py'), 'restart'], creationflags=DETACHED, close_fds=True, cwd=str(ROOT))
+    return True
+
+
+def cmd_restart(args=None, sleep=time.sleep):
+    cmd_stop()
+    sleep(1.0)                                             # let the single-instance mutexes go with the processes
+    return cmd_start()
+
+
+# ------------------------------------------------------------------ Start-menu shortcut (a pinnable launcher)
+SHORTCUT_NAME = 'Taskbar Fighters.lnk'
+OLD_SHORTCUT_NAMES = ('Minis.lnk',)                   # made before the rename: `shortcut remove` still cleans them up
+POWERSHELL = os.path.join(SYSROOT, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+PIN_HINT = 'Right-click Taskbar Fighters in Start > Pin to taskbar'
+
+
+def start_menu_dir():
+    base = os.environ.get('APPDATA') or str(Path.home() / 'AppData' / 'Roaming')
+    return Path(base) / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs'
+
+
+def desktop_dir():
+    """The real Desktop folder (it may be redirected, e.g. into OneDrive)."""
+    try:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(260)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 0x10, None, 0, buf) == 0 and buf.value:      # CSIDL_DESKTOPDIRECTORY
+            return Path(buf.value)
+    except Exception:
+        pass
+    return Path.home() / 'Desktop'
+
+
+def shortcut_spec(root=ROOT):
+    """What the shortcut holds: pythonw.exe running `"<root>/minis.py" start`, in the repo, with the minis icon."""
+    root = Path(root)
+    return dict(target=str(python_exe(windowless=True)), arguments=f'"{root / "minis.py"}" start', workdir=str(root),
+                icon=f'{root / "assets" / "icon" / "minis.ico"},0', description='Taskbar Fighters - pixel fighters on the taskbar')
+
+
+def shortcut_is_ours(target, arguments, root=ROOT):
+    """A .lnk is ours only when it runs a python(w).exe on exactly `"<root>/minis.py" start`."""
+    if not target or os.path.basename(str(target)).lower() not in PYTHONS:
+        return False
+    return os.path.normcase((arguments or '').strip()) == os.path.normcase(shortcut_spec(root)['arguments'])
+
+
+# values reach PowerShell in environment variables, never spliced into the script text
+_PS_WRITE = ('$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:MINIS_LNK);'
+             '$s.TargetPath=$env:MINIS_TARGET;$s.Arguments=$env:MINIS_ARGS;$s.WorkingDirectory=$env:MINIS_WORKDIR;'
+             '$s.IconLocation=$env:MINIS_ICON;$s.Description=$env:MINIS_DESC;$s.Save()')
+_PS_READ = ('$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:MINIS_LNK);'
+            '[Console]::Out.Write($s.TargetPath + [char]10 + $s.Arguments)')
+
+
+def _ps(script, env):
+    if os.environ.get('MINIS_TESTING'):
+        raise RuntimeError('powershell refused under tests')
+    return subprocess.run([POWERSHELL, '-NoProfile', '-NonInteractive', '-Command', script], capture_output=True, text=True,
+                          env=dict(os.environ, **env), creationflags=0x08000000, timeout=30)
+
+
+def write_shortcut(path, spec):
+    r = _ps(_PS_WRITE, dict(MINIS_LNK=str(path), MINIS_TARGET=spec['target'], MINIS_ARGS=spec['arguments'],
+                            MINIS_WORKDIR=spec['workdir'], MINIS_ICON=spec['icon'], MINIS_DESC=spec['description']))
+    return r.returncode == 0 and Path(path).exists()
+
+
+def read_shortcut(path):
+    """-> (target, arguments) of a .lnk, or None."""
+    r = _ps(_PS_READ, dict(MINIS_LNK=str(path)))
+    if r.returncode != 0:
+        return None
+    target, _, args = r.stdout.partition('\n')
+    return target.strip(), args.strip()
+
+
+def cmd_shortcut(args, writer=None, reader=None, dirs=None):
+    """`shortcut [--desktop]` writes "Taskbar Fighters.lnk"; `shortcut remove` deletes it (and an old Minis.lnk) while it still runs this minis.py.
+    writer(path, spec) -> bool, reader(path) -> (target, arguments) | None and dirs (folders) are injectable for tests."""
+    writer, reader = writer or write_shortcut, reader or read_shortcut
+    if dirs is None:
+        dirs = [start_menu_dir()] + ([desktop_dir()] if args.desktop or args.action == 'remove' else [])
+    if args.action == 'remove':
+        rc = 0
+        for d, name in ((d, n) for d in dirs for n in (SHORTCUT_NAME,) + OLD_SHORTCUT_NAMES):
+            p = Path(d) / name
+            if not p.exists():
+                continue
+            got = reader(p)
+            if not got or not shortcut_is_ours(*got):
+                print(f'{p}: left alone (it does not run {ROOT / "minis.py"} start)')
+                rc = 1
+                continue
+            p.unlink()
+            print(f'removed {p}')
+        return rc
+    spec = shortcut_spec()
+    if not (ROOT / 'assets' / 'icon' / 'minis.ico').exists():
+        print('note: assets/icon/minis.ico is missing (`python art/build_icon.py` makes it)')
+    rc = 0
+    for d in dirs:
+        p = Path(d) / SHORTCUT_NAME
+        if p.exists():
+            got = reader(p)
+            if not got or not shortcut_is_ours(*got):
+                print(f'{p}: exists and is not ours - left alone')
+                rc = 1
+                continue
+        Path(d).mkdir(parents=True, exist_ok=True)
+        if writer(p, spec):
+            print(f'wrote {p}  ->  {spec["target"]} {spec["arguments"]}')
+        else:
+            print(f'{p}: could not be written')
+            rc = 1
+    if rc == 0:
+        print(PIN_HINT + '  (Windows lets only you pin a program; minis never pins itself.)')
+    return rc
+
+
 def cmd_print_startup(args=None):
     exe = Path(sys.executable).with_name('pythonw.exe')
     print('# Not run for you. Either of these starts the director and both fighter slots at logon:\n')
@@ -772,10 +901,18 @@ def run_director(shell, cfg, detector_sources=None, wall=time.time, mono=time.mo
     except Exception as e:
         log.error('scoreboard setup failed\n' + safe_traceback(e))
         board = None
+    tray = None
+    if cfg.get('tray_icon', True) and hasattr(shell, 'make_tray'):        # fake shells (tests) have none: no real icon
+        try:
+            tray = director_tray(shell, cfg, board, log, wall)
+            atexit.register(tray.remove)                   # the finally below covers a normal exit; atexit anything else
+        except Exception as e:
+            log.error('tray icon setup failed\n' + safe_traceback(e))
+            tray = None
     log.info('director started')
     dog = Watchdog(log=log, mono=mono)
     errors = 0
-    next_poll = -1e9
+    next_poll = next_tip = -1e9
     n = 0
     try:
         while True:
@@ -789,17 +926,70 @@ def run_director(shell, cfg, detector_sources=None, wall=time.time, mono=time.mo
                     errors = 0
                 if board is not None and board.step() is None:
                     break
+                if tray is not None:
+                    if board is None and not tray.pump():      # otherwise the board's pump serves the tray window too
+                        break
+                    if now >= next_tip:
+                        next_tip = now + 1.0
+                        tray.step()
             except Exception as e:                        # never die silently: log and keep going
                 errors += 1
                 log.error(safe_traceback(e))
             n += 1
             if max_iterations is not None and n >= max_iterations:
                 break
-            time.sleep(0.05 if board is not None else max(0.2, next_poll - mono()))
+            time.sleep(0.05 if board is not None or tray is not None else max(0.2, next_poll - mono()))
     finally:
+        if tray is not None:
+            tray.remove()
         if board is not None:
             board.close()
     return 0
+
+
+def tray_flags(cfg, board):
+    """The tray menu's tick state, read fresh each time the menu opens."""
+    from minis_core import control
+    return dict(paused=control.paused(), plates=control.plates_on(), arena=control.arena_active(),
+                rival=control.rival_on(default=cfg.get('rival', True)), flash=control.flashes_on(default=cfg.get('flashes', True)),
+                select_ok=board is not None, arena_ok=board is not None)
+
+
+def tray_choice(choice, flags, board, wall=time.time, log=None, quit_fn=None, restart_fn=None):
+    """Run one tray-menu choice through the same calls the scoreboard and the fighters' menu use."""
+    from minis_core import control
+    from minis_win import tray as T
+    log = log or logging.getLogger('minis.null')
+    if choice == T.SELECT:
+        control.request_picker(SLOTS, now=wall())          # the scoreboard hosts the select screen (one at a time)
+    elif choice == T.PAUSE:
+        control.set_paused(not flags['paused'])
+    elif choice == T.FLASH:
+        control.set_flashes(not flags['flash'])
+    elif choice == T.PLATES:
+        control.set_plates(not flags['plates'])
+    elif choice == T.RIVAL:
+        control.set_rival(not flags['rival'])
+    elif choice == T.ARENA:
+        if board is not None:
+            board.act('arena')                             # the scoreboard's Arena button: start it, or ask it to leave
+    elif choice == T.BOUT:
+        control.request_demo('match', now=wall())          # what the scoreboard's bout button asks for
+    elif choice == T.RESTART:
+        if not (restart_fn or restart_all)():
+            log.info('restart: refused (tests)')
+    elif choice == T.QUIT:
+        if not (quit_fn or quit_all)():
+            log.info('quit: refused (tests)')
+
+
+def director_tray(shell, cfg, board, log, wall=time.time):
+    from minis_core import control, director
+    from minis_win import tray as T
+    return shell.make_tray(tip=lambda: T.tooltip(director.read_assign() or {}, control.paused()),
+                           flags=lambda: tray_flags(cfg, board),
+                           on_choice=lambda c, f: tray_choice(c, f, board, wall, log),
+                           on_left=lambda: control.request_picker(SLOTS, now=wall()), log=log)
 
 
 class Watchdog:
@@ -1686,7 +1876,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
     for name, fn in (('start', cmd_start), ('stop', cmd_stop), ('status', cmd_status), ('pause', cmd_pause), ('resume', cmd_resume),
-                     ('print-startup', cmd_print_startup), ('director', cmd_director)):
+                     ('print-startup', cmd_print_startup), ('director', cmd_director), ('restart', cmd_restart)):
         sub.add_parser(name).set_defaults(fn=fn)
     r = sub.add_parser('run')
     r.add_argument('slot', choices=SLOTS + (ARENA,))
@@ -1721,6 +1911,10 @@ def main(argv=None):
     sk.add_argument('character')
     sk.set_defaults(fn=cmd_skin)
     sub.add_parser('monitors', help='list monitors for arena --monitor N').set_defaults(fn=cmd_monitors)
+    sc = sub.add_parser('shortcut', help='Start-menu shortcut "Taskbar Fighters" (then pin it yourself); `remove` deletes it')
+    sc.add_argument('action', nargs='?', default='create', choices=('create', 'remove'))
+    sc.add_argument('--desktop', action='store_true', help='also put one on the Desktop')
+    sc.set_defaults(fn=cmd_shortcut)
     ar = sub.add_parser('arena', help='arena mode: fighters break out onto a whole monitor')
     ar.add_argument('action', nargs='?', default='start', choices=('start', 'stop', 'capture'))
     ar.add_argument('path', nargs='?', default=None)
