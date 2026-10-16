@@ -786,19 +786,16 @@ def _forge_arena(seed=3, chars=('claude', 'knight'), intensity='normal'):
     return ar, surf, comp, now
 
 
-def arena_forge_imgs(qa_dir=None):
-    """docs/img/arena-forge.png (annotated stills: the forge, the weapon families, swing / cracks / shatter, a thrown slab)
-    and arena-forge.gif (the sequence at real speed), all over the SYNTHETIC desktop.  qa_dir: also dump every frame of the
-    forge, swing, crack and shatter sequences at 1x and 2x there (frame-by-frame QA; not committed)."""
+def _forge_sequence(chars=('claude', 'knight')):
+    """One scripted forge for fighter a over the SYNTHETIC desktop: cut, lift, morph, armed, a strike (the weapon in the
+    hand, swinging with the arm), three cracks, the shatter (the native weapon returns), then b throws a slab.
+    -> (shots, gif frames, every frame, focus points, (swing0, crack0, shatter0))."""
     from minis_core import forge as FG
-    qa = Path(qa_dir) if qa_dir else None
-    if qa:
-        qa.mkdir(parents=True, exist_ok=True)
-    ar, surf, comp, now = _forge_arena()
+    ar, surf, comp, now = _forge_arena(chars=chars)
     A, B = ar.f['a'], ar.f['b']
     shots, gif, frames, focus = {}, [], [], []
-    box = lambda: _v7_box((A.x + B.x) / 2.0, A.y - 290, 1000, 560)
-    view = box()
+    view = _v7_box((A.x + B.x) / 2.0, A.y - 290, 1000, 560)
+    smears = lambda: sum(1 for k in ar.forge._cache.keys() if isinstance(k, tuple) and k and k[0] == 'smear')
 
     def tick(k=1, grab=None, cap=None):
         nonlocal now
@@ -824,40 +821,75 @@ def arena_forge_imgs(qa_dir=None):
             shots['lift'] = ('2  the piece lifts off: a dark hole is left', _v7_frame(surf, view))
         if job.stage == 'morph' and int(el * 30) == 3 and 'morph' not in shots:
             shots['morph'] = ('3  pixel-shatter, re-assemble (frame 4 of 8)', _v7_frame(surf, view))
-    tick(4, 'armed', '4  armed: a blade made of the window\'s pixels')
-    t = now
-    ar.forge.on_strike('a', t, t + 0.3, t + 0.55)
-    A.play(next((m for m in ('cross', 'jab') if m in A.atlas.anim), 'idle'), t, loop=False, hold='idle')
+    tick(6, 'armed', '4  in the hand: the drawn weapon is gone')
     swing0 = len(frames)
-    tick(8)
-    shots['swing'] = ('5  the swing smear', frames[-1])
-    for k in range(9):
-        if ar.forge.weapons.get('a') is not None and ar.forge.weapons['a'].fast(now):
-            shots['swing'] = ('5  the swing smear', frames[-1])
-            break
-        tick()
-    tick(10)
+    for mv in [m for m in ('cross', 'jab', 'cross_cut') if m in A.atlas.anim][:2]:
+        A.play(mv, now, loop=False, hold='idle')
+        for _ in range(int(A.atlas.total_ms(mv) / 1000.0 * 30) + 4):
+            n0 = smears()
+            tick()
+            if 'swing' not in shots and smears() > n0:
+                shots['swing'] = ('5  it swings with the arm: the smear follows its tip', frames[-1])
+    tick(6)
     crack0 = len(frames)
-    for i in range(FG.CRACKS_TO_SHATTER - 1):
+    for _ in range(FG.CRACKS_TO_SHATTER - 1):
         ar.forge.on_hit_landed('a', now)
         tick(6)
     shots['cracked'] = ('6  cracks grow with every hit', frames[-1])
     ar.forge.on_hit_landed('a', now)
     shatter0 = len(frames)
-    tick(5, 'shatter', '7  ... and it shatters into its own pixels')
+    tick(5, 'shatter', '7  it shatters into its own pixels; the own weapon is back')
     tick(30)
     job = ar.forge.start('b', 'slab', now)
-    while not job.done and len(frames) < 600:
+    while not job.done and len(frames) < 700:
         tick()
     tick(4, 'slab', '8  a ripped desktop slab, thrown')
-    tick(30)
+    tick(20)
+    return shots, gif, frames, focus, (swing0, crack0, shatter0)
+
+
+def _forge_qa_sheets(qa, prefix, frames, focus, marks):
+    """Every frame of forge / swing / crack+shatter at 1x and 2x (2x: around the forger) -> qa/<prefix>-<part>-<zoom>x.png."""
+    swing0, crack0, shatter0 = marks
+    for name, i0, i1 in (('forge', 0, swing0), ('swing', swing0, crack0), ('crack-shatter', crack0, shatter0 + 30)):
+        seq = frames[i0:i1]
+        for zoom in (1, 2):
+            cols = 6
+            cw, ch = (500, 280) if zoom == 1 else (1000, 560)
+            sheet = Image.new('RGB', (cols * cw, ((len(seq) + cols - 1) // cols) * ch), (0, 0, 0))
+            for i, fr in enumerate(seq):
+                if zoom == 1:
+                    im = fr.resize((cw, ch), Image.NEAREST)
+                else:
+                    fx, fy = focus[i0 + i]
+                    x0 = min(max(fx - 250, 0), fr.width - 500)
+                    y0 = min(max(fy - 300, 0), fr.height - 280)
+                    im = fr.crop((x0, y0, x0 + 500, y0 + 280)).resize((cw, ch), Image.NEAREST)
+                sheet.paste(im.convert('RGB'), ((i % cols) * cw, (i // cols) * ch))
+                ImageDraw.Draw(sheet).text(((i % cols) * cw + 6, (i // cols) * ch + 4), str(i), fill=(255, 255, 0), font=F(18))
+            sheet.save(qa / f'{prefix}-{name}-{zoom}x.png')
+
+
+def arena_forge_imgs(qa_dir=None):
+    """docs/img/arena-forge.png (annotated stills: the forge, the weapon in the hand swinging with the arm, cracks, the
+    shatter, a thrown slab, the weapon families) and arena-forge.gif, all over the SYNTHETIC desktop.  qa_dir: also dump
+    every frame of forge, swing, crack and shatter at 1x and 2x for several fighters (frame-by-frame QA; not committed)."""
+    qa = Path(qa_dir) if qa_dir else None
+    if qa:
+        qa.mkdir(parents=True, exist_ok=True)
+    shots, gif, frames, focus, marks = _forge_sequence(('claude', 'knight'))
     save_gif(gif, 'arena-forge.gif', ms=66, colors=128)
+    if qa:
+        _forge_qa_sheets(qa, 'claude', frames, focus, marks)
+        for chars in (('knight', 'codex'), ('cursor', 'codex'), ('oni', 'codex'), ('gemini', 'codex'), ('kunoichi', 'claude')):
+            _, _, fr2, fo2, mk2 = _forge_sequence(chars)
+            _forge_qa_sheets(qa, chars[0], fr2, fo2, mk2)
     order = ['outline', 'lift', 'morph', 'armed', 'swing', 'cracked', 'shatter', 'slab']
     rows = [[shots[k] for k in order[:4] if k in shots], [shots[k] for k in order[4:] if k in shots]]
-    # the families: each roster weapon forged from the same synthetic desktop, 2x
-    fam_row = []
+    fam_row = []                                                 # each family in the hand (2x crop, mid-stance)
     for chars, fam in ((('claude', 'codex'), 'blade'), (('knight', 'codex'), 'greatsword'), (('barbarian', 'codex'), 'axe'),
-                       (('cursor', 'codex'), 'spear'), (('oni', 'codex'), 'club'), (('kunoichi', 'claude'), 'shards')):
+                       (('cursor', 'codex'), 'spear'), (('oni', 'codex'), 'club'), (('gemini', 'codex'), 'twin blades'),
+                       (('kunoichi', 'claude'), 'shards')):
         ar2, surf2, comp2, n2 = _forge_arena(seed=5, chars=chars)
         ar2.forge.start('a', 'weapon', n2)
         while 'a' not in ar2.forge.weapons and n2 < 60:
@@ -869,32 +901,14 @@ def arena_forge_imgs(qa_dir=None):
             ar2.tick(n2)
             comp2.render(n2)
         a2 = ar2.f['a']
-        crop = _v7_frame(surf2, _v7_box(a2.x + a2.facing * 60, a2.y - 150, 420, 300))
+        crop = _v7_frame(surf2, _v7_box(a2.x + a2.facing * 40, a2.y - 140, 420, 300))
         fam_row.append((f'{fam} ({chars[0]})', crop))
-    _v7_card([rows[0], rows[1], fam_row[:3], fam_row[3:]],
+    _v7_card([rows[0], rows[1], fam_row[:4], fam_row[4:]],
              'Desktop weapons: forged from real screen pixels',
-             'Headless render on a SYNTHETIC desktop (never a screen grab): the cut, the hole, the morph, the weapon families',
+             'Headless render on a SYNTHETIC desktop (never a screen grab): the cut, the hole, the morph, the weapon in the hand',
              'The arena grabs its monitor ONCE into RAM at start and never saves it; `python minis.py forge off` (or the menu\'s Desktop weapons) '
              'turns it off\nand drops the grab mid-match.  Without a grab (macOS without Screen Recording) weapons are forged from window shapes.',
              'arena-forge.png', pw=480, ph=270)
-    if qa:
-        for name, i0, i1 in (('forge', 0, swing0), ('swing', swing0, crack0), ('crack-shatter', crack0, shatter0 + 30)):
-            seq = frames[i0:i1]
-            for zoom in (1, 2):
-                cols = 6
-                cw, ch = (500, 280) if zoom == 1 else (1000, 560)
-                sheet = Image.new('RGB', (cols * cw, ((len(seq) + cols - 1) // cols) * ch), (0, 0, 0))
-                for i, fr in enumerate(seq):
-                    if zoom == 1:
-                        im = fr.resize((cw, ch), Image.NEAREST)
-                    else:                                  # 2x: around the forger (its weapon and the piece in front of it)
-                        fx, fy = focus[i0 + i]
-                        x0 = min(max(fx - 200, 0), fr.width - 500)
-                        y0 = min(max(fy - 330, 0), fr.height - 280)
-                        im = fr.crop((x0, y0, x0 + 500, y0 + 280)).resize((cw, ch), Image.NEAREST)
-                    sheet.paste(im.convert('RGB'), ((i % cols) * cw, (i // cols) * ch))
-                    ImageDraw.Draw(sheet).text(((i % cols) * cw + 6, (i // cols) * ch + 4), str(i), fill=(255, 255, 0), font=F(18))
-                sheet.save(qa / f'{name}-{zoom}x.png')
 
 
 def arena_overview():

@@ -134,6 +134,22 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
     fighter's right-click menu.
   - Expected: the check mark follows the state in both menus.
 
+- [ ] **MAC-20 (2026-10-16) The forged weapon is held in the hand, frame by frame (Retina check).**
+  - PC change: while a fighter holds a forged weapon the arena draws it from its unarmed sheet (`Atlas.unarmed_frame`) and
+    attaches the weapon at that frame's `grip` (and `grip2` for dual-wielders: gemini, codex, kunoichi, monk, nomad,
+    generic), rotated to the grip angle with the pivot at the grip point (`forge.Forge.placement`, `held`); the smear is a
+    crescent along the tip positions the art really drew, only around a strike's contact. When it shatters, the next frame
+    is the armed sheet again. Files: `minis_core/forge.py`, `minis_core/arena.py` (`drawables`, `_sprite(unarmed=)`).
+  - Test: `python minis.py arena --rounds 1 --intensity wild --seconds 90` (wild: 5-7 forges), once at the default fighters
+    and once with `python minis.py fighters set a knight` / `set b kunoichi` (`fighters auto` after). Watch a forged
+    weapon through a few strikes, a jump, a hit and its shatter.
+  - Expected on Retina (the canvas is 1 px per point, scaled 2x with nearest filtering): the weapon's grip stays inside the
+    closed hand on every frame (no 1-pt gap or jitter between hand and weapon at 2x), the fighter's own weapon is never
+    drawn at the same time (no double weapon), a dual-wielder holds one in each hand with the back one behind the body,
+    the rotated weapon edges are crisp (nearest, no blur) and the rim reads on light and dark windows; the smear appears
+    only on the cut, not when the arm returns to guard; after the shatter the own weapon is back on the very next frame.
+    Report any frame where the weapon floats off the hand (character, move, roughly when): that is a grip in the art.
+
 ## DONE
 
 - [x] **MAC-9 (2026-10-15) DONE 58b3fdd 2026-10-15 Art renders one pixel differently on macOS.**

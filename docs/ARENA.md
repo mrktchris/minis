@@ -174,7 +174,8 @@ drawn normally.
 1-D along the line between the fighters: x = 0 is the attacker's mark, `gap` is the defender's, positive x is the way the
 attacker faces. The ops are:
 
-- `pose` (role, slot)
+- `pose` (role, slot): every frame index comes from the atlas (`arena_setpieces.frame_of`: hit_frame, the jump's `air`
+  keys for rise / apex / land, smear_frames, a reaction's held pose), never a number written here
 - `pos` (role, `x` or `near` = offset from the attacker's striking distance, `dur`, `ease`, `ghosts`)
 - `alpha` (role, a)
 - `ghost` (role)
@@ -224,10 +225,14 @@ it off). The images above are rendered headless on a synthetic desktop, never a 
    the fighter (0.30 s). Then 8 frames at 30 fps of pixel-shatter and re-assembly: 10-px blocks of the piece scatter
    outwards and gather into the weapon's silhouette, carrying the weapon's texture in the second half; the unused part
    of the piece falls away as debris. The weapon settles into the hand (0.12 s).
-4. **Held.** The weapon is drawn at the grip in front of the fighter, tip up and forward at rest. Every strike swings it:
-   raised back (118 deg) during the wind-up, an accelerating slash to -42 deg exactly at the move's contact, a
-   follow-through to -56 deg, then an eased return. During the fast part three ghosts and a crescent at the tip make the
-   swing smear. It hides while the fighter hangs, climbs, vanishes or falls.
+4. **Held in the hand.** While a weapon is held, the fighter is drawn from its unarmed sheet (its own weapon disappears)
+   and the forged weapon sits at every drawn frame's `grip` from anim.json: pivot at the grip point, extending along the
+   grip angle, so it moves exactly with the arm through strikes, jumps, hits and falls. Dual-wielders (a second grip at
+   a different angle: gemini, codex, kunoichi, monk, nomad, generic) hold a second copy at `grip2`, drawn behind the body;
+   for a two-handed weapon `grip2` is the other hand on the same weapon. Around a strike's contact (hit_frame +/- 1),
+   when the grip turns 25 deg or more between drawn frames, two ghosts at the previous grips and a crescent swept along
+   the tip's real path make the swing smear. A frame with no grip holds nothing. It hides only while its holder has
+   vanished in a set piece. After the shatter the native weapon is back on the next frame.
 5. **Cracks and shatter.** Every hit it lands (or a block) adds a crack (a heavy hit two); the third shatters it. It also
    shatters when its uses run out (calm 2, normal 3, wild 4 exchanges), when its holder is KO'd, and on a set piece's
    finishing cut. Shattered, it breaks into squares of its own pixels that burst, fall with gravity, bounce once on the
@@ -331,6 +336,8 @@ knight, the Windows premultiply included):
 | V8 normal, forge on | 2.80 | 1.35 | 10.64 | 62.9 | 8.4 % |
 | V8 wild, forge on | 3.34 | 1.73 | 11.51 | 57.0 | 10.0 % |
 
+Hand tracking (2026-10-16) adds the per-frame grip lookup and the unarmed sprite; measured while the PC was under other load,
+forge on cost about 30 % over forge off for the same matches, so the absolute figures in the table are the earlier run.
 Forging costs about 0.4 ms a frame on average at `normal`: weapon rotations are cached per 6 deg step and crack level, morph
 frames are built once per forge, and weapon art is built once (the morph's first frame). The max frames are a forge's
 first morph frame and a shatter.
@@ -366,7 +373,10 @@ frames. The process still drops to 20 fps when it goes over `arena_cpu_budget_pc
 - `tests/test_forge.py` holds the V8 desktop-weapons tests: the shape of every family, pixels clipped to the silhouette with
   a rim, progressive cracks, the whole cut / hole / lift / morph / arm / swing / crack / shatter / debris lifecycle, uses
   running out, a thrown slab, a loose piece picked up, shape mode, moved windows, forges per intensity, `forge off` = zero
-  forges, pacing with forging on, the forge inside `stance_finisher`, and privacy: `disable()` drops every derived image and
+  forges, pacing with forging on, the forge inside `stance_finisher`, hand tracking (`HandTracking`: unarmed sheet, the
+  weapon at every frame's grip / grip2 for blade, greatsword, spear, club, twin blades and shards, the native weapon back
+  after the shatter), frame indices from metadata (`FramesFromMetadata`: no referenced frame past its row, hits equal
+  hit_frame, hang / climb use the jump row's own poses), and privacy: `disable()` drops every derived image and
   the overlay repaints without them, `ScreenImage` never pickles, `grab_monitor` refuses under tests, a real headless
   `run_arena` with every write path recorded (open, Path writes, os.write, Image.save, json, logging) leaks no byte run of
   the synthetic screen, `arena capture` refuses while pixels are held and a `forge off` overlay carries none, and
