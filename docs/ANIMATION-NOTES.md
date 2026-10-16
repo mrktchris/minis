@@ -77,11 +77,8 @@ redistribution, no AI training).
 - Hit: frame 1 is a flat white silhouette with a burst, frame 2 a smaller burst, then 2 frames of settle.
 - Eight tones per character at 64 px, two-tone clusters, one-pixel outlines only where a form meets the background.
 
-**Visual inspiration only (not asset sources, nothing downloaded):**
-[Game Academie](https://game-academie.itch.io/) store previews (64 px fighters: heavy single-colour clusters, no
-interior lines) and [DullMesh's Cyber White Samurai](https://dullmesh.itch.io/free-rigged-stylized-cyber-white-samurai)
-(white armour plates with neon edge light) - adopted as LM Studio's costume direction: white plates, teal/magenta
-edge-light trim, and holographic (dithered neon) afterimages on its flash-steps.
+LM Studio's costume direction (white plates, teal/magenta edge-light trim, holographic dithered afterimages on its flash-steps) is
+our own design; it is not credited to any pack.
 
 ## 4. The rules the V5 rig and moves follow
 

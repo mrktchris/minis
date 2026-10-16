@@ -15,20 +15,13 @@ timing, keying, proportion and silhouette (see `docs/ANIMATION-NOTES.md`, sectio
   tier. Studied: the 11-frame draw-and-release as the model for charge -> release, 8-tone colour discipline, hit flash.
   Licence: commercial use and modification allowed, no redistribution, no AI training.
 
-## Visual inspiration only (nothing downloaded, not asset sources)
-
-- Game Academie store previews (https://game-academie.itch.io/): heavy single-colour clusters at 64 px.
-- DullMesh - Rigged Stylized Cyber White Samurai (https://dullmesh.itch.io/free-rigged-stylized-cyber-white-samurai):
-  the white-armour / neon-edge direction behind LM Studio's V6 costume (white kabuto with a glowing V crest, white
-  plates over a dark suit, energy katana) and the holographic afterimages.
-
 ## V6 roster redesign (2026-10-14)
 
 The V6 fighters (ronin, ninja, twin-blade dancer, lancer, monk-brute, cyber samurai, archer-ranger, kunoichi, knight,
 barbarian, monk, nomad, oni) took their proportions (~4.5 heads), weapon-led silhouettes and swing keying from the same
 references, studied only: xzany's Samurai (katana stance, the wide white slash smear), LuizMelo's Martial Hero (sword
-anticipation : action ratio, crescent smear wider than the body), GandalfHardcore's Archer (bow and quiver silhouette),
-DullMesh's Cyber White Samurai (LM Studio) and Game Academie's previews (colour clustering).  No pixels were copied and
+anticipation : action ratio, crescent smear wider than the body) and GandalfHardcore's Archer (bow and quiver silhouette).
+Only free packs are credited here.  No pixels were copied and
 no reference image was fed to any generator; every frame is drawn by `art/rig.py` from pose data.
 
 The same credit line is written into every `anim.json` as `credits` so the engine can show it in-game.

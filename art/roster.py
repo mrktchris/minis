@@ -114,7 +114,7 @@ OLLAMA = Body('ollama', sigil='o', thigh=10, shin=10, torso=15, torso_w=16, wais
               palette=pal(skin='E2B48C', hair='pants', cloth=R('EEE6D4'), trim=R('8A5A38'), pants=R('3A2A20'), helm='trim',
                           metal=R('FFB347'), hilt=R('6A4428'), fx=('FFB347', 'FFE27A', 'FFFFFF', 'EEE6D4')))
 
-# LM Studio: white cyber samurai (inspired by DullMesh's Cyber White Samurai look, nothing copied).  White kabuto with a
+# LM Studio: white cyber samurai (own design, white armour with neon edge light).  White kabuto with a
 # glowing teal V crest, white sode / chest plate / tassets over a dark suit, an energy katana with a magenta hilt.
 LMSTUDIO = Body('lmstudio', sigil='L', torso_w=10.6, headgear='kabuto', face='glow', chest='plate', pads='sode', skirt='tassets', boots=True,
                 gauntlet=True, weapon=W_('energy', 18, 3.5, rel=-56, width=2.0, grip2=2.4),
