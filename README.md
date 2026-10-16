@@ -107,7 +107,8 @@ network.
 - **Fighter select.** Pick which program fights on each side, and which character any program wears, from an arcade-style select
   screen, the right-click menu or the CLI.
 - **Arena mode.** The fight breaks out onto a whole monitor: window edges become walls and ledges, glass cracks and shatters,
-  beams clash, the camera punches in. Visual only - nothing real happens to your windows.
+  beams clash, the camera punches in, and fighters rip weapons out of your desktop. Visual only - nothing real happens to your
+  windows.
 - **Windows and macOS.** Windows 11 is the tested home. macOS (fighters on the Dock, a menu-bar icon) is experimental, and its
   test suite runs in CI on every push.
 - **Tray icon and Start-menu shortcut.** Left-click the tray icon for fighter select, right-click for the menu (Restart, Quit);
@@ -206,6 +207,13 @@ all check out. Process-detected programs have no numbers (`ctx -`).
 (never titles or contents) and paints on itself. No real window is moved, resized, focused, closed or typed into; screen shake
 moves only the overlay. The images here are headless renders on a desktop drawn for the picture, not a screen capture.
 
+**Desktop weapons grab your screen into memory.** When an arena starts it takes ONE picture of its monitor into RAM, and
+fighters cut pieces out of that picture to forge weapons. The picture is never written to disk, a log, a temp file or
+`arena.json`, `arena capture` refuses while it is held, and it is dropped when the arena closes. Turn it off before you share
+your screen or record client work: `python minis.py forge off`, or untick **Desktop weapons** in the tray or fighter menu (a
+running arena drops its picture within 2 seconds). On macOS the picture needs the Screen Recording permission, which Taskbar
+Fighters never asks for; without it the weapons are forged from window shapes instead.
+
 ```
 python minis.py arena [--monitor N] [--rounds 1|3|5|endless] [--endless] [--intensity calm|normal|wild]
                       [--seconds S] [--no-intro] [--no-outro] [--freeze]
@@ -224,7 +232,14 @@ it. Flags you leave out fall back to `"arena": {...}` in `minis.json`, then to t
   full-screen frame.
 - **Beam clashes and set pieces.** Two beams meet and push back and forth; sword scenes with elemental trails play 2-4 times a
   match.
+- **Desktop weapons.** A fighter reaches for a window, a glowing outline cuts a piece out of it, the piece lifts off (a dark
+  hole is painted where it was), shatters into pixels and re-assembles as that fighter's weapon: a blade from a title bar, a
+  greatsword or axe from a window chunk, a spear from a taskbar strip, a club, glass shards. It swings, cracks with every hit
+  and shatters into pixel debris. Slabs get thrown, and chunks knocked off windows can be picked up. 2-4 a match (`calm` 1,
+  `wild` 5 or more).
 - **Intensity.** `calm` halves the effects and turns hazards off; `wild` adds more of everything.
+
+![Desktop weapons on a synthetic desktop: the cut, the hole, the pixel morph, the weapon families, a swing, cracks, the shatter, a thrown slab](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-forge.png)
 
 <details><summary>Stage, air, camera, clash, hazards, intro</summary>
 
@@ -316,8 +331,12 @@ By hand: `python3.12 -m venv .venv`, `.venv/bin/python -m pip install --upgrade 
   `python minis.py plates menubar` (`plates dock` puts them back); they sit just left of the notch.
 - **Menu-bar icon** instead of the tray icon, with the same menu (left click: fighter select; right click or Control-click: the
   menu). No Dock icon: it runs as a background (accessory) app. On a notched MacBook with a full menu bar, macOS may hide the
-  icon behind the notch; `status` says so, and the fighter's right-click menu has everything.
+  icon behind the notch. Then a small badge with the same icon appears just left of the notch (left click: select, right click:
+  the menu), `status` says so, and the fighter's right-click menu has everything. Cmd-drag the icon to a visible spot once and
+  macOS remembers it.
 - **No permissions needed:** no Accessibility, no Screen Recording, no Input Monitoring. The arena reads window *bounds* only.
+  Arena desktop weapons use real screen pixels only if you have granted Screen Recording yourself (it is never requested;
+  `python minis.py doctor` says how); otherwise they are forged from window shapes.
 - **What differs:** no arena `--freeze` and no `arena capture` (both would need a screen capture); start at login is
   `python minis.py autostart on` (one LaunchAgent plist; `autostart off` removes it; `print-startup` only shows it); no Start
   menu, so `shortcut` only explains; `selftest-gui` shows two fighters (at your fighter size) for 5 s and reports their window
@@ -332,7 +351,7 @@ By hand: `python3.12 -m venv .venv`, `.venv/bin/python -m pip install --upgrade 
   right-click Taskbar Fighters in Start > **Pin to taskbar** (Windows only lets you pin a program; it never pins itself).
   `python minis.py shortcut remove` deletes the shortcuts it made, only if they still run this `minis.py`.
 - While it runs, its icon sits in the notification area (tray). Hover: who is fighting ("Taskbar Fighters — Claude vs Grok").
-  **Left-click**: fighter select. **Right-click**: Select fighters..., Pause animations, Flash effects, Plates, Rival mode,
+  **Left-click**: fighter select. **Right-click**: Select fighters..., Pause animations, Flash effects, Desktop weapons, Plates, Rival mode,
   Start/Exit arena, Bout now, Restart Taskbar Fighters, Quit Taskbar Fighters.
 - `python minis.py restart` stops everything and starts it again.
 - No tray icon: set `"tray_icon": false` in `minis.json`.
@@ -365,7 +384,8 @@ Every command below was checked against `python minis.py --help` and each subcom
 | `python minis.py detect` | which known AI programs are seen right now, and how (names and numbers only) |
 | `python minis.py monitors` | list monitors for `arena --monitor N` |
 | `python minis.py arena [--monitor N] [--rounds 1\|3\|5\|endless] [--endless] [--intensity calm\|normal\|wild] [--seconds S] [--no-intro] [--no-outro] [--freeze] [--seed K]` | arena mode ([docs/ARENA.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/ARENA.md)); `arena stop` ends it |
-| `python minis.py arena capture <png>` | PrintWindow of the arena's own window only (refused with `--freeze`; writes only under `qa/` or the data folder) |
+| `python minis.py arena capture <png>` | PrintWindow of the arena's own window only (refused with `--freeze` or while the arena holds a desktop-weapons screen grab; writes only under `qa/` or the data folder) |
+| `python minis.py forge on\|off` | desktop weapons in the arena (default on: one RAM-only screen grab per arena, never saved) |
 | `python minis.py print-startup` | print (never run) the commands to start at logon (macOS: the LaunchAgent plist) |
 | `python minis.py autostart on\|off\|status` | macOS only: start at login with a LaunchAgent (written only when you run `on`) |
 | `python minis.py size 64\|96\|128` | fighter height in px (default 128, HD art); running fighters restart to apply it |
@@ -435,8 +455,10 @@ Fighters hide while a fullscreen app is up, while the taskbar is not at the bott
 - **Your tools untouched.** No settings, hooks, status lines or config files of your AI tools are edited.
 - **Stops only itself.** `stop` ends only processes whose exact command line it can prove are its own; the director restarts a
   dead slot only after the same proof, at most three times in ten minutes.
-- **No screen capture.** The only screen read is the optional arena `--freeze` backdrop, held in that process's memory and never
-  written to disk.
+- **Screen capture only in the arena, only in memory.** An arena grabs its monitor ONCE into RAM to forge desktop weapons (and
+  for the optional `--freeze` backdrop). It is never written to disk, logs, temp files, `arena.json` or `arena capture`, and is
+  dropped when the arena closes. `python minis.py forge off` (or the menu's *Desktop weapons*) turns it off. The taskbar
+  fighters never read the screen.
 - **Arena never touches real windows.** It reads window rectangles (`EnumWindows` / `GetWindowRect`), never titles, never sends
   input; cracks and shatters are paint on its own overlay.
 - **Files written:** `%LOCALAPPDATA%\minis\` on Windows, `~/Library/Application Support/minis/` on macOS (bus files,

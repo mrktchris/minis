@@ -9,8 +9,8 @@ cracks, shatters and rains letters.
 **Visual only: nothing real happens to your windows.** The arena is one click-through overlay window, and everything you see
 is paint on it. The program reads one thing from the desktop: the rectangles of visible windows, as numbers. It never reads
 titles or contents. It never moves, resizes, focuses, closes, minimizes or types into any window. Screen shake moves the
-overlay itself and nothing else. The optional freeze backdrop (`--freeze`) is a picture of the monitor that stays in memory
-and is never written to disk. A test proves this: `VisualOnly7` in `tests/test_arena.py` runs the real arena process with a
+overlay itself and nothing else. Desktop weapons (below) and the optional freeze backdrop (`--freeze`) use one picture of the
+monitor that stays in memory and is never written to disk. A test proves this: `VisualOnly7` in `tests/test_arena.py` runs the real arena process with a
 recording shell and a recording `user32`. The test requires that the only shell call is the single-instance mutex and that
 `user32` is never called.
 
@@ -56,6 +56,9 @@ Where they come from, each layer overriding the one before:
 | craters kept | 2 | 4 | 7 |
 | knock-through speed | 1250 px/s | 950 px/s | 760 px/s |
 | set-piece chance per exchange | 15 % | 25 % | 40 % |
+| desktop weapons per match | 1 | 2-4 | 5-7 |
+| forged weapon lasts (exchanges) | 2 | 3 | 4 |
+| a heavy crack knocks a piece loose | 25 % | 50 % | 75 % |
 
 ## What happens in a match
 
@@ -181,6 +184,7 @@ attacker faces. The ops are:
 - `hit` (`dmg`, `react` = `stagger` | `recoil` | `knockdown`, `push`, `final`)
 - `spark`, `shake`, `flash`
 - `cam` (`box`, `punch`, `lines`, `radial`)
+- `forge` (role): V8, the role forges a desktop weapon during the stance when desktop weapons are on and the match still owes one; `cut` poses swing a weapon in hand, and a `final` hit shatters it
 
 **Pose slots** keep set pieces working for any pairing. Each slot reads a move from the fighter's own atlas, never by a
 move's name:
@@ -201,6 +205,79 @@ A missing move falls back to idle and never raises.
 
 To add a set piece, add an entry to `SETPIECES`, render it with the QA scripts described under Verification, and check
 every frame at 1x and 2x before shipping it.
+
+### Forging: desktop weapons
+
+![Desktop weapons](img/arena-forge.png)
+
+![Desktop weapons animated](img/arena-forge.gif)
+
+The owner's decision: weapons are forged from REAL screen pixels, always (on by default; `python minis.py forge off` turns
+it off). The images above are rendered headless on a synthetic desktop, never a screen grab.
+
+1. **Reach and cut.** The forger turns to a nearby region, throws an arm out and a glowing tether runs to it. An outline in
+   its element colour draws round the region's torn edge (0.32 s), then flashes white (0.08 s).
+2. **The hole.** The piece lifts off and the arena paints a dark, jagged hole where it was: a dark wall, a lit torn edge,
+   glowing in the forger's colour for 0.9 s. The real window under it is never touched. Holes go away when their window
+   moves or closes; at most 10 are kept.
+3. **Lift and morph.** The piece (the region's pixels, clipped to the torn outline, with a rim and glow) flies in front of
+   the fighter (0.30 s). Then 8 frames at 30 fps of pixel-shatter and re-assembly: 10-px blocks of the piece scatter
+   outwards and gather into the weapon's silhouette, carrying the weapon's texture in the second half; the unused part
+   of the piece falls away as debris. The weapon settles into the hand (0.12 s).
+4. **Held.** The weapon is drawn at the grip in front of the fighter, tip up and forward at rest. Every strike swings it:
+   raised back (118 deg) during the wind-up, an accelerating slash to -42 deg exactly at the move's contact, a
+   follow-through to -56 deg, then an eased return. During the fast part three ghosts and a crescent at the tip make the
+   swing smear. It hides while the fighter hangs, climbs, vanishes or falls.
+5. **Cracks and shatter.** Every hit it lands (or a block) adds a crack (a heavy hit two); the third shatters it. It also
+   shatters when its uses run out (calm 2, normal 3, wild 4 exchanges), when its holder is KO'd, and on a set piece's
+   finishing cut. Shattered, it breaks into squares of its own pixels that burst, fall with gravity, bounce once on the
+   taskbar line and fade in four steps (about 1 s).
+6. **Slabs.** A fighter that is already armed (or 30 % of the time) rips out a jagged slab instead and hurls it: the slab
+   spins along an arc to the opponent, shatters into debris on contact, and hits for 10.
+7. **Loose pieces.** A heavy crack or a shatter can knock a chunk of real window off (calm 25 %, normal 50 %, wild 75 %,
+   at most 3 at once). It falls, lands on the first top below it and lies there for 14 s; a forger nearby dashes to it,
+   crouches and forges it instead of cutting a new piece.
+
+**Families** (`forge.family_for`: anim.json `forge` / `weapon` when the art names one, else the roster table, else a blade):
+
+| family | fighters | cut from | shape |
+| --- | --- | --- | --- |
+| blade | claude, lmstudio, gemini, generic | a long strip of a window's title bar (264 x 34) | 232 px curved blade, guard, dark grip |
+| greatsword | knight | a big window chunk (210 x 230) | 252 px broad blade, crossguard, pommel |
+| axe | barbarian | a window chunk (190 x 200) | haft with a crescent head and a beard |
+| spear | cursor, ollama | a thin taskbar strip (360 x 16) | 330 px shaft, collar, leaf tip, held at a third |
+| club | oni, monk | a square block (124 x 124) | tapered, a round studded head |
+| shards | codex, nomad, kunoichi | a pane (176 x 132) | a fan of three glass shards between the fingers |
+| slab | anyone (thrown) | a desktop chunk (156 x 116) | the torn rectangle itself |
+
+The piece's pixels are turned a quarter if that keeps more of them, cropped to the weapon's aspect (never squashed),
+resampled, and clipped to the silhouette. A bevel (a lit top edge, a shaded bottom edge), a one-pixel bright rim and a glow in
+the fighter's element colour make it read on any desktop, white windows included.
+
+**How many.** 2-4 forges a match at `normal`, exactly 1 at `calm`, 5-7 at `wild` (`forge.TARGETS`). They are spread over the
+rounds that must still be played and favour dramatic moments: the fighter under 35 HP rips out a weapon, match point and a
+comeback raise the chance, and the `stance_finisher` set piece forges a blade during its stance (the finishing cut then
+shatters it). Region choice prefers windows near the fighter, unoccluded, clear of the HUD and of earlier holes; the
+taskbar strip is the spear's home.
+
+**Privacy: engineering rules, not options.**
+
+- The monitor is grabbed ONCE, when the arena starts (`minis.grab_monitor`): Windows uses PIL's in-memory BitBlt grab
+  (BGRA to RGBA), macOS uses Quartz only when the Screen Recording permission is already granted. A headless run never grabs.
+- The grab is held as `forge.ScreenImage`: regions are cropped from it, it cannot be pickled, and its repr names only a size.
+  No captured pixel is written to disk, logs, `arena.json`, temp files or crash dumps. The heartbeat says only
+  `screen_pixels: true|false` and a forge count.
+- `arena capture` refuses while the arena holds the grab (and while `--freeze` is on).
+- `minis.py forge off` (control.json `forge`), or unticking **Desktop weapons** in the tray menu or a fighter's right-click
+  menu, drops the grab within 2 s in a running arena, together with every image made from it (weapons, pieces, morph
+  frames, debris, caches); the overlay repaints those rectangles without them. The next arena does not grab at all.
+- The grab is dropped when the arena closes (`Forge.purge` in `run_arena`'s finally).
+- A window that moved since the grab no longer matches its pixels: its pieces are forged from its shape.
+
+**Without pixels** (macOS without Screen Recording, a failed grab, a moved window), the weapons are forged from window
+SHAPES: the same cut, hole, morph and weapon, textured with a stylized frosted glass (window chunks) or brushed steel (title
+bars, taskbar strips) drawn from the rectangle's outline. `python minis.py doctor` reports which mode applies and how to
+grant the permission. Taskbar Fighters never calls `CGRequestScreenCaptureAccess`.
 
 ### Moves from the roster
 
@@ -244,6 +321,32 @@ V7 costs less on average than V6, even though it draws more. Two changes pay for
   decal or banner is no longer repainted every frame.
 - The letterbox repaints only the strip it grew or shrank by.
 
+V8 (desktop weapons), measured with `python tests/arena_harness.py bench --seeds 4` (same method, 1920x1080, claude vs
+knight, the Windows premultiply included):
+
+| | mean | p50 | p95 | max | CPU at 30 fps |
+| --- | --- | --- | --- | --- | --- |
+| V8 normal, forge off (= V7) | 2.43 | 1.06 | 9.00 | 40.5 | 7.3 % |
+| V8 calm, forge on | 2.06 | 0.99 | 8.82 | 64.7 | 6.2 % |
+| V8 normal, forge on | 2.80 | 1.35 | 10.64 | 62.9 | 8.4 % |
+| V8 wild, forge on | 3.34 | 1.73 | 11.51 | 57.0 | 10.0 % |
+
+Forging costs about 0.4 ms a frame on average at `normal`: weapon rotations are cached per 6 deg step and crack level, morph
+frames are built once per forge, and weapon art is built once (the morph's first frame). The max frames are a forge's
+first morph frame and a shatter.
+
+**macOS** (FOUND-2): the same bench with `--backend mac` simulates the macOS window's per-frame work (RGBa conversion and
+bytes of every touched tile):
+
+| macOS window | ms/frame mean | p95 | tiles uploaded / frame | tiles skipped / frame | pixels uploaded / frame |
+| --- | --- | --- | --- | --- | --- |
+| V7: 256-pt tiles, full-frame flashes | 2.74 | 9.27 | 8.9 | 0 | ~583 k |
+| V8: 128-pt tiles, empty tiles skipped, GPU flash layer | 2.31 | 7.77 | 15.9 | 4.9 | ~261 k |
+
+That is 55 % fewer pixels converted and handed to Core Animation per frame. What the PC cannot measure is the Core Animation
+cost per layer update on a real Mac (V8 makes more, smaller updates); `MINIS_ARENA_PROFILE=1` logs it there
+(docs/MAC-HANDOFF.md).
+
 The expensive frames are the zoom lens (a 0.45-monitor region, nearest-neighbour mesh) and the few full-screen flash
 frames. The process still drops to 20 fps when it goes over `arena_cpu_budget_pct`.
 
@@ -260,5 +363,16 @@ frames. The process still drops to 20 fps when it goes over `arena_cpu_budget_pc
   - `SetPieces7`: 2 to 4 per match, every set piece for two pairings, slot fallbacks, every element
   - `Moves7`: traits, and an unknown attack kind still plays
   - `VisualOnly7`: no window API is ever called
+- `tests/test_forge.py` holds the V8 desktop-weapons tests: the shape of every family, pixels clipped to the silhouette with
+  a rim, progressive cracks, the whole cut / hole / lift / morph / arm / swing / crack / shatter / debris lifecycle, uses
+  running out, a thrown slab, a loose piece picked up, shape mode, moved windows, forges per intensity, `forge off` = zero
+  forges, pacing with forging on, the forge inside `stance_finisher`, and privacy: `disable()` drops every derived image and
+  the overlay repaints without them, `ScreenImage` never pickles, `grab_monitor` refuses under tests, a real headless
+  `run_arena` with every write path recorded (open, Path writes, os.write, Image.save, json, logging) leaks no byte run of
+  the synthetic screen, `arena capture` refuses while pixels are held and a `forge off` overlay carries none, and
+  `VisualOnly8` (no window API while forging). Every "screen" in those tests is a synthetic image; the real screen is never
+  grabbed.
 - Previews are rendered headless onto a RAM surface over a synthetic busy desktop, never a screen grab. The doc images are
-  made by `tools/doc_images.py` (`arena_overview()`, `arena_v7_imgs()`).
+  made by `tools/doc_images.py` (`arena_overview()`, `arena_v7_imgs()`, `arena_forge_imgs()`;
+  `python tools/doc_images.py --only forge`, with `FORGE_QA_DIR=<folder>` to dump every frame of the forge, swing, crack and
+  shatter at 1x and 2x for frame-by-frame review).

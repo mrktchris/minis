@@ -697,6 +697,140 @@ def arena_v7_imgs():
              'Options: rounds 1 / 3 / 5 or endless, intensity calm / normal / wild, seconds, intro / outro (docs/ARENA.md).', 'arena-intro.png')
 
 
+def _forge_arena(seed=3, chars=('claude', 'knight'), intensity='normal'):
+    """A V7 doc arena with desktop weapons on, forging from the SYNTHETIC busy desktop (never a screen grab)."""
+    from minis_core import arena as AR, forge as FG, fx as fxmod
+    from minis_core.atlas import Library
+    HD = _DESK.setdefault('lib', Library(hd=True))
+    desk = _DESK.setdefault('desk', _busy_desktop())
+    st = AR.Stage((0, 0, 1920, 1080), V7_WINS, floor_y=1032)
+    scr = FG.ScreenImage(desk.copy(), rects=[(w['id'], w['l'], w['t'], w['r'], w['b']) for w in st.windows])
+    ar = AR.Arena(st, {'a': HD[chars[0]], 'b': HD[chars[1]]}, fxmod.default(), seed=seed, now=0.0, record=lambda *a, **k: None,
+                  options={'intensity': intensity}, screen=scr, forge=True)
+    ar.flashes = True
+    surf = AR.Surface(1920, 1080)
+    comp = AR.Compositor(ar, surf)
+    now = 0.0
+    while ar.phase != 'fight':
+        now += 1 / 30.0
+        ar.tick(now)
+        comp.render(now)
+    ar.exchange, ar.cooldown_until, ar.next_hazard = None, 1e9, 1e9
+    ar.forge.target = 0                                                     # the scene below forges by hand
+    return ar, surf, comp, now
+
+
+def arena_forge_imgs(qa_dir=None):
+    """docs/img/arena-forge.png (annotated stills: the forge, the weapon families, swing / cracks / shatter, a thrown slab)
+    and arena-forge.gif (the sequence at real speed), all over the SYNTHETIC desktop.  qa_dir: also dump every frame of the
+    forge, swing, crack and shatter sequences at 1x and 2x there (frame-by-frame QA; not committed)."""
+    from minis_core import forge as FG
+    qa = Path(qa_dir) if qa_dir else None
+    if qa:
+        qa.mkdir(parents=True, exist_ok=True)
+    ar, surf, comp, now = _forge_arena()
+    A, B = ar.f['a'], ar.f['b']
+    shots, gif, frames, focus = {}, [], [], []
+    box = lambda: _v7_box((A.x + B.x) / 2.0, A.y - 290, 1000, 560)
+    view = box()
+
+    def tick(k=1, grab=None, cap=None):
+        nonlocal now
+        for _ in range(k):
+            now += 1 / 30.0
+            ar.tick(now)
+            comp.render(now)
+            fr = _v7_frame(surf, view)
+            frames.append(fr)
+            focus.append((int(A.x - view[0]), int(A.y - view[1])))
+            if int(round(now * 30)) % 2 == 0:
+                g, _ = card(fr.resize((640, 358), Image.BILINEAR), 'Desktop weapons (arena)', 'Headless render on a synthetic desktop')
+                gif.append(g)
+        if grab:
+            shots[grab] = (cap, _v7_frame(surf, view))
+    job = ar.forge.start('a', 'weapon', now)
+    while not job.done and len(frames) < 120:
+        tick()
+        el = now - job.t_stage
+        if job.stage == 'outline' and el > job.t_outline * 0.6 and 'outline' not in shots:
+            shots['outline'] = ('1  reach: a glowing outline cuts the title bar', _v7_frame(surf, view))
+        if job.stage == 'lift' and el > 0.12 and 'lift' not in shots:
+            shots['lift'] = ('2  the piece lifts off: a dark hole is left', _v7_frame(surf, view))
+        if job.stage == 'morph' and int(el * 30) == 3 and 'morph' not in shots:
+            shots['morph'] = ('3  pixel-shatter, re-assemble (frame 4 of 8)', _v7_frame(surf, view))
+    tick(4, 'armed', '4  armed: a blade made of the window\'s pixels')
+    t = now
+    ar.forge.on_strike('a', t, t + 0.3, t + 0.55)
+    A.play(next((m for m in ('cross', 'jab') if m in A.atlas.anim), 'idle'), t, loop=False, hold='idle')
+    swing0 = len(frames)
+    tick(8)
+    shots['swing'] = ('5  the swing smear', frames[-1])
+    for k in range(9):
+        if ar.forge.weapons.get('a') is not None and ar.forge.weapons['a'].fast(now):
+            shots['swing'] = ('5  the swing smear', frames[-1])
+            break
+        tick()
+    tick(10)
+    crack0 = len(frames)
+    for i in range(FG.CRACKS_TO_SHATTER - 1):
+        ar.forge.on_hit_landed('a', now)
+        tick(6)
+    shots['cracked'] = ('6  cracks grow with every hit', frames[-1])
+    ar.forge.on_hit_landed('a', now)
+    shatter0 = len(frames)
+    tick(5, 'shatter', '7  ... and it shatters into its own pixels')
+    tick(30)
+    job = ar.forge.start('b', 'slab', now)
+    while not job.done and len(frames) < 600:
+        tick()
+    tick(4, 'slab', '8  a ripped desktop slab, thrown')
+    tick(30)
+    save_gif(gif, 'arena-forge.gif', ms=66, colors=128)
+    order = ['outline', 'lift', 'morph', 'armed', 'swing', 'cracked', 'shatter', 'slab']
+    rows = [[shots[k] for k in order[:4] if k in shots], [shots[k] for k in order[4:] if k in shots]]
+    # the families: each roster weapon forged from the same synthetic desktop, 2x
+    fam_row = []
+    for chars, fam in ((('claude', 'codex'), 'blade'), (('knight', 'codex'), 'greatsword'), (('barbarian', 'codex'), 'axe'),
+                       (('cursor', 'codex'), 'spear'), (('oni', 'codex'), 'club'), (('kunoichi', 'claude'), 'shards')):
+        ar2, surf2, comp2, n2 = _forge_arena(seed=5, chars=chars)
+        ar2.forge.start('a', 'weapon', n2)
+        while 'a' not in ar2.forge.weapons and n2 < 60:
+            n2 += 1 / 30.0
+            ar2.tick(n2)
+            comp2.render(n2)
+        for _ in range(14):
+            n2 += 1 / 30.0
+            ar2.tick(n2)
+            comp2.render(n2)
+        a2 = ar2.f['a']
+        crop = _v7_frame(surf2, _v7_box(a2.x + a2.facing * 60, a2.y - 150, 420, 300))
+        fam_row.append((f'{fam} ({chars[0]})', crop))
+    _v7_card([rows[0], rows[1], fam_row[:3], fam_row[3:]],
+             'Desktop weapons: forged from real screen pixels',
+             'Headless render on a SYNTHETIC desktop (never a screen grab): the cut, the hole, the morph, the weapon families',
+             'The arena grabs its monitor ONCE into RAM at start and never saves it; `python minis.py forge off` (or the menu\'s Desktop weapons) '
+             'turns it off\nand drops the grab mid-match.  Without a grab (macOS without Screen Recording) weapons are forged from window shapes.',
+             'arena-forge.png', pw=480, ph=270)
+    if qa:
+        for name, i0, i1 in (('forge', 0, swing0), ('swing', swing0, crack0), ('crack-shatter', crack0, shatter0 + 30)):
+            seq = frames[i0:i1]
+            for zoom in (1, 2):
+                cols = 6
+                cw, ch = (500, 280) if zoom == 1 else (1000, 560)
+                sheet = Image.new('RGB', (cols * cw, ((len(seq) + cols - 1) // cols) * ch), (0, 0, 0))
+                for i, fr in enumerate(seq):
+                    if zoom == 1:
+                        im = fr.resize((cw, ch), Image.NEAREST)
+                    else:                                  # 2x: around the forger (its weapon and the piece in front of it)
+                        fx, fy = focus[i0 + i]
+                        x0 = min(max(fx - 200, 0), fr.width - 500)
+                        y0 = min(max(fy - 330, 0), fr.height - 280)
+                        im = fr.crop((x0, y0, x0 + 500, y0 + 280)).resize((cw, ch), Image.NEAREST)
+                    sheet.paste(im.convert('RGB'), ((i % cols) * cw, (i // cols) * ch))
+                    ImageDraw.Draw(sheet).text(((i % cols) * cw + 6, (i // cols) * ch + 4), str(i), fill=(255, 255, 0), font=F(18))
+                sheet.save(qa / f'{name}-{zoom}x.png')
+
+
 def arena_overview():
     """docs/img/arena.png (one still per feature group) and arena.gif (a real-speed stretch of a match).  Two passes over the
     same seeded match: the first finds when things happen, the second renders only the frames it needs."""
@@ -1080,6 +1214,8 @@ def main(argv=None):
         if 'arena' in only:
             impact_imgs(*arena_imgs())
             arena_v7_imgs()
+        if 'arena' in only or 'forge' in only:
+            arena_forge_imgs(os.environ.get('FORGE_QA_DIR'))          # V8 desktop weapons, synthetic desktop only
     finally:
         shutil.rmtree(_TMP, True)
     return 0

@@ -8,8 +8,9 @@ Commit fixes, mark the item DONE with the commit hash and the date, and push. Ad
 anything the PC side must know** (a bug you could not fix, a behaviour that differs from Windows, a question). Keep each
 item short: what you ran, what you saw, what you changed.
 
-Rules that still apply on the Mac: no screen capture (no Screen Recording permission, ever), never touch other apps'
-windows, never edit AI tool settings, `python minis.py stop` before switching between a clone and a pip install (they share
+Rules that still apply on the Mac: the Mac session takes no screen capture itself and never grants Screen Recording on its
+own (the app's desktop weapons may use the permission only if the OWNER has granted it; the app never requests it: MAC-13),
+never touch other apps' windows, never edit AI tool settings, `python minis.py stop` before switching between a clone and a pip install (they share
 `~/Library/Application Support/minis`).
 
 Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash> <date>` = done.
@@ -36,6 +37,60 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - Mac 2026-10-15: Python 3.14.8 + PyObjC 12.2.2 + Pillow 12.3.0 on Apple silicon, macOS 15.7.4: OK (the CI also runs 3.12 / 3.13).
     Dock side / auto-hide and full-screen Spaces need System Settings changes the owner has to make; no second display or
     Intel Mac here.
+
+- [ ] **MAC-13 (2026-10-15) Desktop weapons: Screen Recording preflight, real pixels, no prompt.**
+  - PC change: the arena forges weapons from a screen grab taken ONCE into RAM at start (minis_core/forge.py; on by default,
+    `python minis.py forge off|on`, menu *Desktop weapons*). On macOS `minis_mac/shell.py` `grab_screen(rect)` calls
+    `CGWindowListCreateImage(rect, OnScreenOnly, kCGNullWindowID, kCGWindowImageNominalResolution)` (fallback
+    `CGDisplayCreateImageForRect`) and `pil_from_cgimage` only when `screen_capture_allowed()` (`CGPreflightScreenCaptureAccess`)
+    is true. `CGRequestScreenCaptureAccess` is never called. PIL's ImageGrab is not used on macOS (it writes a temp file).
+  - Test A (no permission, the normal state): `python minis.py doctor` -> the line `desktop weapons: on, from window SHAPES ...
+    For real pixels: System Settings > ...`. Then `python minis.py arena --rounds 1 --seconds 60`. Expected: NO permission
+    prompt at any point; 1-4 forges a match (an outline cuts a window piece, a dark hole is left, the piece morphs into a
+    frosted-glass / steel weapon); `~/Library/Application Support/minis/arena.json` while it runs has `"screen_pixels": false`;
+    `logs/arena.log` says `forge=True pixels=False`.
+  - Test B (only if the OWNER chooses to grant Screen Recording to the terminal / Python that runs it): doctor says `from real
+    screen pixels`; the arena's weapons carry the windows' real colours; arena.json shows `"screen_pixels": true` and, after
+    `python minis.py forge off`, `false` within ~2 s while the weapons vanish. Report whether the grab is at points size
+    (1710x1107 on a 14" MacBook) or needed the Retina downscale, and whether a moved window's pieces come out as glass.
+    Never grant the permission yourself; if the owner does not want to, skip Test B and say so.
+  - Expected for both: no file appears anywhere with screen content (`find ~/Library/Application Support/minis /tmp -newer
+    <start marker> -type f` lists only logs / json), `python minis.py arena capture` is refused on macOS as before.
+
+- [ ] **MAC-14 (2026-10-15) Arena CPU (FOUND-2): measure the V8 macOS window.**
+  - PC change: `minis_mac/arena_window.py` uses 128-pt tiles (was 256), skips fully transparent tiles (contents nil, no
+    conversion), shows colour / white flashes as a GPU tint layer (no full-canvas re-upload), keeps the canvas at 1 px per
+    point (Core Animation scales it on Retina), and counts tiles and upload time. `run_arena` logs a profile line every 5 s
+    with `MINIS_ARENA_PROFILE=1`. On the PC the simulated mac work dropped from ~583 k to ~261 k pixels per frame
+    (docs/ARENA.md Performance).
+  - Test: `MINIS_ARENA_PROFILE=1 python minis.py arena --rounds 3 --intensity normal --seconds 60` (repeat with `calm`, `wild`,
+    and once with `python minis.py forge off`); meanwhile `top -pid <arena pid> -stats pid,cpu -l 30` (the pid is in arena.json).
+    Copy the `arena profile:` lines from `~/Library/Application Support/minis/logs/arena.log`.
+  - Expected: CPU <= 10 % of a core at normal (was 15-31 %), no `cpu over budget, 20 fps` line, flashes still visible (a
+    full-screen tint), no tearing between tiles. Report the profile numbers: if `upload` dominates, the next step is bigger
+    tiles for big dirty rects (a per-rect tile size); if `render` dominates, it is the shared compositor; if neither and CPU
+    is still high, it is the AppKit run loop (hover polling at 30 Hz over every panel).
+
+- [ ] **MAC-15 (2026-10-15) Menu-bar icon behind the notch (FOUND-3): the fallback badge.**
+  - PC change: macOS cannot be told where to put a status item; it hides whatever does not fit. `minis_mac/tray.py` now
+    gives the item an `autosaveName` (a Cmd-drag to a visible spot is remembered) and checks every 5 s
+    (`menubar_icon_shown`, bounds only) whether it is shown. While it is hidden, a 22-pt badge with the same icon appears in
+    the free stretch just left of the notch (`geometry.menubar_badge_origin`; left of the HUD plates when they are in the
+    menu bar): left click = fighter select, right click = the tray menu (opens at the mouse). It disappears when the item is
+    visible again.
+  - Test: on the notched MacBook with the full menu bar: `python minis.py start`; within ~5 s look left of the notch.
+    Left-click the badge (select opens), right-click it (menu with *Desktop weapons*), try `python minis.py plates menubar`
+    (badge moves left of the plates after a restart). Then make room (quit a few menu-bar apps): the badge goes away and the
+    icon shows. `python minis.py status` should keep reporting the icon's state.
+  - Expected: badge visible and clickable, crisp on Retina, never over the notch or the app menus' text when the free
+    stretch exists; no permission prompt. Report if `status_item_shown` mistakes the badge for the icon (the badge sits at
+    y >= 2 for exactly that reason).
+
+- [ ] **MAC-16 (2026-10-15) Menu items: Desktop weapons.**
+  - PC change: the tray menu and every fighter's right-click menu have a *Desktop weapons* checkmark (control.json `forge`).
+  - Test: untick it in the menu-bar menu, check `python minis.py status` says `desktop weapons: off`; tick it again from a
+    fighter's right-click menu.
+  - Expected: the check mark follows the state in both menus.
 
 ## DONE
 
@@ -142,8 +197,11 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
 - [ ] FOUND-2 (2026-10-15) The arena runs at 15-31 % of one core on an Apple silicon MacBook (1710x1107 pt @2x) and logs "cpu over
   budget, 20 fps" within a second, every run. The Mac upload is ~2.5 ms per full frame now (58b3fdd); the rest is the shared
   engine / compositor. PC side: a per-platform budget, or profile `minis_core/arena.py` compose at 30 fps.
+  - PC 2026-10-15: the macOS window work is cut (128-pt tiles, empty tiles skipped, GPU flash layer) and a profiler added;
+    measuring on the Mac is MAC-14.
 - [ ] FOUND-3 (2026-10-15) On a MacBook with a full menu bar the status item is created but macOS keeps it behind the notch (x 743,
   never on screen). `status` says so and the fighter menu has every control. Idea for PC side: a `Select fighters...` /
   `Arena` entry point that does not depend on the icon (e.g. scoreboard name click already opens select).
+  - PC 2026-10-15: autosaveName + a fallback badge left of the notch while the icon is hidden (MAC-15).
 - [x] FOUND-4 (2026-10-15) DONE (PC, 2026-10-15: one word, "experimental"; the README badges no longer say beta) `doctor` / `minis_platform.label()` still print "macOS ... - experimental"; README calls macOS beta. PC side:
   pick one word.
