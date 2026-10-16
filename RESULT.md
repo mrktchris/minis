@@ -458,3 +458,40 @@ section 8, [docs/ARENA.md](docs/ARENA.md), [docs/MAC-TESTING.md](docs/MAC-TESTIN
   clearances with the fighter size in `config.fight_zone`. Not fixed in this pass.
 - `docs/img/live-taskbar.png` and `live-bout.gif` were not refreshed: the only allowed capture is the 48 taskbar rows, which
   at 128 px shows the fighters from the knees down. They still show the V6 64 px fighters.
+
+## V7.1 (2026-10-15): lock-on, real jumps, HUD at every size, own-window capture
+
+Owner's live screenshot: two 128 px fighters, the left one facing away with its bow aimed at empty space, the right one
+mid-jump ("make them lock on to each other better"; "they look very stiff when they jump"). Details: ANIMATION-NOTES
+sections 9 (art) and 10 (engine); commits 0599efd, 5ce3a51, 9022c2c and the test-speed fix after them.
+
+### Root cause of the facing bug
+
+Inside a bout facing followed the partner's bus copy, read every 0.2 s and written at most every 0.25 s. After a crossover
+(the vault back after a dash-through, as in the screenshot) the fighter faced the old side for up to half a second and the
+next timeline attack (the bow shot) went off backwards. Two more engine causes: the timeline let a bout spread 110 px around
+its centre while the brain clamped every slide to a ~75 px half-zone at 128 px (the two processes' fighters drifted off the
+shared plan), and facing was set before the redraw's slide and never at home for a sleeper after the walk home. Found on the
+way: every strike step-in was a 60 000 ms slide (`int(max(60, seconds) * 1000)`), so strikers barely closed in.
+
+### Verified
+
+| claim | evidence |
+| --- | --- |
+| facing | `tests/test_lockon.py` audit, 26 seeded runs (matches, spars, clashes, roster at 128 px, real bus lag, 30 fps, ~100 000 bout frames): facing away outside the whitelist 237 -> 0 frames; the replayed opponent equals the real one on every frame |
+| strikes and shots | contacts from outside the move's reach 201 -> 0 (of ~560; whiffs and blade locks excluded); projectiles fired with the opponent behind or arriving on empty space 0 / 0 before and after |
+| HUD | frames reaching over a plate or the scoreboard at 64 / 96 / 128 px: 91 / 100 / 361 -> 0 / 0 / 0 (of 4 050 each, composed exactly as the window draws them) |
+| jumps | 13 characters x 2 resolutions rebuilt; neutral jump 600 ms with ~5 px in-cell rise -> 930 ms, 470 ms airborne, apex 19 px, engine-drawn at 30 fps; no height jump between rows in 13 seeded matches (only the intended slams drop fast); strips viewed at 4x (`qa/jump/`, git-ignored, `python art/qa_jump.py strips all`) |
+| suite | `python -m unittest discover -s tests`: 626 OK, 14 skipped (Windows, Python 3.14) |
+
+### Not done / not verified
+
+- **Live images not refreshed.** `tools/own_capture.py` works against the live copy (its dumps carried all five windows at
+  128 px with the 60 px headroom, 188 px tall), but during this run the owner opened fighter select, set a new lineup,
+  paused, and the director stopped; I did not override that. Refresh with the copy running and unpaused:
+  `python tools/own_capture.py --out <dir> --seconds 40 --fps 10 --demo match` then
+  `python tools/doc_images.py --annotate-live <dir>` (writes `docs/img/live-taskbar.png`, `live-bout.gif`).
+- The one allowed `python minis.py restart` also stopped an arena process that was running at the time (pid 56348).
+- The arena still picks jump frames by number (ledge hang 3, climb 4/5): after the rebuild 3 is the rising pose, 4 the apex,
+  6 the landing. Arena files are the arena agent's; told.
+- macOS: MAC-17..20 in docs/MAC-HANDOFF.md (window headroom, zone/clip, own-window dump, lock-on look).

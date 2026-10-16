@@ -1270,10 +1270,14 @@ class ForgeV8(unittest.TestCase):
         out |= set(a.get('smear_frames') or [])
         return sorted(i for i in out if 0 <= i < n)
 
+    _moves = {}                                              # build_moves per character (pose data; the same at any RES)
+
     @staticmethod
     def render(ch, name, i, res=1, unarmed=False, facing=1):
         c = roster.get(ch)
-        mv = M.build_moves(c)[name]
+        if ch not in ForgeV8._moves:
+            ForgeV8._moves[ch] = M.build_moves(c)
+        mv = ForgeV8._moves[ch][name]
         poses = [f[0] for f in mv['frames']]
         prev, prev2 = BF.frame_history(poses, i, mv['loop'])
         rig.set_res(res)
@@ -1336,7 +1340,14 @@ class ForgeV8(unittest.TestCase):
         """The grip point is on (within 1 px of) the gripping hand's pixels, and the grip angle matches the axis of the
         weapon pixels actually drawn (5 degrees at RES 2, 7 at RES 1 where a 12-18 px blade is quantised; long weapons
         only, smear frames skipped), in both facings."""
-        import numpy as np
+        import re
+
+        def where(buf, ids):                                 # (xs, ys) of the pixels whose part id is in ids (no numpy:
+            w = buf.width                                    # a byte-class regex over the 'L' part buffer runs in C)
+            pat = re.compile(b'[' + b''.join(re.escape(bytes([int(i)])) for i in ids) + b']')
+            ks = [m.start() for m in pat.finditer(buf.tobytes())]
+            return [k % w for k in ks], [k // w for k in ks]
+
         for res, root in ((1, 'assets'), (2, 'assets_hd')):
             for ch in CHARS:
                 s = Sheet(ch, root)
@@ -1347,7 +1358,6 @@ class ForgeV8(unittest.TestCase):
                     for i in self.sample(a)[:2 if res == 2 else None]:
                         for facing in (1, -1):
                             buf, pose = self.render(ch, n, i, res=res, facing=facing)
-                            px = np.array(buf)
                             ax = s.meta['anchor']['R' if facing > 0 else 'L'] + 0.5
                             for key, hand_part, wpn in (('grip', 'hand_f', ('wpn_f', 'hilt_f')),
                                                         ('grip2', 'hand_b', ('wpn_b', 'hilt_b'))):
@@ -1357,12 +1367,13 @@ class ForgeV8(unittest.TestCase):
                                 gx = ax + (g[0] if facing > 0 else -g[0])
                                 gy = s.meta['ground_y'] + g[1]
                                 hid = rig.PID['hand_f' if g[3] == 'f' else 'hand_b']
-                                ys, xs = np.nonzero(px == hid)
+                                xs, ys = where(buf, {hid})
                                 r_ = int(math.ceil(1.5 * res))
-                                win = px[max(0, int(gy) - r_):int(gy) + r_ + 1, max(0, int(gx) - r_):int(gx) + r_ + 1]
-                                covered = any(v and rig.Z[int(v)] > rig.Z[hid] for v in np.unique(win))
+                                win = {buf.getpixel((xx, yy)) for yy in range(max(0, int(gy) - r_), min(buf.height, int(gy) + r_ + 1))
+                                       for xx in range(max(0, int(gx) - r_), min(buf.width, int(gx) + r_ + 1))}
+                                covered = any(v and rig.Z[int(v)] > rig.Z[hid] for v in win)
                                 if len(xs) and not covered:          # a hand behind the arm / weapon / body is not checked
-                                    d = np.min(np.hypot(xs + 0.5 - gx, ys + 0.5 - gy))
+                                    d = min(math.hypot(x + 0.5 - gx, y + 0.5 - gy) for x, y in zip(xs, ys))
                                     # on the hand: within one RES 1 px of a hand pixel's edge
                                     self.assertLessEqual(d, 0.5 * res + 1.0 * res, (root, ch, n, i, facing, key, g, d))
                                 spec = body.weapon if key == 'grip' else (body.weapon_b or body.weapon)
@@ -1371,17 +1382,23 @@ class ForgeV8(unittest.TestCase):
                                         or key == 'grip2'):
                                     continue
                                 ids = [rig.PID[w] for w in wpn]
-                                ys, xs = np.nonzero(np.isin(px, ids))
+                                xs, ys = where(buf, set(ids))
                                 if len(xs) < 12 * res:
                                     continue
-                                pts = np.stack([xs + 0.5, ys + 0.5], 1)
-                                c = pts.mean(0)
-                                ev, vec = np.linalg.eigh(np.cov((pts - c).T))
-                                axis = vec[:, -1]
-                                if ev[-1] < 4 * ev[0]:
+                                n_ = float(len(xs))                  # principal axis of the weapon pixels (2x2 covariance)
+                                cx_, cy_ = sum(xs) / n_ + 0.5, sum(ys) / n_ + 0.5
+                                sxx = sum((x + 0.5 - cx_) ** 2 for x in xs) / (n_ - 1)
+                                syy = sum((y + 0.5 - cy_) ** 2 for y in ys) / (n_ - 1)
+                                sxy = sum((x + 0.5 - cx_) * (y + 0.5 - cy_) for x, y in zip(xs, ys)) / (n_ - 1)
+                                tr, det = sxx + syy, sxx * syy - sxy * sxy
+                                disc = math.sqrt(max(0.0, tr * tr / 4 - det))
+                                ev_hi, ev_lo = tr / 2 + disc, tr / 2 - disc
+                                if ev_hi < 4 * ev_lo:
                                     continue                         # foreshortened to a blob: no axis to measure
-                                if np.dot(axis, c - (gx, gy)) < 0:
-                                    axis = -axis
+                                th = 0.5 * math.atan2(2 * sxy, sxx - syy)
+                                axis = (math.cos(th), math.sin(th))
+                                if axis[0] * (cx_ - gx) + axis[1] * (cy_ - gy) < 0:
+                                    axis = (-axis[0], -axis[1])
                                 want = g[2] if facing > 0 else 180.0 - g[2]
                                 got = math.degrees(math.atan2(axis[1], axis[0]))
                                 err = abs((got - want + 180) % 360 - 180)
