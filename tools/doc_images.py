@@ -266,7 +266,9 @@ def annotate_live_frames(fdir, man):
         fs = [rects[r] for r in ('a', 'b') if r in rects]
         if fs:
             cx = sum((r[0] + r[2]) / 2 for r in fs) / len(fs)
-            cy = min(r[1] for r in fs) + 16
+            # the window reaches JUMP_HEADROOM above its 64-unit cell: point at the cell top (the fighters' heads)
+            cell = 64.0 / (64.0 + cfgmod.JUMP_HEADROOM)
+            cy = min(r[3] - (r[3] - r[1]) * cell for r in fs) + 12
             callout(d, (ox + int(cx * K), oy + int(cy * K)), (ox + int(cx * K), oy - 72), 'fighters', CYA, anchor='ct')
         sb = rects.get('scoreboard')
         if sb:

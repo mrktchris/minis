@@ -486,11 +486,12 @@ way: every strike step-in was a 60 000 ms slide (`int(max(60, seconds) * 1000)`)
 
 ### Not done / not verified
 
-- **Live images not refreshed.** `tools/own_capture.py` works against the live copy (its dumps carried all five windows at
-  128 px with the 60 px headroom, 188 px tall), but during this run the owner opened fighter select, set a new lineup,
-  paused, and the director stopped; I did not override that. Refresh with the copy running and unpaused:
-  `python tools/own_capture.py --out <dir> --seconds 40 --fps 10 --demo match` then
-  `python tools/doc_images.py --annotate-live <dir>` (writes `docs/img/live-taskbar.png`, `live-bout.gif`).
+- **Live images refreshed (2026-10-16)** with `tools/own_capture.py` against the live copy (40 s, knight vs codex skins at
+  128 px): `docs/img/live-taskbar.png`, `docs/img/live-bout.gif` - whole fighters, plates and scoreboard, both locked on in
+  every sampled frame, real jumps, a knockdown and the KO. Two live blockers on the way, both outside the engine: Windows
+  reported QUNS_BUSY (a full-screen app / an arena on monitor 2), so every window was hidden and nothing presented; and an
+  arena started through the director during one capture hid the fighters again. The dump now answers a request even for
+  a window that never drew (hidden record) and own_capture names the reason instead of "no dumps arrived" (b239367).
 - The one allowed `python minis.py restart` also stopped an arena process that was running at the time (pid 56348).
 - The arena still picks jump frames by number (ledge hang 3, climb 4/5): after the rebuild 3 is the rising pose, 4 the apex,
   6 the landing. Arena files are the arena agent's; told.
