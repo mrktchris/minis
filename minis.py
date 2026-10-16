@@ -1332,6 +1332,7 @@ class Scoreboard:
         self.ov = self.shell.Overlay('minis-scoreboard', self.left() * self.g['scale'], self.g['y'], self.SB.W, self.SB.H,
                                      scale=self.g['scale'], on_event=self.on_event,
                                      on_hittest=lambda x, y: self.SB.hit(x, y, self.state) is not None)
+        from minis_core import dump; dump.watch(self.ov, 'scoreboard')   # docs: tools/own_capture.py
         self.ov.show(False)
         req = control.picker_request(now=self.wall())
         self.last['picker'] = req and req.get('id')       # a request from before this process started is not replayed
@@ -1596,11 +1597,13 @@ class Fighter:
         self.snap = Snapshot(atlas.character, 'sleeping')
         self.ov = self.shell.Overlay(f'minis-{self.slot}', int(self.cfg['zone'][0]), self.g['y'], 64, self.cell, scale=self.g['scale'],
                                      on_event=self.on_event, on_timer=self.menu_tick)
+        from minis_core import dump; dump.watch(self.ov, self.slot)   # docs: tools/own_capture.py
         self.ov.show(False)
         if plat.is_mac():
             self.hud_pos = control.hud_position(self.control_path)
         self.pov = self.shell.Overlay(f'minis-{self.slot}-plate', *self.plate_xy(), cfgmod.PLATE_W, cfgmod.PLATE_H,
                                       scale=self.g['scale'], on_event=self.on_plate_event, on_timer=self.menu_tick)
+        dump.watch(self.pov, f'{self.slot}-plate')
         self.pov.show(False)
         self.hud_k = hud_density(self.shell)
         if plat.is_mac():                                  # over app windows, not a taskbar: see-through + click-through on hover
