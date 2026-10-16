@@ -145,11 +145,20 @@ def self_argv(*tail):
     return [str(python_exe()), str(ROOT / 'minis.py')] + list(tail)
 
 
+BUNDLE_EXES = ('taskbarfighters.exe', 'taskbarfighters-cli.exe')   # the windowed and console launchers of one bundle
+
+
 def _frozen_argv_is_ours(argv, tail, role, exe=None):
-    """A frozen build's child: <the same executable> then exactly the tail (the arena: the tail as a prefix)."""
+    """A frozen build's child: <this executable, or its sibling launcher in the same bundle folder> then exactly the tail
+    (the arena: the tail as a prefix).  A double-click starts TaskbarFighters.exe; `TaskbarFighters-cli.exe stop` must
+    still recognise those processes, so both launchers count - only from this very folder."""
     exe = exe or sys.executable
     try:
-        same = os.path.normcase(os.path.normpath(str(argv[0]))) == os.path.normcase(os.path.normpath(str(exe)))
+        mine = os.path.normcase(os.path.normpath(str(exe)))
+        theirs = os.path.normcase(os.path.normpath(str(argv[0])))
+        same = theirs == mine or (os.path.dirname(theirs) == os.path.dirname(mine)
+                                  and os.path.basename(theirs) in BUNDLE_EXES
+                                  and os.path.basename(mine) in BUNDLE_EXES)
     except (TypeError, ValueError):
         return False
     rest = list(argv[1:])
@@ -376,7 +385,7 @@ def status_line(now=None):
     states = {r: proc_state(r)[0] for r in ROLES}
     rival = 'on' if control.rival_on(default=load_config().get('rival', True)) else 'off'
     if not any(v == 'running' for v in states.values()):
-        return f'minis is not running (start it with `python minis.py start`). Rival mode {rival}.'
+        return f'minis is not running (start it with `{prog_name()} start`). Rival mode {rival}.'
     data = director.read_assign()
     sides = []
     for s, side in (('a', 'left'), ('b', 'right')):
