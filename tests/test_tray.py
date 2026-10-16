@@ -174,7 +174,7 @@ class TrayLogic(unittest.TestCase):
         from minis_core import lineup as L
         items = T.tray_menu(dict(paused=True, flash=False, plates=True, rival=False, arena=True))
         labels = L.labels_of(items)
-        self.assertEqual(labels, ['Select fighters\u2026', 'Pause animations', 'Flash effects', 'Plates', 'Rival mode',
+        self.assertEqual(labels, ['Select fighters\u2026', 'Pause animations', 'Flash effects', 'Desktop weapons', 'Plates', 'Rival mode',
                                   'Exit arena', 'Bout now', 'Restart Taskbar Fighters', 'Quit Taskbar Fighters'])
         opts = {it[0]: (it[2] if len(it) > 2 else {}) for it in items if it}
         self.assertTrue(opts[T.PAUSE]['checked'])
@@ -220,6 +220,9 @@ class TrayActions(Isolated):
         self.assertFalse(control.paused())
         self.run_choice(T.FLASH)
         self.assertFalse(control.flashes_on())
+        self.assertTrue(control.forge_on())                                    # desktop weapons: on by default
+        self.run_choice(T.FORGE)
+        self.assertFalse(control.forge_on())
         self.run_choice(T.PLATES)
         self.assertFalse(control.plates_on())
         self.run_choice(T.RIVAL)

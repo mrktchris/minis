@@ -11,6 +11,8 @@
   python minis.py winners random|decided   how match winners are drawn (decided = biased by the health score)
   python minis.py rival on|off   rival mode: a sleeping partner (or the sparring bot) is woken for a match now and then
   python minis.py flash on|off   white flashes on big hits (off: never a flash, for anyone who dislikes strobing)
+  python minis.py forge on|off   desktop weapons in the arena (default on): it grabs its monitor ONCE into RAM to forge weapons
+                                 from real screen pixels and never saves it; turn it off before screen-sharing client work
   python minis.py fighters       programs seen + their state, the characters, the current lineup
   python minis.py fighters set a|b <program|character>   pin a program to a side, or give that side's program a look
   python minis.py fighters pin a|b <program>   keep this program on that side (asleep when it is not detected)
@@ -23,8 +25,9 @@
   python minis.py arena [--monitor N] [--freeze] [--seconds S] [--seed K]   arena mode (default monitor: the Arena button's)
       [--rounds 1|3|5|endless] [--endless] [--intensity calm|normal|wild] [--no-intro] [--no-outro]   match options (docs/ARENA.md)
   python minis.py arena stop     ask the arena to leave (then force-stop it if it will not)
-  python minis.py arena capture <png>   PrintWindow of the arena's OWN window only; refused while --freeze is on, and
-                                        only under qa/ or the data folder
+  python minis.py arena capture <png>   PrintWindow of the arena's OWN window only; refused while --freeze is on or the arena
+                                        holds a screen grab for desktop weapons (`forge off` first), and only under qa/ or
+                                        the data folder
   python minis.py director       run the director + scoreboard widget in the foreground
   python minis.py run <slot>     run one fighter slot in the foreground (a = left, b = right)
   python minis.py run arena ...  the arena process body (what `arena` launches)
@@ -433,7 +436,8 @@ def cmd_status(args=None):
         print(f'assign.json: written {round(now - float(data.get("ts", 0)), 1)}s ago')
     print('animations:', 'PAUSED' if control.paused() else 'running', '| HUD plates:',
           ('on' if control.plates_on() else 'off') + (' (menu bar)' if plat.is_mac() and control.hud_position() == 'menubar' else ''),
-          '| winners:', control.winners(), '| flash effects:', 'on' if control.flashes_on() else 'off')
+          '| winners:', control.winners(), '| flash effects:', 'on' if control.flashes_on() else 'off',
+          '| desktop weapons:', 'on' if control.forge_on(default=load_config().get('forge', True)) else 'off')
     lu = control.lineup()
     print(f"lineup: a={lu['a']} b={lu['b']}" + (' | looks: ' + ', '.join(f'{k}->{v}' for k, v in sorted(lu['skins'].items())) if lu['skins'] else ''))
     st, pid = proc_state(ARENA)
@@ -508,6 +512,17 @@ def cmd_flash(args):
     ok = control.set_flashes(args.state == 'on')
     print(f'flash effects {args.state}' if ok else 'could not write control.json')
     return 0 if ok else 1
+
+
+def cmd_forge(args):
+    from minis_core import control
+    ok = control.set_forge(args.state == 'on')
+    if not ok:
+        print('could not write control.json')
+        return 1
+    print(f'desktop weapons {args.state}' + (' (the arena grabs its monitor into RAM once to forge weapons; it is never saved)'
+                                             if args.state == 'on' else ' (no screen grab; a running arena drops its grab within ~2 s)'))
+    return 0
 
 
 def cmd_show(args):
@@ -800,6 +815,12 @@ def cmd_arena(args):
         st = control.arena_state()
         if st and st.get('freeze'):
             print('arena capture: refused while the freeze backdrop is on (it holds a full-monitor grab)')
+            return 2
+        if st and st.get('screen_pixels', True):
+            # desktop weapons are textured with real screen pixels: a capture of the overlay would carry them out of RAM.
+            # (An old heartbeat without the key counts as holding pixels: refuse rather than guess.)
+            print('arena capture: refused while the arena holds a screen grab for desktop weapons '
+                  '(run `python minis.py forge off`, wait 2 s, then capture)')
             return 2
         if not capture_allowed(args.path):
             print(f'arena capture: refused - write under {ROOT / "qa"} or {cfgmod.data_dir()}')
@@ -1162,7 +1183,7 @@ def tray_flags(cfg, board):
     from minis_core import control
     return dict(paused=control.paused(), plates=control.plates_on(), arena=control.arena_active(),
                 rival=control.rival_on(default=cfg.get('rival', True)), flash=control.flashes_on(default=cfg.get('flashes', True)),
-                select_ok=board is not None, arena_ok=board is not None)
+                forge=control.forge_on(default=cfg.get('forge', True)), select_ok=board is not None, arena_ok=board is not None)
 
 
 def tray_choice(choice, flags, board, wall=time.time, log=None, quit_fn=None, restart_fn=None):
@@ -1176,6 +1197,8 @@ def tray_choice(choice, flags, board, wall=time.time, log=None, quit_fn=None, re
         control.set_paused(not flags['paused'])
     elif choice == T.FLASH:
         control.set_flashes(not flags['flash'])
+    elif choice == T.FORGE:
+        control.set_forge(not flags.get('forge', True))
     elif choice == T.PLATES:
         control.set_plates(not flags['plates'])
     elif choice == T.RIVAL:
@@ -1698,7 +1721,8 @@ class Fighter:
         from minis_core import control, director, lineup as L
         cp = self.control_path
         flags = dict(paused=control.paused(cp), plates=control.plates_on(cp), winners=control.winners(cp), arena=control.arena_active(),
-                     rival=control.rival_on(cp, default=self.cfg.get('rival', True)), flash=control.flashes_on(cp, default=self.cfg.get('flashes', True)))
+                     rival=control.rival_on(cp, default=self.cfg.get('rival', True)), flash=control.flashes_on(cp, default=self.cfg.get('flashes', True)),
+                     forge=control.forge_on(cp, default=self.cfg.get('forge', True)))
         lu = control.lineup(cp)
         data = director.read_assign(self.assign_path) or {}
         if self.assigned and not director.slot_assignment(data, self.slot):
@@ -1735,6 +1759,8 @@ class Fighter:
             control.set_paused(not flags['paused'], cp)
         elif choice == L.FLASH:
             control.set_flashes(not flags['flash'], cp)
+        elif choice == L.FORGE:
+            control.set_forge(not flags['forge'], cp)
         elif choice == L.BOUT:
             control.request_demo('spar', cp, now=self.wall())
         elif choice == L.MATCH:
@@ -2010,12 +2036,33 @@ def cmd_run(args):
 
 
 # ------------------------------------------------------------------ arena process
+def grab_monitor(shell, rect, log=None):
+    """The ONE screen grab an arena makes (desktop weapons, --freeze), into RAM: an RGBA image of `rect`, or None.
+    Windows: PIL's in-memory BitBlt grab (BGRA -> RGBA); macOS: the backend's Quartz grab, only when the Screen Recording
+    permission is ALREADY granted (it is never requested).  Never under tests, never written anywhere."""
+    if os.environ.get('MINIS_TESTING'):
+        return None                                         # a test must never grab the real screen
+    try:
+        if plat.is_mac():
+            fn = getattr(shell, 'grab_screen', None)
+            return fn(rect) if fn is not None else None
+        from PIL import ImageGrab
+        return ImageGrab.grab(bbox=rect, all_screens=True).convert('RGBA')
+    except Exception as e:
+        if log is not None:
+            log.error('screen grab failed (desktop weapons use window shapes)\n' + safe_traceback(e))
+        return None
+
+
 def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=None, surface=None, wall=time.time, mono=time.monotonic,
-              max_seconds=None, seed=None):
+              max_seconds=None, seed=None, screen=None):
     """The arena process body.  Injectable for tests: `monitor_rect` (l, t, r, b) replaces the real monitor, `windows_fn()`
-    the window-rect enumeration, `backdrop` a synthetic RAM image, `surface` a headless surface instead of the window.
-    The freeze backdrop (`--freeze`) is grabbed into RAM here and handed to the arena; it is never written anywhere."""
-    from minis_core import arena as AR, bus, control, director, fx as fxmod, rounds
+    the window-rect enumeration, `backdrop` a synthetic RAM image, `surface` a headless surface instead of the window,
+    `screen` a synthetic RAM image standing in for the desktop-weapons grab.
+    The monitor is grabbed at most ONCE, here, into RAM (grab_monitor), for desktop weapons (control.json `forge`, default
+    on) and the freeze backdrop; it is handed to the arena, never written anywhere, and dropped when the arena closes.
+    A headless run (a `surface`) never grabs: it uses `screen` or forges from window shapes."""
+    from minis_core import arena as AR, bus, control, director, forge as FG, fx as fxmod, rounds
     from minis_core.atlas import Library
     log = get_logger('arena')
     if _own_process_with(shell, ARENA) is None:
@@ -2034,16 +2081,27 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
     if opts.get('freeze') and backdrop is None and plat.is_mac():
         log.info('arena: --freeze ignored on macOS (no screen capture)')
         opts = dict(opts, freeze=False)
-    if opts.get('freeze') and backdrop is None:
-        try:
-            from PIL import ImageGrab
-            backdrop = ImageGrab.grab(bbox=rect, all_screens=True).convert('RGBA')     # RAM only, for this process's life
-        except Exception as e:
-            log.error('freeze grab failed\n' + safe_traceback(e))
-            backdrop = None
-    if backdrop is not None and backdrop.size != (rect[2] - rect[0], rect[3] - rect[1]):
+    forge_on = control.forge_on(default=cfg.get('forge', True))
+    windows_fn0 = windows_fn or (lambda: shell.window_rects(exclude=()))
+    try:
+        wins0 = list(windows_fn0())                         # rects at grab time: a window that moves later is forged from its shape
+    except Exception:
+        wins0 = []
+    size = (rect[2] - rect[0], rect[3] - rect[1])
+    grab = screen
+    if grab is None and surface is None and (forge_on or (opts.get('freeze') and backdrop is None)):
+        grab = grab_monitor(shell, rect, log)               # RAM only, for this process's life
+    if grab is not None and grab.size != size:
         from PIL import Image
-        backdrop = backdrop.resize((rect[2] - rect[0], rect[3] - rect[1]), Image.NEAREST)
+        grab = grab.resize(size, Image.NEAREST)
+    if opts.get('freeze') and backdrop is None and grab is not None:
+        backdrop = grab.copy() if forge_on else grab        # the freeze backdrop gets holes punched in: never the forge's copy
+    if backdrop is not None and backdrop.size != size:
+        from PIL import Image
+        backdrop = backdrop.resize(size, Image.NEAREST)
+    stage0 = AR.Stage(rect, wins0, floor_y, tuple(cfg.get('arena_min_window_px', (160, 100))))
+    scr = FG.ScreenImage(grab if forge_on else None, rects=[(w['id'], w['l'], w['t'], w['r'], w['b']) for w in stage0.windows])
+    grab = None                                             # the ScreenImage is the only reference left (plus a freeze backdrop)
     assign = director.read_assign() or DEFAULT_ASSIGN
     slots = {s: director.slot_assignment(assign, s) or DEFAULT_ASSIGN[s] for s in SLOTS}
     lib = Library(hd=True)
@@ -2052,10 +2110,10 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
     chars = {s: slots[s].get('source') or atl[s].character for s in SLOTS}     # V6: the record is per program
     buses = {s: bus.read(s, now=wall()) for s in SLOTS}
     scores = {s: rounds.score_of_bus(buses[s]) for s in SLOTS}
-    arena = AR.Arena(AR.Stage(rect, [], floor_y, tuple(cfg.get('arena_min_window_px', (160, 100)))), atl, fxmod.default(),
+    arena = AR.Arena(stage0, atl, fxmod.default(),
                      seed=seed if seed is not None else int(wall() * 1000) % 100000, mode=control.winners(), scores=scores, backdrop=backdrop,
                      names=names, chars=chars, now=mono(), cfg=cfg, record=lambda w, l, where='arena': _arena_record(arena, w, l, where),
-                     options=opts.get('options') or None)
+                     options=opts.get('options') or None, screen=scr, forge=forge_on)
     own = []
     if surface is None:
         aw = plat.module('arena_window')
@@ -2071,8 +2129,9 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
     seconds = opts.get('seconds') or max_seconds
     fps = int(cfg.get('arena_fps', 30))
     budget = float(cfg.get('arena_cpu_budget_pct', 10.0))
-    log.info('arena started monitor=%s freeze=%s seconds=%s', mon, backdrop is not None, seconds)
+    log.info('arena started monitor=%s freeze=%s seconds=%s forge=%s pixels=%s', mon, backdrop is not None, seconds, forge_on, scr.available)
     lp = dict(last_win=-1e9, last_hb=-1e9, last_cpu=None, cpu_pct=0.0, fps=fps)
+    prof = dict(on=bool(os.environ.get('MINIS_ARENA_PROFILE')), t0=mono(), n=0, tick=0.0, render=0.0)   # FOUND-2: numbers only
     try:
         procs = plat.procs()
     except Exception:
@@ -2098,8 +2157,23 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
                 arena.paused = paused
             if control.arena_stop_requested(started) or (seconds and wall() - started >= float(seconds)):
                 arena.request_exit(now)
+            t1 = time.perf_counter()
             arena.tick(now)
+            t2 = time.perf_counter()
             comp.render(now)
+            if prof['on']:
+                prof['n'] += 1
+                prof['tick'] += t2 - t1
+                prof['render'] += time.perf_counter() - t2
+                if now - prof['t0'] >= 5.0:
+                    st_ = getattr(win, 'stats', None) or {}
+                    n = max(1, prof['n'])
+                    log.info('arena profile: %d frames %.1f fps, tick %.2f ms, render %.2f ms (upload %.2f ms, tiles %.1f up / %.1f '
+                             'skipped per frame), cpu %.1f%%', n, n / (now - prof['t0']), prof['tick'] / n * 1e3, prof['render'] / n * 1e3,
+                             st_.get('upload_s', 0.0) / n * 1e3, st_.get('uploaded', 0) / n, st_.get('skipped', 0) / n, lp['cpu_pct'])
+                    prof.update(t0=now, n=0, tick=0.0, render=0.0)
+                    if st_:
+                        st_.update(uploaded=0, skipped=0, upload_s=0.0, frames=0)
             if now - lp['last_hb'] >= 1.0:
                 lp['last_hb'] = now
                 st = arena.state()
@@ -2127,6 +2201,7 @@ def run_arena(opts, shell, cfg, monitor_rect=None, windows_fn=None, backdrop=Non
             win.close()
         del backdrop
         arena.backdrop = None
+        arena.forge.purge()                                 # the desktop-weapons grab and everything made from it leave RAM
         log.info('arena stopped: %s', arena.state())
     return 0
 
@@ -2328,6 +2403,35 @@ def _version(mod_name, attr='__version__'):
         return f'missing ({type(e).__name__})'
 
 
+MAC_GRANT = ('System Settings > Privacy & Security > Screen & System Audio Recording, turn on the app you start Taskbar Fighters '
+             'from (Terminal, iTerm, or the Python that runs it), then restart Taskbar Fighters')
+
+
+def forge_report(shell):
+    """One doctor line on desktop weapons: on/off, and on macOS whether real pixels are possible (Screen Recording is only
+    ever checked with CGPreflightScreenCaptureAccess, never requested)."""
+    from minis_core import control
+    try:
+        on = control.forge_on(default=load_config().get('forge', True))
+    except Exception:
+        on = True
+    if not on:
+        return 'desktop weapons: off (`python minis.py forge on` to turn them on)'
+    if plat.is_mac():
+        ok = None
+        try:
+            ok = shell.screen_capture_allowed() if shell is not None and hasattr(shell, 'screen_capture_allowed') else None
+        except Exception:
+            ok = None
+        if ok:
+            return ('desktop weapons: on, from real screen pixels (Screen Recording is granted; the arena grabs its display into '
+                    'RAM once and never saves it; `python minis.py forge off` before screen-sharing)')
+        return ('desktop weapons: on, from window SHAPES (Screen Recording is not granted, and Taskbar Fighters never asks for it). '
+                'For real pixels: ' + MAC_GRANT)
+    return ('desktop weapons: on (the arena grabs its monitor into RAM once to forge weapons from real pixels and never saves it; '
+            '`python minis.py forge off` before screen-sharing or recording)')
+
+
 def cmd_doctor(args=None, shell=None, probe=None, describe=None, out=print):
     """One report to paste to an AI agent or an issue: versions, backend, geometry, data dir, detected programs, and a
     real test window.  Names and numbers only; the home folder is shown as ~; no window titles; nothing is written."""
@@ -2395,6 +2499,7 @@ def cmd_doctor(args=None, shell=None, probe=None, describe=None, out=print):
                 check('test overlay window', ok, detail)
             except Exception as e:
                 check('test overlay window', False, f'{type(e).__name__}: {str(e)[:200]}')
+    out('  ' + forge_report(shell))
     try:
         from minis_core import sources
         cfg = load_config()
@@ -2472,6 +2577,9 @@ def main(argv=None):
     fl = sub.add_parser('flash', help='white flashes on big hits on or off')
     fl.add_argument('state', choices=('on', 'off'))
     fl.set_defaults(fn=cmd_flash)
+    fg = sub.add_parser('forge', help='desktop weapons in the arena on or off (on: one RAM-only screen grab per arena)')
+    fg.add_argument('state', choices=('on', 'off'))
+    fg.set_defaults(fn=cmd_forge)
     sh = sub.add_parser('show', help='bring back a hidden fighter')
     sh.add_argument('slot', nargs='?', default=None, choices=SLOTS)
     sh.set_defaults(fn=cmd_show)

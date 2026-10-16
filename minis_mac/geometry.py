@@ -208,3 +208,23 @@ def fullscreen_from_cg(infos, own_pid, screen_rect):
         if wl <= l and wt <= t and wr >= r and wb >= b:
             return True
     return False
+
+
+BADGE = 22                                              # the menu-bar fallback badge (points)
+
+
+def menubar_badge_origin(frame, visible, notch_left, plates_in_menubar, plate_w, plate_h, gap, margin=8):
+    """App point (x, y) of the fallback badge shown when macOS hides the status item (FOUND-3: a full menu bar, or the
+    notch).  It sits in the free stretch just left of the notch (else centred), left of the HUD plates when they are in
+    the menu bar too, vertically centred in the menu bar.  Pure."""
+    fx, fy, fw, fh = frame
+    vx, vy, vw, vh = visible
+    bar = (fy + fh) - (vy + vh)
+    if bar <= 0:
+        bar = 24
+    if plates_in_menubar:
+        right = menubar_plate_origin('a', frame, visible, notch_left, plate_w, plate_h, gap, margin)[0] - gap
+    else:
+        right = (notch_left - margin) if notch_left else fx + (fw + BADGE) / 2.0
+    x = max(fx + margin, right - BADGE)
+    return int(round(x)), int(max(2, (bar - BADGE) // 2))      # y >= 2: status_item_shown never mistakes it for the icon

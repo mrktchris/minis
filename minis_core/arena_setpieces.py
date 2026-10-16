@@ -140,7 +140,7 @@ SETPIECES = {
     'flurry': dict(gap=230, span=(-40, 330), dur=1.8, dmg=29, keys=_flurry_keys()),
     # a long stance and charge (element swirling round the blade, focus lines), a vanishing dash, the finisher
     'stance_finisher': dict(gap=420, span=(-60, 640), dur=2.6, dmg=36, keys=[
-        (0.00, 'pose', 'A', 'stance'), (0.00, 'pose', 'D', 'guard'), (0.00, 'cam', dict(box=2.5, radial='A', until=0.98)),
+        (0.00, 'pose', 'A', 'stance'), (0.00, 'pose', 'D', 'guard'), (0.00, 'cam', dict(box=2.5, radial='A', until=0.98)), (0.04, 'forge', 'A'),
         (0.05, 'trail', 'A', dict(path='arc', cx=0, cy=-96, r=96, a0=-90, a1=180, width=26, draw=0.45, hold=0.35, fade=0.2, seed=4)),
         (0.25, 'trail', 'A', dict(path='arc', cx=0, cy=-96, r=118, a0=90, a1=350, width=20, draw=0.4, hold=0.25, fade=0.2, seed=5)),
         (0.45, 'trail', 'A', dict(path='arc', cx=0, cy=-96, r=78, a0=180, a1=420, width=16, draw=0.35, hold=0.15, fade=0.2, seed=6)),
@@ -417,6 +417,15 @@ class SetPiece:
                 b.play(r[1], now)
             else:
                 b.pose = r
+            if role == 'A' and slot in ('cut', 'cut2', 'cut3', 'follow'):
+                ar.forge.slash(self.slot['A'], now)          # a forged weapon in hand cuts with the pose
+        elif op == 'forge':
+            # V8: the stance doubles as a forge - the attacker rips a blade out of the desktop while it charges (only when
+            # desktop weapons are on, the match still owes a forge and it is not already armed)
+            s = self.slot[args[0]]
+            F = ar.forge
+            if F.enabled and s not in F.weapons and (F.owed() > 0 or ar.endless):
+                F.start(s, 'weapon', now, quick=True, setpiece=True)
         elif op == 'pos':
             role, p = args
             b = self.body(role)
@@ -459,6 +468,8 @@ class SetPiece:
             p = args[0]
             ar._setpiece_hit(self, p, now)
             self.hits += 1
+            if p.get('final'):
+                ar.forge.on_hit_landed(self.slot['A'], now, final=True)    # the finishing cut shatters a forged weapon
         elif op == 'spark':
             b = self.body(args[0])
             ar.fxp.spawn_at('hit_light', now, b.x - self.s * 10, self.y - 100, self.s)

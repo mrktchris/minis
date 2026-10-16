@@ -34,3 +34,17 @@ def merge_rects(rects, limit=12):
         _, i, j, u = best
         rs = [r for k, r in enumerate(rs) if k not in (i, j)] + [u]
     return rs
+
+
+def tile_keys(rects, w, h, tile=128):
+    """The (tx, ty) origins of every `tile`-sized tile the rects touch, clipped to a w x h surface (the macOS arena window
+    re-uploads exactly these)."""
+    keys = set()
+    for x0, y0, x1, y1 in rects:
+        x0, y0, x1, y1 = max(0, int(x0)), max(0, int(y0)), min(w, int(x1)), min(h, int(y1))
+        if x1 <= x0 or y1 <= y0:
+            continue
+        for ty in range((y0 // tile) * tile, y1, tile):
+            for tx in range((x0 // tile) * tile, x1, tile):
+                keys.add((tx, ty))
+    return keys

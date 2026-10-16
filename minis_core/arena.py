@@ -24,6 +24,11 @@ V7 (docs/ARENA.md) - still strictly visual: nothing here can reach another windo
   hazards    letter rain from shattered windows, cracks that spread and drop a glass shard you can stand on
   options    rounds 1|3|5, endless, intensity calm|normal|wild, seconds, intro (VS card) / outro (winner on the highest
              window, both fly back down) - Arena(options=...) or minis.json "arena" / control.json "arena_opts"
+
+V8 desktop weapons (forge.py, docs/ARENA.md "Forging"): fighters cut pieces out of the screen image the process grabbed
+ONCE into RAM at start, morph them into weapons, swing them, crack and shatter them, throw slabs; 2-4 forges a match
+(calm 1, wild 5-7).  control.json `forge` (`minis.py forge off`) switches it off and drops the grab mid-match.  The pixels
+never leave RAM: the heartbeat says only whether a grab is held (`screen_pixels`), and `arena capture` refuses while it is.
 """
 from __future__ import annotations
 import math, random
@@ -32,6 +37,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
 from . import choreo, rounds
 from . import arena_setpieces as SP
+from . import forge as FG
 from .effects import EffectPlayer
 from .fx import text_image
 from .render import font, text, TRACK, AMBER, RED
@@ -87,7 +93,8 @@ BAR_MAX_K = 0.085              # letterbox bar height as a fraction of the monit
 QUIET_EVENTS = frozenset(('zoom', 'radial', 'skid', 'skid_off', 'wall_bounce', 'tech', 'double_jump', 'air_dash', 'ledge_grab', 'climb',
                           'recovery', 'through', 'crater', 'meteor_through', 'hazard_crack', 'hazard_shard', 'shard_platform',
                           'shard_crumble', 'ink', 'pound', 'launch', 'throw', 'pull', 'boomerang', 'juggle_jump', 'outro_perch',
-                          'setpiece_setup', 'clash_charge', 'clash_fire', 'clash_meet', 'clash_push', 'meteor'))
+                          'setpiece_setup', 'clash_charge', 'clash_fire', 'clash_meet', 'clash_push', 'meteor', 'forge_cut', 'forge_morph',
+                          'forge_armed', 'forge_crack', 'forge_shatter', 'forge_throw', 'forge_pickup', 'forge_loose'))
 ROUND_CHOICES = (1, 3, 5)
 INTENSITIES = ('calm', 'normal', 'wild')
 # How much destruction / FX each intensity allows.  `fx` scales particle and letter counts; None switches a feature off.
@@ -756,10 +763,12 @@ def _fighter_crack(sprite, seed):
 # ---------------------------------------------------------------- the arena
 class Arena:
     def __init__(self, stage, atlases, fx, seed=1, mode='decided', scores=None, backdrop=None, names=None, now=0.0, record=None,
-                 cfg=None, chars=None, options=None):
+                 cfg=None, chars=None, options=None, screen=None, forge=None):
         """atlases: {'a': Atlas(hd), 'b': Atlas(hd)}; backdrop: RGBA image the size of the stage kept in RAM, or None.
         options: see arena_options(); layered over minis.json "arena" (cfg) and control.json "arena_opts" - the latter only
-        when a cfg is given (the real process), so a bare Arena never reads this machine's control file."""
+        when a cfg is given (the real process), so a bare Arena never reads this machine's control file.
+        screen: forge.ScreenImage - the monitor grabbed once into RAM for desktop weapons (None: weapons from window shapes).
+        forge: desktop weapons on / off; None = control.json `forge` (default on) when a cfg is given, else off."""
         self.stage, self.fx = stage, fx
         self.rng = random.Random(seed)
         self.mode = mode if mode in rounds.MODES else 'decided'
@@ -836,6 +845,10 @@ class Arena:
         self.final_ko = None                                   # (t, loser) of the match-deciding KO
         self._text_banners = {}
         self._vs = None
+        if forge is None:                                      # desktop weapons (forge.py): the owner's default is on
+            forge = bool(ctl.get('forge', self.cfg.get('forge', True))) if cfg is not None else False
+        self._forge_read = now
+        self.forge = FG.Forge(self, screen=screen, enabled=forge, seed=seed)
         for s in 'ab':
             self.f[s].vy = -1700.0                             # entry: burst out of the taskbar, upward
             self.f[s].fly_until = 0.0
@@ -851,6 +864,7 @@ class Arena:
         return dict(phase=self.phase, round=self.round, hp={s: self.f[s].hp for s in 'ab'}, wins=dict(self.wins), winner=self.winner,
                     mode=self.mode, freeze=self.backdrop is not None, shattered=len(self.cracks.shattered), cracks=sum(self.cracks.count.values()),
                     rounds=self.opts['rounds'], endless=self.endless, intensity=self.opts['intensity'],
+                    forge=self.forge.state(), screen_pixels=self.forge.pixels,
                     events=[[k, t, str(kw.get('name') or kw.get('move') or '')] for k, t, kw in
                             [e for e in self.events if e[0] not in QUIET_EVENTS][-32:]])
 
@@ -903,6 +917,7 @@ class Arena:
                 self.ult_rolled = False
             self.banner = (self._round_banner(), now + 1.2, None)
             self.exchange = None
+            self.forge.new_round()
             self.k_round, self.air_done = 0, False
             for p in self.pick.values():
                 p.new_round()
@@ -1034,6 +1049,8 @@ class Arena:
             for s in 'ab':
                 self._window_collisions(self.f[s], now)
         self._tick_world(now, dt)
+        self._forge_poll(now)
+        self.forge.tick(now, dt)
         for s in 'ab':
             b = self.f[s]
             if b.getup_at is not None and now >= b.getup_at and b.down and b.hp > 0 and self.phase in ('fight', 'round_end'):
@@ -1116,6 +1133,9 @@ class Arena:
         beats = [bt for bt in ex['beats'] if not (bt.get('kind') == 'move' and (bt.get('dx') or 0) > 0)]   # openers are played by the approach
         self.k_round += 1
         first = next((bt for bt in beats if bt.get('kind') not in ('move', 'emote')), None)
+        sp_owed = not self.endless and self.sp_played < 2 and max(self.wins.values()) >= self.to_win - 1
+        if not air and not boost and not sp_owed and self._forge_try(att, dfn, k, now):
+            return
         if not air and not (boost or comeback) and self._setpiece_try(att, dfn, k, now):
             return
         if first is not None and not air and not (boost or comeback) and self._clash_ok(att, dfn, first, now):
@@ -1155,7 +1175,7 @@ class Arena:
     def _fight(self, now):
         over = now - self.round_t0 - rounds.ROUND_CAP_S
         ex = self.exchange
-        if over >= 0 and (ex is None or ex['state'] in ('approach', 'beat', 'wait', 'sp_setup') or over > (2.5 if ex['state'] in ('clash', 'setpiece') else 1.0)):
+        if over >= 0 and (ex is None or ex['state'] in ('approach', 'beat', 'wait', 'sp_setup', 'forge') or over > (2.5 if ex['state'] in ('clash', 'setpiece') else 1.0)):
             if ex is not None and ex['state'] == 'clash':
                 self._end_clash(ex, now)
             if self.sp is not None:
@@ -1186,6 +1206,13 @@ class Arena:
             self._tick_clash(ex, now)
         elif ex['state'] == 'sp_setup':
             self._tick_sp_setup(ex, now)
+        elif ex['state'] == 'forge':
+            if ex['job'].done or now >= ex['deadline']:
+                if not ex['job'].done:
+                    self.forge._finish(ex['job'], now, release=True)
+                self.exchange = None
+                self.last_att, self.last_hit = ex['att'], ex['job'].kind == 'slab'
+                self.cooldown_until = now + self.rng.uniform(*COOLDOWN_CLOSE)
         elif ex['state'] == 'setpiece':
             if self.sp is None or self.sp.done:
                 self.sp = None
@@ -1353,6 +1380,7 @@ class Arena:
         hs = (bt.get('hitstop') or 0) / 1000.0
         ex.update(state='strike', who=who, tgt=tgt, beat=bt, contact=t_c, end=max(now + W.atlas.total_ms(move) / 1000.0, t_c + 0.25) + hs,
                   hit_done=False, fx_list=fx_list, pre_done=False, main=name)
+        self.forge.on_strike(who, now, t_c, ex['end'])                # a forged weapon swings with the strike
         self.note('strike', now, who=who, move=move, move_kind=kind)
         if kind == 'ultimate':
             self.used_ult[who] = True
@@ -1426,6 +1454,7 @@ class Arena:
             self.fxp.spawn_at('block_spark', now, cx + T.facing * 24, cy)
             T.vx = W.facing * (160.0 if outcome != 'parry' else 0.0)
             self.note('block' if outcome != 'parry' else 'parry', now, who=ex['tgt'])
+            self.forge.on_hit_landed(ex['who'], now)                  # a blocked forged weapon still cracks
             return
         dmg = arena_dmg(bt)
         T.hp = max(0, T.hp - dmg)
@@ -1484,6 +1513,7 @@ class Arena:
         if ex['who'] == ex['att']:
             ex['hit'] = True
         self.note('hit', now, who=ex['tgt'], dmg=dmg, hp=T.hp, air=ex['air'])
+        self.forge.on_hit_landed(ex['who'], now, heavy=heavy, final=final)
         if T.hp <= 0:
             self._end_round(now, ex['tgt'])
 
@@ -1551,6 +1581,71 @@ class Arena:
                 self._flash_cache = True
         return self._flash_cache
 
+    def _forge_poll(self, now):
+        """control.json `forge` read every 2 s in the real process: switched off mid-match, the grab is dropped at once."""
+        if not self.forge.enabled or self.cfg is None or not self.cfg or now - self._forge_read < 2.0:
+            return
+        self._forge_read = now
+        try:
+            from . import control
+            on = control.forge_on(default=self.cfg.get('forge', True))
+        except Exception:
+            on = True
+        if not on:
+            self.forge.disable(now)
+            self.note('forge_off', now)
+
+    def _forge_try(self, att, dfn, k, now):
+        """V8 desktop weapons: this exchange is a forge (forge.py decides who and when) -> True when one started."""
+        who = self.forge.want(att, dfn, k, now)
+        if who is None:
+            return False
+        other = 'b' if who == 'a' else 'a'
+        job = self.forge.start(who, self.forge.kind_for(who), now)
+        if job is None:
+            return False
+        self.exchange = dict(att=who, dfn=other, beats=[], i=0, state='forge', t=now, deadline=now + 4.0, air=False, kind='forge', opener=None,
+                             range_after='far', hit=False, job=job)
+        return True
+
+    def _forge_hit(self, att, dfn, now, dmg=10):
+        """A thrown slab lands: a heavy hit through the same bookkeeping as any hit (HP, meter, KO, the finisher camera)."""
+        A, D = self.f[att], self.f[dfn]
+        if D.hp <= 0 or self.phase != 'fight':
+            return
+        cx, cy = D.center()
+        D.hp = max(0, D.hp - dmg)
+        self.meter[att] += dmg
+        self.meter[dfn] += dmg / 2.0
+        self.hp_history.append((round(now, 3), dfn, D.hp))
+        away = 1.0 if D.x >= A.x else -1.0
+        D.hang = D.climb = D.ledge_plan = None
+        D.pose, D.hover, D.fly_until, D.target, D.grounded = None, False, 0.0, None, False
+        hs = 0.1
+        if D.hp <= 0:
+            D.play('knockdown', now, loop=False, hold='ko')
+            D.down = True
+            D.vx, D.vy = away * 700.0, -480.0
+            D.knocked_until = now + 1.2
+            if self._final(att):
+                hs = rounds.KO_HITSTOP_MS / 1000.0
+                for f in (A, D):
+                    f.slow = (now + hs, now + hs + rounds.SLOW_S, rounds.SLOW_K)
+                self.final_ko = (now, dfn)
+                self._finisher_camera(now, cx, cy, att, hs)
+        else:
+            D.play('hit_heavy', now, loop=False, hold='idle')
+            D.vx, D.vy = away * 520.0, -260.0
+            D.knocked_until = now + 0.6
+            D.recover_ok = True
+        D.stop = (now, now + hs)
+        self.fxp.spawn_at('hit_heavy', now, cx, cy, int(away))
+        self.fx_count += 1
+        self._impact(now, dfn, cx, cy, int(away))
+        self.note('hit', now, who=dfn, dmg=dmg, hp=D.hp, air=False)
+        if D.hp <= 0:
+            self._end_round(now, dfn)
+
     def _impact(self, now, tgt, cx, cy, facing):
         """V6 impact frames for IMPACT_S: the fx `impact` on the struck fighter when the sheet has it, and both fighters drawn
         as silhouettes (struck = white, striker = dark).  Only the two sprite rects change, never a full-screen frame, so
@@ -1565,6 +1660,7 @@ class Arena:
     def _end_exchange(self, ex, now):
         self.exchange = None
         self.last_att, self.last_hit = ex['att'], ex['hit']
+        self.forge.on_exchange_end((ex['att'], ex['dfn']), now)
         for s in 'ab':
             f = self.f[s]
             if f.hover or f.chase:
@@ -1600,6 +1696,10 @@ class Arena:
                 L.target, L.vx = None, 0.0
                 L.play(sl, now + 0.3, loop=False, hold=HOLD_LAST)
         self.comeback_for = 'b' if winner == 'a' else 'a'
+        for j in [j for j in self.forge.jobs if not j.setpiece]:   # a forge cut short by the round's end
+            self.forge._finish(j, now, release=True)
+        if ko_loser is not None:
+            self.forge.shatter(ko_loser, now)                       # the KO'd fighter's weapon breaks as it falls
         self.wins[winner] += 1
         self.rounds.append(dict(n=self.round, winner=winner, ko=ko_loser is not None, hp={s: self.f[s].hp for s in 'ab'}, dur=round(now - self.round_t0, 2)))
         self.exchange = None
@@ -2334,6 +2434,8 @@ class Arena:
         if kind is None:
             return None
         self.note(kind, now)
+        if kind != 'crack_small':
+            self.forge.on_window_crack(win, now, cx, cy, heavy=True)   # a chunk may break off: a weapon to pick up
         if kind == 'shatter':
             self._shatter(win, now, cx, cy)
         else:
@@ -2563,6 +2665,7 @@ class Arena:
             out.append((im, d['x'], d['y']))
         for s in self.shards:
             out.append((s['img'], int(s['x']), int(s['y'])))
+        out.extend(self.forge.drawables(now, 'back'))            # forge holes and loose pieces lying on the tops
         if self.sp is not None:
             out.extend(self.sp.drawables(now, 'back'))
         for im, lx, ty, layer, inst in self.fxp.placements(now, layer='back'):
@@ -2608,6 +2711,7 @@ class Arena:
             im = self._sprite(b.atlas, b.drawn_anim(), idx, b.facing, silhouette=sil)
             l, t, r, bt = b.sprite_rect()
             out.append((im, l + b.jitter, t))
+        out.extend(self.forge.drawables(now, 'front'))           # forged weapons in hand, cuts, morphs, slabs, debris
         for im, lx, ty, layer, inst in self.fxp.placements(now, layer='front'):
             out.append((im, lx, ty))
         if self.sp is not None:
@@ -2908,6 +3012,15 @@ class Compositor:
         a = self.arena
         flash = a.fxp.flash(now) if a.flashes_on(now) else 0.0
         cf = a.cam.flash_at(now) if a.flashes_on(now) else None
+        tint = getattr(self.surface, 'tint', None)
+        if tint is not None:                 # V8: the surface washes the window itself (macOS: a GPU layer): no full-frame repaint
+            if flash > 0:
+                tint((255, 255, 255), min(1.0, flash))
+            elif cf is not None:
+                tint(cf[0], min(1.0, cf[1]))
+            else:
+                tint(None, 0.0)
+            return self._render(now)
         if flash <= 0 and cf is None and not self.flashed:
             return self._render(now)
         W, H = a.stage.w, a.stage.h          # V5: a white screen flash is one full frame (and the frame after it clears it)

@@ -95,6 +95,18 @@ def set_flashes(flag: bool, path=None) -> bool:
     return _update(path, flashes=bool(flag))
 
 
+def forge_on(path=None, default=True) -> bool:
+    """Desktop weapons in the arena (V8, the owner's default: on): the arena grabs its monitor ONCE into RAM to forge
+    weapons from real screen pixels, and never saves it.  `minis.py forge on|off` or the menu's "Desktop weapons";
+    off = no grab and no forge, and an arena already running drops its grab within ~2 s."""
+    v = read(path).get('forge')
+    return bool(default) if v is None else bool(v)
+
+
+def set_forge(flag: bool, path=None) -> bool:
+    return _update(path, forge=bool(flag))
+
+
 def fighter_size(path=None, default=128) -> int:
     """Taskbar fighter size in px (64 | 96 | 128): control.json `fighter_size` (set by `minis.py size N` and the menu),
     else `default` (config `fighter_size`)."""

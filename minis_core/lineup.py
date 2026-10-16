@@ -131,6 +131,7 @@ def look_of(source_id, lu, assign=None) -> str:
 # ---------------------------------------------------------------- the right-click menu, as data
 QUIT_ALL, HIDE_1H, PLATES, PAUSE, BOUT, MATCH, WIN_DECIDED, ARENA, RIVAL, HIDE, SELECT, WIN_RANDOM, FLASH = range(1, 14)
 HUD_DOCK, HUD_MENUBAR = 14, 15                     # macOS only: the Plates position submenu
+FORGE = 16                                         # V8: Desktop weapons (arena forging) on / off
 PICK_AUTO, PICK_BASE = 100, 101
 LOOK_DEFAULT, LOOK_BASE = 300, 301
 SIZE_BASE = 400                                    # SIZE_BASE + px: the Fighter size submenu (464 / 496 / 528)
@@ -183,6 +184,7 @@ def fighter_menu(slot, assign, lu, flags, chars):
               None,
               (BOUT, 'Start a bout now'), (MATCH, 'Start a match now (best of 3)'),
               (ARENA, 'Arena mode', {'checked': bool(flags.get('arena'))}),
+              (FORGE, 'Desktop weapons (arena grabs the screen into RAM)', {'checked': bool(flags.get('forge', True))}),
               None,
               (HIDE, f'Hide this fighter ({name})'), (HIDE_1H, 'Hide for 1 hour'), (QUIT_ALL, 'Quit Taskbar Fighters (stops everything)')]
     if flags.get('hud_pos') in ('dock', 'menubar'):
