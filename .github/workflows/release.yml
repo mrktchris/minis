@@ -168,6 +168,7 @@ jobs:
   # environment pypi).  Runs only on a v* tag, after the GitHub Release job.
   pypi:
     needs: release
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}   # never from a manual re-run
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

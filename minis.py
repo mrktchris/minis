@@ -820,7 +820,7 @@ def cmd_arena(args):
             # desktop weapons are textured with real screen pixels: a capture of the overlay would carry them out of RAM.
             # (An old heartbeat without the key counts as holding pixels: refuse rather than guess.)
             print('arena capture: refused while the arena holds a screen grab for desktop weapons '
-                  '(run `python minis.py forge off`, wait 2 s, then capture)')
+                  f'(run `{prog_name()} forge off`, wait 2 s, then capture)')
             return 2
         if not capture_allowed(args.path):
             print(f'arena capture: refused - write under {ROOT / "qa"} or {cfgmod.data_dir()}')
@@ -2431,11 +2431,11 @@ def forge_report(shell):
             ok = None
         if ok:
             return ('desktop weapons: on, from real screen pixels (Screen Recording is granted; the arena grabs its display into '
-                    'RAM once and never saves it; `python minis.py forge off` before screen-sharing)')
+                    f'RAM once and never saves it; `{prog_name()} forge off` before screen-sharing)')
         return ('desktop weapons: on, from window SHAPES (Screen Recording is not granted, and Taskbar Fighters never asks for it). '
                 'For real pixels: ' + MAC_GRANT)
     return ('desktop weapons: on (the arena grabs its monitor into RAM once to forge weapons from real pixels and never saves it; '
-            '`python minis.py forge off` before screen-sharing or recording)')
+            f'`{prog_name()} forge off` before screen-sharing or recording)')
 
 
 def cmd_doctor(args=None, shell=None, probe=None, describe=None, out=print):
