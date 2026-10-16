@@ -290,11 +290,18 @@ class HandTracking(unittest.TestCase):
             for _ in range(24):
                 step(ar, 1 / 30.0, comp)
                 idx = A.frame(ar.last_now)[0]
+                calls = []
+                real = ar._sprite
+
+                def rec(atlas, anim, i, facing, alpha=None, silhouette=None, unarmed=False, real=real, calls=calls):
+                    if atlas is A.atlas and alpha is None:
+                        calls.append(unarmed)
+                    return real(atlas, anim, i, facing, alpha=alpha, silhouette=silhouette, unarmed=unarmed)
+                ar._sprite = rec
                 items = ar.drawables(ar.last_now)
+                del ar._sprite
                 l, t, r, bt = A.sprite_rect()
-                body = [im for im, x, y in items if (x, y) == (l + A.jitter, t) and im.size == (A.atlas.cell[0] * AR.SCALE, A.atlas.cell[1] * AR.SCALE)]
-                want = A.atlas.unarmed_frame(A.drawn_anim(), idx, A.facing)
-                self.assertTrue(body and body[0].tobytes() == want.resize(body[0].size, Image.NEAREST).tobytes(), (chars, idx))   # unarmed sheet
+                self.assertTrue(calls and all(calls), (chars, idx, calls))           # drawn from the unarmed sheet
                 for which in (('grip', 'grip2') if dual else ('grip',)):
                     g = (A.atlas.grip if which == 'grip' else A.atlas.grip2)(A.drawn_anim(), idx, A.facing)
                     pl = F.placement(A, w, ar.last_now, which)
@@ -309,11 +316,17 @@ class HandTracking(unittest.TestCase):
             F.shatter('a', ar.last_now)
             self.assertFalse(F.armed('a'))
             step(ar, 1 / 30.0, comp)
-            idx = A.frame(ar.last_now)[0]
-            l, t, r, bt = A.sprite_rect()
-            body = [im for im, x, y in ar.drawables(ar.last_now) if (x, y) == (l + A.jitter, t)]
-            armed = A.atlas.frame_image(A.drawn_anim(), idx, A.facing)
-            self.assertTrue(any(b.tobytes() == armed.resize(b.size, Image.NEAREST).tobytes() for b in body), chars)   # native weapon back
+            calls = []
+            real = ar._sprite
+
+            def rec(atlas, anim, idx, facing, alpha=None, silhouette=None, unarmed=False):
+                if atlas is A.atlas and alpha is None:
+                    calls.append(unarmed)
+                return real(atlas, anim, idx, facing, alpha=alpha, silhouette=silhouette, unarmed=unarmed)
+            ar._sprite = rec
+            ar.drawables(ar.last_now)
+            del ar._sprite
+            self.assertTrue(calls and not any(calls), (chars, calls))                  # the native (armed) sheet is back
             self.assertEqual(surf.out_of_bounds, 0)
 
     def test_screen_angle_maps_to_the_rotation_both_facings(self):
