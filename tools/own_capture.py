@@ -143,6 +143,20 @@ def save_gif(frames, path, ms):
     q[0].save(path, save_all=True, append_images=q[1:], duration=int(round(ms)), loop=0, optimize=True, disposal=1)
 
 
+def hidden_reason(ddir):
+    """Why nothing could be drawn: windows that answered but were hidden the whole time, or no window at all."""
+    roles = set()
+    for p in Path(ddir).glob('*.json'):
+        try:
+            roles.add(json.loads(p.read_text(encoding='utf-8')).get('role'))
+        except (OSError, ValueError):
+            pass
+    if not roles:
+        return 'the dumps hold no visible window in that span'
+    return ('Taskbar Fighters is running but its windows stayed hidden the whole time (%s): a full-screen app is up, '
+            'an arena is playing, or they are hidden (`minis.py show`).' % ', '.join(sorted(r for r in roles if r)))
+
+
 def build(dump_dir, t0, seconds, fps, out, gif=None, still=None, at=None, frames_dir=True, taskbar=None):
     """Composite the dumps in dump_dir for [t0, t0 + seconds] -> written paths (and the manifest dict)."""
     out = Path(out)
@@ -240,7 +254,7 @@ def main(argv=None, sleep=time.sleep, wall=time.time):
             written, _ = build(ddir, t0, a.seconds, a.fps, a.out, gif=a.gif, still=a.still, at=a.at,
                                frames_dir=not a.no_frames, taskbar=os_taskbar_rect())
             if not written:
-                print('the dumps hold no visible window in that span')
+                print(hidden_reason(ddir))
                 rc = 1
             for p in written:
                 print(p)

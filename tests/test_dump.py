@@ -315,3 +315,68 @@ class TestAnnotateLive(DumpBase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RealRoles(DumpBase):
+    """The real Fighter / Scoreboard objects (fake shell) with the dump hooks minis.py installs.  Live bug (2026-10-15):
+    with a full-screen app up Windows reports QUNS_BUSY, the live copy hides every window and never presents, and the
+    request produced nothing at all - not even a sign the windows exist - so own_capture said "no dumps arrived" while a
+    match was being fought.  Now a never-drawn window answers with a hidden record and the tool says why."""
+
+    def fighter(self, busy=False):
+        import minis
+        from minis_core import director
+        from test_minis import FakeDetector, FakeShell
+        from helpers import CFG
+        director.write_assign({'a': {'source': 'claude', 'character': 'claude', 'program': 'Claude Code'},
+                               'b': {'source': 'codex', 'character': 'codex', 'program': 'Codex'}, 'ts': self.wall()})
+        sh = FakeShell()
+        sh.fullscreen_busy = lambda: busy
+        f = minis.Fighter('a', dict(CFG, fighter_size=128), sh, mono=self.mono, wall=self.wall,
+                          detector_for=lambda src, cfg: FakeDetector(src))
+        f.setup()
+        return f
+
+    def run_steps(self, f, n=12):
+        for _ in range(n):
+            self.tick(0.1)
+            f.step()
+            dump.poll_once()
+
+    def test_a_visible_fighter_dumps_its_sprite_and_plate_from_its_own_presents(self):
+        f = self.fighter()
+        self.request(every_ms=50)
+        self.run_steps(f)
+        recs = [json.loads(p.read_text()) for p in self.dumps()]
+        roles = {r['role'] for r in recs if r['visible'] and r['png']}
+        self.assertEqual(roles, {'a', 'a-plate'})
+        a = [r for r in recs if r['role'] == 'a' and r['visible']][-1]
+        self.assertEqual(a['h'], 128 + 60)                              # the 128 px cell + the jump headroom
+        self.assertGreater(sum(1 for r in recs if r['role'] == 'a'), 3)  # from present(), not only the first poll
+
+    def test_a_hidden_fighter_answers_hidden_and_the_tool_says_why(self):
+        f = self.fighter(busy=True)
+        self.request(every_ms=50)
+        self.run_steps(f)
+        self.assertFalse(f.ov.visible)
+        recs = [json.loads(p.read_text()) for p in self.dumps()]
+        self.assertTrue(recs, 'a hidden window must still answer the request')
+        self.assertEqual({r['role'] for r in recs}, {'a', 'a-plate'})
+        self.assertFalse(any(r['visible'] or r['png'] for r in recs))
+        msg = own_capture.hidden_reason(self.data / 'dump' / 't1')
+        self.assertIn('stayed hidden', msg)
+        self.assertIn('full-screen', msg)
+
+    def test_the_real_scoreboard_dumps_too(self):
+        import minis
+        from test_minis import FakeShell
+        from helpers import CFG
+        sb = minis.Scoreboard(dict(CFG), FakeShell(), wall=self.wall, mono=self.mono)
+        sb.setup()
+        self.request(every_ms=50)
+        for _ in range(12):
+            self.tick(0.25)
+            sb.step()
+            dump.poll_once()
+        recs = [json.loads(p.read_text()) for p in self.dumps()]
+        self.assertTrue(any(r['role'] == 'scoreboard' for r in recs))

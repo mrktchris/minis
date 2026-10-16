@@ -121,18 +121,22 @@ class _Watcher:
     def write(self, req, ov, with_image):
         """One record (png + json, or json only reusing the last png).  Caller holds _lock."""
         d = safe_dir(self.root, req['id'])
-        if d is None or self.img is None:
+        if d is None:
             return False
+        if self.img is None:
+            # a window that has never drawn (hidden since its process started: a full-screen app, the arena, `hide`,
+            # no assignment) still says it exists and is hidden, so the tool can tell "hidden" from "not running"
+            with_image = False
         if self.req_id != req['id']:
             self.req_id, self.png, self.last_ms, self.last_img_ms = req['id'], None, 0, -10 ** 15
-        if self.png is None:
+        if self.png is None and self.img is not None:
             with_image = True
         wall = _wall()
         ms = max(int(wall * 1000), self.last_ms + 1)
         d.mkdir(parents=True, exist_ok=True)
         stem = f'{self.role}-{ms}'
         img = self.img
-        if with_image:
+        if with_image and img is not None:
             img.save(d / f'{stem}.png', compress_level=1)
             self.png, self.last_img_ms = f'{stem}.png', ms
         dens = 1
@@ -143,9 +147,10 @@ class _Watcher:
                 dens = 1
         scale = max(1, int(getattr(ov, 'scale', 1) or 1))
         x, y, vis = self.state(ov)
+        iw, ih = (img.width, img.height) if img is not None else (0, 0)
         rec = {'role': self.role, 'id': req['id'], 'wall': ms / 1000.0, 'x': x, 'y': y,
-               'w': (img.width // dens) * scale, 'h': (img.height // dens) * scale, 'scale': scale, 'density': dens,
-               'visible': vis, 'png': self.png}
+               'w': (iw // dens) * scale, 'h': (ih // dens) * scale, 'scale': scale, 'density': dens,
+               'visible': vis and img is not None, 'png': self.png}
         tmp = d / f'.{stem}.json.tmp'
         tmp.write_text(json.dumps(rec, separators=(',', ':')), encoding='utf-8')
         os.replace(tmp, d / f'{stem}.json')
@@ -176,7 +181,7 @@ def poll_once():
             live.append(w)
             try:
                 req = active(w.root)
-                if req is None or w.img is None:
+                if req is None:
                     continue
                 if w.req_id != req['id']:
                     w.write(req, ov, with_image=True)
