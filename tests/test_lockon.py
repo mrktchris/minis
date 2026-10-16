@@ -324,3 +324,63 @@ if __name__ == '__main__':
             print(x)
     else:
         unittest.main()
+
+
+class SpriteNeverClipped(unittest.TestCase):
+    """The HUD clip (render.compose `clip`) may only ever trim effects, never a fighter: the sprite composed with the clip
+    must equal the sprite composed without it, on every frame of seeded matches at 64 / 96 / 128 px.  Two paths: the live
+    one (minis.Fighter passes the zone to the Brain) and the doc render (tools/doc_images.taskbar_strip_frames sets
+    brain.zone afterwards).  Found 2026-10-16 in the launch demo: Brain.band was computed once from the constructor's zone,
+    so the 128 px doc render kept the 64 px band and sliced the left fighter at strip x ~355."""
+
+    def run_size(self, size, doc, seeds=2, secs=40.0):
+        import minis
+        from minis_core import render
+        from minis_core.atlas import Library
+        cfg = dict(cfgmod.DEFAULTS)
+        k = size / 64.0
+        hd = Library(hd=True) if size > 64 else None
+        z0, z1 = cfgmod.fight_zone(cfg, size)
+        zone = (z0 / k, z1 / k)
+        n = cut = 0
+        for s in range(seeds):
+            ca, cb = ROSTER[(s * 5 + 1) % 13], ROSTER[(s * 5 + 8) % 13]
+            br = {}
+            for i, (w, c) in enumerate(((LEFT, ca), (RIGHT, cb))):
+                if doc:                                          # as doc_images: default zone first, the real one after
+                    b = Brain(w, LIB[c], LIB, cfg, random.Random(s + i), 1000.0, run=f'd{w}', record=sim.no_record)
+                    b.zone = zone
+                    x = (420 if w == LEFT else 610) / k
+                    b.x = b.home_x = x
+                    b.home = (x - 40 / k, x + 40 / k)
+                else:
+                    b = Brain(w, LIB[c], LIB, cfg, random.Random(s + i), 1000.0, run=f'l{w}', zone=zone, record=sim.no_record)
+                b.flashes = True
+                br[w] = b
+            tele = {w: sim.FakeTelemetry(w, [(0, 'idle', 30)]) for w in br}
+            bus = {}
+            br[LEFT].request_demo('match', 1000.0, wait_s=30)
+            for i in range(int(secs * 10)):
+                now = 1000.0 + i / 10.0
+                sim.step(br, tele, now, bus)
+                for w, b in br.items():
+                    v = dict(b.view(now), fx=[], banner=None, proj=None, flash=0.0)     # the sprite alone
+                    atlas = b.atlas if size == 64 else hd[b.character]
+                    vv = v if size == 64 else minis.hd_view(v, atlas, b.atlas)
+                    a_im, a_x = render.compose(atlas, atlas, vv, b.snap, now, cfg, show_plate=False)
+                    b_im, b_x = render.compose(atlas, atlas, dict(vv, clip=None), b.snap, now, cfg, show_plate=False)
+                    n += 1
+                    if a_im.getbbox() is None or b_im.getbbox() is None:
+                        continue
+                    aa = (a_im.getbbox()[0] + a_x, a_im.getbbox()[2] + a_x)
+                    bb = (b_im.getbbox()[0] + b_x, b_im.getbbox()[2] + b_x)
+                    if aa != bb:
+                        cut += 1
+        return n, cut
+
+    def test_no_fighter_pixel_is_ever_clipped(self):
+        for size in (64, 96, 128):
+            for doc in (False, True):
+                n, cut = self.run_size(size, doc)
+                self.assertGreater(n, 1000, (size, doc))
+                self.assertEqual(cut, 0, (size, 'doc render' if doc else 'live', n))

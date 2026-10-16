@@ -367,9 +367,6 @@ class Brain:
         self.run = run or '%08x' % rng.getrandbits(32)         # a restarted process gets a new run id
         z0, z1 = zone or cfgmod.fight_zone(cfg)              # the roam zone minus the fixed HUD plate strip
         self.zone = (z0, z1)
-        # V7.1: the band the fight may draw into (RES 1 px): the zone plus a whole sprite each side, i.e. up to the plates
-        # and the scoreboard (config.fight_zone keeps exactly that clearance).  render.compose clips every frame to it.
-        self.band = (z0 - cfgmod.SPRITE_REACH, z1 + cfgmod.SPRITE_REACH)
         self.track = None            # V7.1: this slot's row of the running bout (Track), and the opponent's (the lock-on ghost)
         self.ghost = None
         self.carry = None            # (t, h): an airborne row was cut off at height h at time t (outside a bout: the throw)
@@ -425,6 +422,15 @@ class Brain:
         self.contact_log = deque(maxlen=64)
         self.bout_log = deque(maxlen=64)          # (what, bout id, t, move); bout_log_n counts every note ever made
         self.bout_log_n = 0
+
+    @property
+    def band(self):
+        """V7.1: the band the fight may draw into (RES 1 px): the zone plus a whole sprite each side, i.e. up to the plates
+        and the scoreboard (config.fight_zone keeps exactly that clearance).  render.compose clips every frame to it.
+        Derived from `zone` on every read: a caller that moves the zone later (the 128 px doc render) must not keep a
+        stale band, or the clip slices the fighter instead of trimming effects."""
+        z0, z1 = self.zone
+        return (z0 - cfgmod.SPRITE_REACH, z1 + cfgmod.SPRITE_REACH)
 
     def _schedule_rival(self, now):
         c = self.cfg

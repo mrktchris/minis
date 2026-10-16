@@ -159,8 +159,27 @@ def _best_window(frames, meta, n):
     return best_i
 
 
+CROP = None                                       # set by demo(): the clip's own motion box (+ margin), so the fight is framed
+
+
+def _motion_box(clip, pad=48):
+    """Union box of every pixel that changes across the clip (fighters, effects, banners, scoreboard), padded.  A fixed
+    window went stale when the fight zone started scaling with fighter_size and cut the fighters in half."""
+    from PIL import ImageChops
+    base, box = clip[0].convert('RGB'), None
+    for f in clip[1:]:
+        b = ImageChops.difference(f.convert('RGB'), base).getbbox()
+        if b:
+            box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]), max(box[2], b[2]), max(box[3], b[3]))
+    w, h = clip[0].size
+    if box is None:
+        return (STAGE_X[0], 0, STAGE_X[1], h)
+    return (max(0, box[0] - pad), max(0, box[1] - pad // 2), min(w, box[2] + pad // 4), h)
+
+
 def _compose(strip, W=1280, top=0, bg=(22, 23, 30)):
-    stage = up(strip.crop((STAGE_X[0], 0, STAGE_X[1], strip.height)), 2)       # 1280 x 288 at fighter_size 128
+    box = CROP or (STAGE_X[0], 0, STAGE_X[1], strip.height)
+    stage = up(strip.crop(box), 2)
     c = Image.new('RGBA', (W, top + stage.height), bg + (255,))
     c.alpha_composite(stage, ((W - stage.width) // 2, top))
     return c
@@ -171,6 +190,8 @@ def demo(gif_out=DOCS / 'demo.gif', mp4_out=DOCS / 'demo.mp4', seconds=8.0):
     n = int(seconds * FPS)
     a = _best_window(frames, meta, n)
     clip = frames[a:a + n]
+    global CROP
+    CROP = _motion_box(clip)
     print(f'demo: frames {a}..{a + n - 1} of {len(frames)} ({seconds:.0f} s at {FPS} fps)')
 
     # GIF: the 1280-wide strip; one shared palette, no dither (pixel art), 50 ms frames
