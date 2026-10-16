@@ -157,8 +157,8 @@ def _frozen_argv_is_ours(argv, tail, role, exe=None):
         mine = os.path.normcase(os.path.normpath(str(exe)))
         theirs = os.path.normcase(os.path.normpath(str(argv[0])))
         same = theirs == mine or (os.path.dirname(theirs) == os.path.dirname(mine)
-                                  and os.path.basename(theirs) in BUNDLE_EXES
-                                  and os.path.basename(mine) in BUNDLE_EXES)
+                                  and os.path.basename(theirs).lower() in BUNDLE_EXES     # normcase only folds case
+                                  and os.path.basename(mine).lower() in BUNDLE_EXES)      # on Windows
     except (TypeError, ValueError):
         return False
     rest = list(argv[1:])
