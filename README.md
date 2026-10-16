@@ -520,9 +520,9 @@ minis_platform/   picks minis_win or minis_mac at run time (nothing imports a de
 - At the default 128 px a fighter stands well above the 48 px taskbar, over the bottom of the desktop (its window is
   click-through except the sprite); `size 64` keeps it to about 11 px above the taskbar's top edge. Long weapons tilt to fit
   the cell.
-- On macOS, desktop weapons from real pixels (after you grant Screen Recording yourself), the arena's CPU use, the notch
-  badge and the new jumps and lock-on are CI-tested but not yet checked on a real Mac
-  ([docs/MAC-HANDOFF.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/MAC-HANDOFF.md) MAC-13..21).
+- On macOS, desktop weapons from real pixels (after you grant Screen Recording yourself), the weapon held frame by frame,
+  and the taller jump windows, scaled fight zone and lock-on are CI-tested but not yet fully checked on a real Mac
+  ([docs/MAC-HANDOFF.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/MAC-HANDOFF.md) MAC-13, 17, 18, 20, 21).
 - The arena does not get the task-finished super boost the taskbar has; its 30 fps target is not met on the author's PC, so it drops
   itself to 20 fps; platforms are only the top edges of windows.
 - Process sources have no numbers, and "working" is a CPU heuristic (the 15% threshold is a first guess).

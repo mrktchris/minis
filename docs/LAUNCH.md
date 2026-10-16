@@ -17,7 +17,7 @@ lock-on and HUD clearance at 128 px. Done on master (2026-10-16): README, CHANGE
       `start` from the bundle was not, because the live checkout was running.
 - [ ] Watch `docs/demo.mp4` and `docs/demo.gif` once, and read `docs/release-notes/v1.0.0.md`, the tweets below and the
       README top.
-- [ ] Check `docs/MAC-HANDOFF.md`: MAC-5, MAC-8 and MAC-13..21 are still OPEN (real-Mac checks). They do not block the
+- [ ] Check `docs/MAC-HANDOFF.md`: MAC-5, 8, 13, 17, 18, 20 and 21 are still OPEN (real-Mac checks; MAC-13 and 21 wait for you to grant Screen Recording). They do not block the
       tag; the release notes call macOS experimental and list them as known limits.
 - [ ] CI is green on master, both the Windows and the macOS jobs.
 

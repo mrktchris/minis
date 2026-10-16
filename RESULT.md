@@ -538,5 +538,6 @@ prepared the release; the tag is the owner's.
 
 - Not tagged and not released: the owner tags after review.
 - `start` from the Windows bundle (the owner's live copy was running; both share the data folder) - LAUNCH.md has the check.
-- macOS: MAC-5, MAC-8 and MAC-13..21 in `docs/MAC-HANDOFF.md` are still OPEN (real-Mac checks of the V7.1 and V8 work).
+- macOS: MAC-5, 8, 13, 17, 18, 20 and 21 in `docs/MAC-HANDOFF.md` are still OPEN (real-Mac checks of the V7.1 and V8 work; the
+  Mac session closed MAC-14/15/16/19/22 in `f98889f` while this pass ran).
 - The wheel is 51 MB (36 MB of it the HD sheets); under PyPI's 100 MB default file limit.
