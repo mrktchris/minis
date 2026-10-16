@@ -66,32 +66,83 @@ def strikes_ranked(atlas):
     return pool
 
 
+POSES = ('hit', 'rise', 'apex', 'land', 'smear', 'peak', 'held', 'last')
+
+
+def frame_of(atlas, anim, pose):
+    """The frame index of a named pose in `anim`, read from the atlas's own metadata so a rebuilt row can never leave a
+    stale index behind (tests/test_forge.py FramesFromMetadata checks every reference against every atlas):
+      hit    the move's hit_frame (else its proj_frame, else the middle)
+      rise / apex / land   from the move's `air` curve: the frame playing when it leaves the ground, at its first apex key
+             ('o' / 'h'), and at its landing key ('i') - the jump's rising pose, its apex tuck (also the ledge-hang pose),
+             its landing squash
+      smear  the first of `smear_frames`, else the middle
+      peak   a reaction's held pose: the longest frame in its first two thirds
+      held   a looping pose's hold (loop_range start), else the last frame
+      last   the last frame
+    An explicit anim.json `poses: {name: index}` wins.  Always a valid index; 0 when the move is missing."""
+    a = (atlas.anim.get(anim) or {}) if anim else {}
+    fr = a.get('frames') or []
+    n = len(fr)
+    if n == 0:
+        return 0
+    clamp = lambda i: max(0, min(n - 1, int(i)))
+    named = a.get('poses')
+    if isinstance(named, dict) and pose in named:
+        return clamp(named[pose])
+    if pose == 'hit':
+        return clamp(a.get('hit_frame', a.get('proj_frame', n // 2)))
+    if pose in ('rise', 'apex', 'land'):
+        air = [k for k in (a.get('air') or []) if isinstance(k, (list, tuple)) and len(k) >= 2]
+        pick = None
+        if pose == 'rise' and air:
+            pick = air[0]
+        elif pose == 'apex':
+            pick = next((k for k in air if len(k) > 2 and k[2] in ('o', 'h')), None)
+        elif pose == 'land':
+            pick = next((k for k in air if len(k) > 2 and k[2] == 'i'), None)
+        if pick is not None:
+            return clamp(atlas.locate(anim, float(pick[0]), False)[0])
+        return clamp({'rise': n // 3, 'apex': n // 2, 'land': n - 2}[pose])
+    if pose == 'smear':
+        sm = a.get('smear_frames')
+        return clamp(sm[0] if isinstance(sm, list) and sm else n // 2)
+    if pose == 'peak':
+        span = max(1, (2 * n + 2) // 3)
+        return clamp(max(range(span), key=lambda i: (fr[i].get('ms', 0), -i)))
+    if pose == 'held':
+        lr = a.get('loop_range')
+        return clamp(lr[0] if isinstance(lr, (list, tuple)) and lr else n - 1)
+    return n - 1
+
+
 def resolve_slot(atlas, slot):
     """-> (anim, frame index) for a held pose, ('@play', anim) for an animation that runs, or None (release)."""
     if slot in (None, 'idle'):
         return None
     has = atlas.anim.__contains__
-    n = lambda a: len(atlas.anim[a]['frames'])
+    f = lambda anim, pose: (anim, frame_of(atlas, anim, pose))       # every index from the atlas's metadata
     if slot == 'charge':
-        return ('@play', 'powerup') if has('powerup') else ('crouch', n('crouch') - 1) if has('crouch') else None
+        return ('@play', 'powerup') if has('powerup') else f('crouch', 'last') if has('crouch') else None
     if slot == 'stance':
-        return ('crouch', n('crouch') - 1) if has('crouch') else ('idle', 0)
+        return f('crouch', 'last') if has('crouch') else ('idle', 0)
     if slot == 'dash':
-        return ('dash', min(2, n('dash') - 1)) if has('dash') else ('jump', 0) if has('jump') else ('idle', 0)
+        return f('dash', 'smear') if has('dash') else ('jump', 0) if has('jump') else ('idle', 0)
     if slot == 'guard':
-        return ('block', n('block') - 1) if has('block') else ('idle', 0)
+        return f('block', 'last') if has('block') else ('idle', 0)
     if slot in ('stagger', 'recoil'):
         a = 'hit' if slot == 'stagger' else 'hit_heavy'
         a = a if has(a) else ('hit' if has('hit') else 'idle')
-        return (a, min(2 if slot == 'recoil' else 1, n(a) - 1))
+        return f(a, 'peak')
     if slot in ('wind', 'cut', 'follow', 'cut2', 'cut3'):
         ranked = strikes_ranked(atlas) or ['idle']
         m = ranked[{'cut2': 1, 'cut3': 2}.get(slot, 0) % len(ranked)]
         if m == 'idle':
             return ('idle', 0)
-        hf = int(atlas.anim[m].get('hit_frame', 0))
+        hf = frame_of(atlas, m, 'hit')
+        n = len(atlas.anim[m]['frames'])
         idx = hf - 1 if slot == 'wind' else hf + 1 if slot == 'follow' else hf
-        return (m, max(0, min(n(m) - 1, idx)))
+        return (m, max(0, min(n - 1, idx)))
     return None
 
 
@@ -417,8 +468,6 @@ class SetPiece:
                 b.play(r[1], now)
             else:
                 b.pose = r
-            if role == 'A' and slot in ('cut', 'cut2', 'cut3', 'follow'):
-                ar.forge.slash(self.slot['A'], now)          # a forged weapon in hand cuts with the pose
         elif op == 'forge':
             # V8: the stance doubles as a forge - the attacker rips a blade out of the desktop while it charges (only when
             # desktop weapons are on, the match still owes a forge and it is not already armed)

@@ -3,7 +3,7 @@
 Nothing here grabs the real screen: every "screen" is a synthetic image made in this file (a noise pattern no art uses),
 and grab_monitor itself refuses under MINIS_TESTING.  The privacy tests patch every write path a process has (open, Path
 writes, os.write, Image.save, json, logging) during a real headless arena run and prove no captured pixel reaches any."""
-import builtins, collections, io, json, logging, os, pickle, random, sys, unittest
+import builtins, collections, io, json, logging, math, os, pickle, random, sys, unittest
 from pathlib import Path
 from unittest import mock
 
@@ -175,14 +175,23 @@ class Lifecycle(unittest.TestCase):
         self.assertIn('a', F.weapons)
         w = F.weapons['a']
         self.assertEqual(sig_pixels(w.art['levels'][0]) > 0, True)                     # textured with the screen's pixels
-        # a strike swings it: the angle goes up (wind-up), through the slash, back to rest
+        # a strike swings it WITH THE ARM: every frame the weapon sits at the art's grip, at the grip's angle
+        A = ar.f['a']
+        A.play('cross', ar.last_now, loop=False, hold='idle')
+        angs = []
+        for _ in range(int(A.atlas.total_ms('cross') / 1000.0 * 30) + 2):
+            step(ar, 1 / 30.0, comp)
+            idx = A.frame(ar.last_now)[0]
+            g = A.atlas.grip(A.drawn_anim(), idx, A.facing)
+            pl = F.placement(A, w, ar.last_now)
+            if g is None:
+                self.assertIsNone(pl)
+                continue
+            self.assertAlmostEqual(pl[2], g[2])
+            angs.append(g[2])
+        self.assertGreater(max(angs) - min(angs), 90)                                 # it really swung through the arc
+        self.assertTrue(any(isinstance(k, tuple) and k and k[0] == 'smear' for k in F._cache.keys()))   # and smeared its real tip path
         t = ar.last_now
-        F.on_strike('a', t, t + 0.3, t + 0.6)
-        angs = [w.angle(t + k / 30.0) for k in range(0, 30)]
-        self.assertGreater(max(angs), FG.REST + 40)
-        self.assertLess(min(angs), 0)
-        self.assertTrue(any(w.fast(t + k / 30.0) for k in range(30)))
-        self.assertAlmostEqual(w.angle(t + 2.0), FG.REST)
         for k in range(FG.CRACKS_TO_SHATTER - 1):
             F.on_hit_landed('a', t)
             self.assertEqual(w.cracks, k + 1)
@@ -255,6 +264,114 @@ class Lifecycle(unittest.TestCase):
         tex, pixels = ar.forge._texture_from((200, 300, 300, 400), win, 'chunk', 1)
         self.assertFalse(pixels)
         self.assertEqual(sig_pixels(tex), 0)
+
+
+class HandTracking(unittest.TestCase):
+    """The forged weapon replaces the drawn one: the fighter comes from its unarmed sheet and the weapon sits at every
+    frame's grip (grip2 too for a dual-wielder), for every family; after the shatter the native weapon is back."""
+
+    def test_every_family_follows_the_grip_and_the_native_weapon_returns(self):
+        for chars, fam, dual in ((('claude', 'codex'), 'blade', False), (('knight', 'codex'), 'greatsword', False), (('cursor', 'codex'), 'spear', False),
+                                 (('oni', 'codex'), 'club', False), (('gemini', 'codex'), 'blade', True), (('kunoichi', 'claude'), 'shards', True)):
+            st, ar = arena(chars=chars)
+            to_fight(ar)
+            surf = AR.Surface(st.w, st.h)
+            comp = AR.Compositor(ar, surf)
+            F = ar.forge
+            F.start('a', 'weapon', ar.last_now)
+            step(ar, 3.0, comp, until=lambda ar: 'a' in F.weapons)
+            w = F.weapons['a']
+            self.assertEqual((w.family, w.dual), (fam, dual), chars)
+            A = ar.f['a']
+            step(ar, 0.3, comp)
+            moves = [m for m in ('cross', 'jab', 'idle') if m in A.atlas.anim]
+            A.play(moves[0], ar.last_now, loop=False, hold='idle')
+            seen = 0
+            for _ in range(24):
+                step(ar, 1 / 30.0, comp)
+                idx = A.frame(ar.last_now)[0]
+                items = ar.drawables(ar.last_now)
+                l, t, r, bt = A.sprite_rect()
+                body = [im for im, x, y in items if (x, y) == (l + A.jitter, t) and im.size == (A.atlas.cell[0] * AR.SCALE, A.atlas.cell[1] * AR.SCALE)]
+                want = A.atlas.unarmed_frame(A.drawn_anim(), idx, A.facing)
+                self.assertTrue(body and body[0].tobytes() == want.resize(body[0].size, Image.NEAREST).tobytes(), (chars, idx))   # unarmed sheet
+                for which in (('grip', 'grip2') if dual else ('grip',)):
+                    g = (A.atlas.grip if which == 'grip' else A.atlas.grip2)(A.drawn_anim(), idx, A.facing)
+                    pl = F.placement(A, w, ar.last_now, which)
+                    if g is None:
+                        continue
+                    gx = l + A.jitter + (A.atlas.anchor(A.facing) + 0.5 + g[0]) * AR.SCALE
+                    self.assertAlmostEqual(pl[0], gx)
+                    im, piv = w.image(FG.screen_to_deg(g[2], A.facing), A.facing)
+                    self.assertTrue(any(i2 is im and (x, y) == (int(pl[0] - piv[0]), int(pl[1] - piv[1])) for i2, x, y in items), (chars, which, idx))
+                    seen += 1
+            self.assertGreater(seen, 10, chars)
+            F.shatter('a', ar.last_now)
+            self.assertFalse(F.armed('a'))
+            step(ar, 1 / 30.0, comp)
+            idx = A.frame(ar.last_now)[0]
+            l, t, r, bt = A.sprite_rect()
+            body = [im for im, x, y in ar.drawables(ar.last_now) if (x, y) == (l + A.jitter, t)]
+            armed = A.atlas.frame_image(A.drawn_anim(), idx, A.facing)
+            self.assertTrue(any(b.tobytes() == armed.resize(b.size, Image.NEAREST).tobytes() for b in body), chars)   # native weapon back
+            self.assertEqual(surf.out_of_bounds, 0)
+
+    def test_screen_angle_maps_to_the_rotation_both_facings(self):
+        art = FG.build_weapon('spear', FG.shape_texture((300, 20), 1), (200, 200, 255))
+        w = FG.Weapon('a', 'spear', art, 3, False)
+        for ang in (-90.0, -30.0, 0.0, 45.0, 120.0, -150.0):
+            for facing in (1, -1):
+                a_scr = ang if facing > 0 else 180.0 - ang        # what Atlas.grip returns for that facing
+                im, piv = w.image(FG.screen_to_deg(a_scr, facing), facing)
+                alpha = im.getchannel('A')
+                tx = piv[0] + math.cos(math.radians(a_scr)) * w.length * 0.9
+                ty = piv[1] + math.sin(math.radians(a_scr)) * w.length * 0.9
+                near = [alpha.getpixel((int(tx) + dx, int(ty) + dy)) for dx in range(-5, 6) for dy in range(-5, 6)
+                        if 0 <= int(tx) + dx < im.width and 0 <= int(ty) + dy < im.height]
+                self.assertTrue(near and max(near) > 0, (ang, facing))          # the tip lies along the grip's angle
+
+
+class FramesFromMetadata(unittest.TestCase):
+    """Every frame index the arena, its set pieces and the forge use comes from anim.json: none may run past its row, and
+    a 'hit' reference must be the move's hit_frame."""
+
+    def test_every_referenced_frame_exists_and_hits_match_hit_frame(self):
+        from minis_core import arena_setpieces as SP
+        for c in sorted(FG.FAMILY_OF):
+            a = LIB[c]
+            for anim in a.anim:
+                n = len(a.anim[anim]['frames'])
+                for pose in SP.POSES:
+                    i = SP.frame_of(a, anim, pose)
+                    self.assertTrue(0 <= i < n, (c, anim, pose, i, n))
+                if 'hit_frame' in a.anim[anim]:
+                    self.assertEqual(SP.frame_of(a, anim, 'hit'), a.anim[anim]['hit_frame'], (c, anim))
+            for slot in ('stance', 'charge', 'dash', 'wind', 'cut', 'follow', 'cut2', 'cut3', 'guard', 'stagger', 'recoil'):
+                r = SP.resolve_slot(a, slot)
+                if r is not None and r[0] != '@play':
+                    self.assertTrue(0 <= r[1] < len(a.anim[r[0]]['frames']), (c, slot, r))
+                    if slot in ('cut', 'cut2', 'cut3'):
+                        self.assertEqual(r[1], a.anim[r[0]]['hit_frame'], (c, slot))
+            j = a.anim['jump']
+            for pose, key in (('apex', ('o', 'h')), ('land', ('i',))):
+                k = next(k for k in j['air'] if len(k) > 2 and k[2] in key)
+                self.assertEqual(SP.frame_of(a, 'jump', pose), a.locate('jump', k[0], False)[0], (c, pose))
+
+    def test_hang_and_climb_use_the_jump_rows_own_poses(self):
+        from minis_core import arena_setpieces as SP
+        st, ar = arena(forge=False)
+        to_fight(ar)
+        b = ar.f['b']
+        x0, x1, y = st.ledges()[0]
+        ar._start_hang(b, ar.last_now, 'l', x0, x1, y)
+        self.assertEqual(b.pose, ('jump', SP.frame_of(b.atlas, 'jump', 'apex')))
+        ar._start_climb(b, ar.last_now)
+        seen = set()
+        for _ in range(20):
+            step(ar, 1 / 30.0)
+            if b.climb is not None and b.pose:
+                seen.add(b.pose[1])
+        self.assertTrue(seen <= {SP.frame_of(b.atlas, 'jump', 'rise'), SP.frame_of(b.atlas, 'jump', 'apex')} and seen, seen)
 
 
 class Scheduling(unittest.TestCase):

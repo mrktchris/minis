@@ -1380,7 +1380,6 @@ class Arena:
         hs = (bt.get('hitstop') or 0) / 1000.0
         ex.update(state='strike', who=who, tgt=tgt, beat=bt, contact=t_c, end=max(now + W.atlas.total_ms(move) / 1000.0, t_c + 0.25) + hs,
                   hit_done=False, fx_list=fx_list, pre_done=False, main=name)
-        self.forge.on_strike(who, now, t_c, ex['end'])                # a forged weapon swings with the strike
         self.note('strike', now, who=who, move=move, move_kind=kind)
         if kind == 'ultimate':
             self.used_ult[who] = True
@@ -1939,9 +1938,7 @@ class Arena:
                 for s in (ex['left'], ex['right']):
                     b = self.f[s]
                     m = ex['moves'][s]
-                    a = b.atlas.anim[m]
-                    idx = int(a.get('hit_frame', a.get('proj_frame', len(a['frames']) // 2)))
-                    b.pose = (m, max(0, min(len(a['frames']) - 1, idx)))
+                    b.pose = (m, SP.frame_of(b.atlas, m, 'hit'))
                     b.target = (b.x, b.y)
                     hx, hy = self._clash_hand(s, ex)
                     ex['fronts'][s] = hx
@@ -2292,7 +2289,7 @@ class Arena:
         b.trail.clear()
         b.hang = dict(side=side, x0=x0, x1=x1, y=y, t0=now, until=now + self.rng.uniform(0.35, 0.6))
         anim = next((n for n in ('ledge_hang', 'hang') if n in b.atlas.anim), 'jump')
-        b.pose = (anim, min(3, b.frame_count(anim) - 1)) if anim == 'jump' else None
+        b.pose = (anim, SP.frame_of(b.atlas, anim, 'apex')) if anim == 'jump' else None     # the jump's apex tuck: arms up
         if anim != 'jump':
             b.play(anim, now)
         self._burst_ring(now, x0 if side == 'l' else x1, y)
@@ -2314,8 +2311,7 @@ class Arena:
         b.x = c['x0'] + (c['x1'] - c['x0']) * kx
         b.y = c['y0'] + (c['y1'] - c['y0']) * ky - lift
         if 'jump' in b.atlas.anim:
-            n = b.frame_count('jump')
-            b.pose = ('jump', min(n - 1, 4 if k < 0.55 else 5))
+            b.pose = ('jump', SP.frame_of(b.atlas, 'jump', 'rise' if k < 0.55 else 'apex'))   # pull up, then tuck over the lip
         if k >= 1.0:
             b.climb = None
             b.pose = None
@@ -2694,24 +2690,28 @@ class Arena:
                 age = (now - t) / AFTERIMAGE_S
                 if age >= 1.0:
                     continue
-                im = self._sprite(b.atlas, anim, fr, facing, alpha=int(110 * (1.0 - int(age * 4) / 4.0)))   # 4 steps: cacheable
+                im = self._sprite(b.atlas, anim, fr, facing, alpha=int(110 * (1.0 - int(age * 4) / 4.0)),   # 4 steps: cacheable
+                                  unarmed=self.forge.armed(s))
                 out.append((im, int(x - b.atlas.anchor(facing) * SCALE), int(y - b.atlas.ground_y * SCALE)))
         imp = self.impact if (self.impact and self.impact[0] <= now < self.impact[1]) else None
         for s in 'ab':
             b = self.f[s]
             idx, _ = b.frame(now)
             sil = None if imp is None else ('white' if s == imp[2] else (None if len(imp) > 3 else 'dark'))
+            armed = self.forge.armed(s)                        # V8: a forged weapon replaces the drawn one (unarmed sheet)
             if b.alpha is not None and sil is None:
                 if b.alpha <= 0.05:
                     continue
-                im = self._sprite(b.atlas, b.drawn_anim(), idx, b.facing, alpha=int(255 * round(b.alpha * 4) / 4.0))
+                im = self._sprite(b.atlas, b.drawn_anim(), idx, b.facing, alpha=int(255 * round(b.alpha * 4) / 4.0), unarmed=armed)
                 l, t, r, bt = b.sprite_rect()
                 out.append((im, l + b.jitter, t))
                 continue
-            im = self._sprite(b.atlas, b.drawn_anim(), idx, b.facing, silhouette=sil)
+            out.extend(self.forge.held(s, now, 'back'))        # a dual-wielder's second forged weapon, behind the body
+            im = self._sprite(b.atlas, b.drawn_anim(), idx, b.facing, silhouette=sil, unarmed=armed)
             l, t, r, bt = b.sprite_rect()
             out.append((im, l + b.jitter, t))
-        out.extend(self.forge.drawables(now, 'front'))           # forged weapons in hand, cuts, morphs, slabs, debris
+            out.extend(self.forge.held(s, now, 'front'))       # the forged weapon at this frame's grip, swinging with the arm
+        out.extend(self.forge.drawables(now, 'front'))           # cuts, morphs, slabs, debris
         for im, lx, ty, layer, inst in self.fxp.placements(now, layer='front'):
             out.append((im, lx, ty))
         if self.sp is not None:
@@ -2868,13 +2868,13 @@ class Arena:
 
     _sprite_cache = {}
 
-    def _sprite(self, atlas, anim, idx, facing, alpha=None, silhouette=None):
-        key = (id(atlas), anim, idx, facing >= 0, alpha, silhouette)
+    def _sprite(self, atlas, anim, idx, facing, alpha=None, silhouette=None, unarmed=False):
+        key = (id(atlas), anim, idx, facing >= 0, alpha, silhouette, bool(unarmed))
         im = self._sprite_cache.get(key)
         if im is None:
             if len(self._sprite_cache) > 480:                # V6: 160 thrashed (two fighters x trails x impact silhouettes)
                 self._sprite_cache.clear()
-            fr = atlas.frame_image(anim, idx, facing)
+            fr = atlas.unarmed_frame(anim, idx, facing) if unarmed and hasattr(atlas, 'unarmed_frame') else atlas.frame_image(anim, idx, facing)
             im = fr.resize((fr.width * SCALE, fr.height * SCALE), Image.NEAREST)
             if alpha is not None:
                 im = im.copy()

@@ -21,7 +21,7 @@ composites.  No window is touched; only the rectangle list and the RAM image are
 """
 from __future__ import annotations
 import math, random
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 # ---------------------------------------------------------------- tuning
@@ -47,9 +47,6 @@ MORPH_FRAMES = 8                                                      # 6-10 fra
 CELL = 10                                                             # morph block size (stage px)
 PAD = 7                                                               # room round a silhouette for its rim and glow
 ANGLE_STEP = 6                                                        # rotation cache granularity (degrees)
-REST = 38.0                                                           # held: tip up and forward
-WIND, HIT, FOLLOW = 118.0, -42.0, -56.0                               # swing: raised back, the slash, the follow-through
-GRIP = (30.0, -92.0)                                                  # hip-relative grip while held (2x art scale)
 PRESENT = (84.0, -156.0)                                              # where a lifted piece floats while it morphs
 HOLE_RGBA = (12, 12, 16, 244)
 HOLES_MAX = 10
@@ -451,39 +448,24 @@ class _LRU(OrderedDict):
 
 # ---------------------------------------------------------------- held weapons, jobs, loose pieces
 class Weapon:
-    """A forged weapon in a fighter's hand: rotated about its grip, swung on strikes with its own smear, cracked by hits."""
+    """A forged weapon in a fighter's hand.  It has no swing of its own: every drawn frame it sits at the frame's `grip`
+    (anim.json, V8 art), rotated to the grip angle with the pivot at the grip point, so it moves exactly with the arm.  A
+    dual-wielder (`dual`) holds a second copy at `grip2`; a two-handed grip2 is the same weapon's second hand and is not
+    drawn twice.  `hist` keeps the last placements for the smear that follows the real tip path."""
 
-    def __init__(self, slot, family, art, uses, pixels):
+    def __init__(self, slot, family, art, uses, pixels, dual=False):
         self.slot, self.family, self.art = slot, family, art
         self.uses, self.cracks = uses, 0
         self.pixels = pixels                                        # textured from the screen grab (False: from a shape)
-        self.swing = None                                           # (t0, contact, end)
+        self.dual = bool(dual)
         self.t_armed = None
         self.hidden = False
-        self._rot = _LRU(40)
-
-    def angle(self, now):
-        sw = self.swing
-        if sw is None:
-            return REST
-        t0, tc, te = sw
-        if now >= te + 0.25:
-            return REST                                             # pure: smears sample past and future angles
-        t_w = max(t0, tc - 0.07)
-        if now < t_w:
-            return _lerp(REST, WIND, _ease_out((now - t0) / max(1e-3, t_w - t0)))
-        if now < tc:
-            k = (now - t_w) / max(1e-3, tc - t_w)
-            return _lerp(WIND, HIT, k * k)                          # accelerating into the contact
-        if now < tc + 0.12:
-            return _lerp(HIT, FOLLOW, _ease_out((now - tc) / 0.12))
-        return _lerp(FOLLOW, REST, _ease((now - tc - 0.12) / max(1e-3, te + 0.25 - tc - 0.12)))
-
-    def fast(self, now):
-        sw = self.swing
-        return sw is not None and sw[1] - 0.07 <= now < sw[1] + 0.12
+        self.hist = {'grip': deque(maxlen=6), 'grip2': deque(maxlen=6)}   # (t, gx, gy, screen angle, frame key)
+        self._rot = _LRU(60)
+        self.length = art['size'][0] - PAD - art['grip'][0]        # grip to tip
 
     def image(self, deg, facing):
+        """The weapon rotated `deg` counter-clockwise (right-facing space), mirrored for facing -1 -> (image, pivot)."""
         step = int(round(deg / ANGLE_STEP)) * ANGLE_STEP
         lvl = min(self.cracks, CRACKS_TO_SHATTER)
 
@@ -503,6 +485,27 @@ class Weapon:
             g.putalpha(im.getchannel('A').point(lambda v: v * q // 4))
             return g
         return self._rot.get_or(('ghost', id(im), q), make), piv
+
+
+def SP_frame_hit(atlas, anim):
+    from . import arena_setpieces as SP
+    return SP.frame_of(atlas, anim, 'hit')
+
+
+def screen_to_deg(ang, facing):
+    """A grip angle (screen degrees, 0 = right, -90 = up, already mirrored for facing -1) -> Weapon.image's `deg`."""
+    a_r = ang if facing >= 0 else 180.0 - ang                     # back to the right-facing sheet's angle
+    return -(((a_r + 180.0) % 360.0) - 180.0)
+
+
+def is_dual(atlas):
+    """Two weapons (a second grip at a different angle on some frame), or one weapon held in two hands."""
+    for name in ('idle', 'walk', 'jab', 'cross'):
+        for i in range(len((atlas.anim.get(name) or {}).get('frames') or [])):
+            g, g2 = atlas.grip(name, i, 1), atlas.grip2(name, i, 1)
+            if g and g2 and abs(((g[2] - g2[2]) + 180.0) % 360.0 - 180.0) > 15.0:
+                return True
+    return False
 
 
 class Job:
@@ -811,7 +814,7 @@ class Forge:
         for name in ('jab', 'palm', 'punch', 'cross'):
             a = b.atlas.anim.get(name)
             if a and 'hit_frame' in a:
-                b.pose = (name, int(a['hit_frame']))
+                b.pose = (name, SP.frame_of(b.atlas, name, 'hit'))
                 return
         b.pose = SP.resolve_slot(b.atlas, 'stance')
 
@@ -830,7 +833,7 @@ class Forge:
             self._tick_job(j, now)
         for s, w in list(self.weapons.items()):
             b = ar.f[s]
-            w.hidden = bool(b.hang or b.climb or (b.alpha is not None and b.alpha < 0.5) or (b.down and not b.grounded))
+            w.hidden = bool(b.alpha is not None and b.alpha < 0.5)
         self._tick_loose(now, dt)
         self._tick_slabs(now, dt)
         self._tick_debris(now, dt)
@@ -858,7 +861,8 @@ class Forge:
                 b.facing = 1 if j.loose['x'] >= b.x else -1
                 j.tx = b.facing
                 if 'crouch' in b.atlas.anim:
-                    b.pose = ('crouch', len(b.atlas.anim['crouch']['frames']) - 1)
+                    from . import arena_setpieces as SP
+                    b.pose = ('crouch', SP.frame_of(b.atlas, 'crouch', 'last'))
                 j.stage, j.t_stage = 'lift', now
                 if j.loose in self.loose:
                     self.loose.remove(j.loose)
@@ -943,10 +947,13 @@ class Forge:
         if art is None:
             tex = j.piece.crop((PAD, PAD, j.piece.width - PAD, j.piece.height - PAD)) if j.kind == 'pickup' else j.texture
             art = build_weapon(j.family, tex, j.glow, seed=j.seed)
-        w = Weapon(j.slot, j.family, art, self.uses, j.pixels)
+        b = ar.f[j.slot]
+        w = Weapon(j.slot, j.family, art, self.uses, j.pixels, dual=is_dual(b.atlas))
         w.t_armed = now
         self.weapons[j.slot] = w
-        ar._burst_ring(now, *self._grip_pos(ar.f[j.slot], w, now))
+        pl = self.placement(b, w, now)
+        if pl is not None:
+            ar._burst_ring(now, pl[0], pl[1])
         ar.note('forge_armed', now, who=j.slot, move=j.family)
 
     def _morph_debris(self, j, now):
@@ -963,35 +970,39 @@ class Forge:
             self._debris(im, cx, cy, math.cos(a) * sp, math.sin(a) * sp - 260, now + rng.uniform(0.6, 0.9), now)
 
     # ---- the held weapon
-    def _grip_pos(self, b, w, now):
-        f = b.facing
-        gx, gy = GRIP
-        sw = w.swing
-        if sw is not None and now < sw[2] + 0.25:
-            hand = None
-            try:
-                hand = b.atlas.hand(b.anim)
-            except Exception:
-                hand = None
-            hx, hy = (hand[0] * 2.0, hand[1] * 2.0) if hand else (64.0, -110.0)
-            t0, tc, te = sw
-            if now < tc:
-                k = _ease((now - t0) / max(1e-3, tc - t0))
-            else:
-                k = 1.0 - _ease((now - tc) / max(1e-3, te + 0.25 - tc))
-            gx, gy = _lerp(gx, min(abs(hx), 90.0), k), _lerp(gy, max(-150.0, min(-60.0, hy)), k)
-        return b.x + f * gx, b.y + gy
+    def placement(self, b, w, now, which='grip'):
+        """(gx, gy, screen angle) of a held weapon this frame, from the drawn frame's grip in the art, or None when that
+        frame holds nothing in that hand.  The grip is relative to the anchor column centre and the ground_y row, so it
+        lands where the sprite is drawn (jitter included)."""
+        from .arena import SCALE
+        anim = b.drawn_anim()
+        idx = b.frame(now)[0]
+        fn = b.atlas.grip if which == 'grip' else b.atlas.grip2
+        try:
+            g = fn(anim, idx, b.facing)
+        except Exception:
+            g = None
+        if g is None:
+            return None
+        l, t, r, bt = b.sprite_rect()
+        gx = l + b.jitter + (b.atlas.anchor(b.facing) + 0.5 + g[0]) * SCALE
+        gy = t + (b.atlas.ground_y + g[1]) * SCALE
+        return gx, gy, g[2]
 
-    def on_strike(self, slot, now, contact, end):
-        w = self.weapons.get(slot)
-        if w is not None:
-            w.swing = (now, max(now + 0.08, contact), max(contact + 0.1, end))
+    def armed(self, slot):
+        """True while `slot` holds a forged weapon: the arena then draws it from its unarmed sheet."""
+        return slot in self.weapons
 
-    def slash(self, slot, now):
-        """A set piece's cut pose: one fast swing landing now."""
+    def held(self, slot, now, layer):
+        """Drawables for `slot`'s forged weapon: layer 'back' = the second weapon of a dual-wielder (behind the body),
+        'front' = the main weapon and its smear."""
         w = self.weapons.get(slot)
-        if w is not None:
-            w.swing = (now - 0.06, now + 0.02, now + 0.22)
+        if w is None or w.hidden:
+            return []
+        b = self.ar.f[slot]
+        if layer == 'back':
+            return self._weapon_drawables(b, w, now, 'grip2') if w.dual else []
+        return self._weapon_drawables(b, w, now, 'grip')
 
     def on_hit_landed(self, slot, now, heavy=False, final=False):
         w = self.weapons.get(slot)
@@ -1020,17 +1031,21 @@ class Forge:
         """The weapon breaks into its own pixels: small squares that burst from the crack, fall and fade."""
         ar = self.ar
         b = ar.f[w.slot]
-        deg = w.angle(now)
-        im, piv = w.image(deg, b.facing)
-        gx, gy = self._grip_pos(b, w, now)
-        x, y = gx - piv[0], gy - piv[1]
         rng = random.Random(int(now * 1000) + 5)
-        cx, cy = x + im.width / 2.0, y + im.height / 2.0
-        for cim, px, py in debris_cells(im, x, y, rng, cell=12, limit=46):
-            a = math.atan2(py - cy, px - cx) + rng.uniform(-0.5, 0.5)
-            sp = rng.uniform(160, 520)
-            self._debris(cim, px, py, math.cos(a) * sp, math.sin(a) * sp - 320, now + rng.uniform(0.8, 1.25), now)
-        ar.holes.append((int(x) - 4, int(y) - 4, int(x + im.width) + 4, int(y + im.height) + 4))
+        cx = cy = None
+        for which in (('grip', 'grip2') if w.dual else ('grip',)):
+            pl = self.placement(b, w, now, which)
+            if pl is None:                                          # nothing in that hand this frame: break it at the chest
+                pl = (b.x + b.facing * 40.0, b.y - 110.0, -45.0 if b.facing > 0 else -135.0)
+            gx, gy, ang = pl
+            im, piv = w.image(screen_to_deg(ang, b.facing), b.facing)
+            x, y = gx - piv[0], gy - piv[1]
+            cx, cy = x + im.width / 2.0, y + im.height / 2.0
+            for cim, px, py in debris_cells(im, x, y, rng, cell=12, limit=40):
+                a = math.atan2(py - cy, px - cx) + rng.uniform(-0.5, 0.5)
+                sp = rng.uniform(160, 520)
+                self._debris(cim, px, py, math.cos(a) * sp, math.sin(a) * sp - 320, now + rng.uniform(0.8, 1.25), now)
+            ar.holes.append((int(x) - 4, int(y) - 4, int(x + im.width) + 4, int(y + im.height) + 4))
         ar.fxp.spawn_at('hit_light', now, cx, cy, b.facing)
         ar.note('forge_shatter', now, who=w.slot)
 
@@ -1159,9 +1174,6 @@ class Forge:
             return out
         for j in self.jobs:
             out.extend(self._job_drawables(j, now))
-        for s, w in self.weapons.items():
-            if not w.hidden:
-                out.extend(self._weapon_drawables(ar.f[s], w, now))
         for s in self.slabs:
             k = int((now - s['t0']) * 24) % 8
             im = self._cache.get_or(('slab', id(s['img']), k, s['spin']), lambda: s['img'].rotate(-s['spin'] * k * 45, resample=Image.NEAREST, expand=True))
@@ -1300,46 +1312,73 @@ class Forge:
         res = (im, int(-x0), int(-y0))
         return self._cache.get_or(key, lambda: res)
 
-    def _weapon_drawables(self, b, w, now):
+    def _weapon_drawables(self, b, w, now, which):
+        pl = self.placement(b, w, now, which)
+        if pl is None:
+            return []
+        gx, gy, ang = pl
         out = []
-        deg = w.angle(now)
-        gx, gy = self._grip_pos(b, w, now)
-        if w.fast(now):                                             # the swing smear: three ghosts at the angles just past
-            for i, q in ((3, 1), (2, 2), (1, 3)):
-                g, piv = w.ghost(w.angle(now - 0.018 * i), b.facing, q)
-                out.append((g, int(gx - piv[0]), int(gy - piv[1])))
-            out.append(self._smear_arc(b, w, now, gx, gy))
-        if w.t_armed is not None and now - w.t_armed < T_SETTLE:   # settles from the morph point into the hand
+        h = w.hist[which]
+        key = (b.drawn_anim(), b.frame(now)[0], b.facing)
+        if not h or h[-1][4] != key:
+            h.append((now, gx, gy, ang, key))
+        recent = [p for p in h if now - p[0] <= 0.12]
+        turn = abs(((recent[-1][3] - recent[0][3]) + 180.0) % 360.0 - 180.0) if len(recent) >= 2 else 0.0
+        mv = b.atlas.anim.get(key[0]) or {}
+        striking = 'hit_frame' in mv and abs(key[1] - SP_frame_hit(b.atlas, key[0])) <= 1     # around the contact only, never a recovery
+        if turn >= 25.0 and striking:                               # a fast swing: ghosts at the art's own previous grips ...
+            for q, p in zip((1, 2), recent[-3:-1]):
+                g, piv = w.ghost(screen_to_deg(p[3], b.facing), b.facing, q)
+                out.append((g, int(p[1] - piv[0]), int(p[2] - piv[1])))
+            out.append(self._smear(w, recent, which))               # ... and a crescent along the tip's real path
+        settle = w.t_armed is not None and now - w.t_armed < T_SETTLE and which == 'grip'
+        if settle:                                                  # from the morph point into the hand
             k = _ease((now - w.t_armed) / T_SETTLE)
             px, py = b.x + b.facing * PRESENT[0], b.y + PRESENT[1]
             gx, gy = _lerp(px, gx, k), _lerp(py, gy, k)
-            deg = _lerp(0.0, deg, k)
-        im, piv = w.image(deg, b.facing)
+            a0 = 0.0 if b.facing > 0 else 180.0
+            ang = a0 + ((ang - a0 + 180.0) % 360.0 - 180.0) * k
+        im, piv = w.image(screen_to_deg(ang, b.facing), b.facing)
         out.append((im, int(gx - piv[0]), int(gy - piv[1])))
         return out
 
-    def _smear_arc(self, b, w, now, gx, gy):
-        """A crescent the tip sweeps through, in the weapon's glow with a white core (cached by quantized angles)."""
-        a0, a1 = w.angle(now - 0.06), w.angle(now)
-        L = w.art['size'][0] - PAD - w.art['grip'][0]
-        q = lambda v: int(round(v / 6.0)) * 6
-        key = ('smear', id(w), q(a0), q(a1), b.facing >= 0, int(L))
-
-        def make():
-            R = int(L) + 8
-            im = Image.new('RGBA', (2 * R, 2 * R), (0, 0, 0, 0))
-            d = ImageDraw.Draw(im)
-            lo, hi = sorted((q(a0), q(a1)))
-            if hi - lo < 6:
-                return im, R, R
-            s0, s1 = (-hi, -lo) if b.facing >= 0 else (180 + lo, 180 + hi)          # screen angles (y down)
-            d.arc([R - L, R - L, R + L, R + L], s0, s1, fill=tuple(w.art_glow) + (150,), width=14)
-            d.arc([R - L + 4, R - L + 4, R + L - 4, R + L - 4], s0, s1, fill=(255, 255, 255, 220), width=4)
-            return im, R, R
+    def _smear(self, w, pts, which):
+        """The swing smear: a crescent swept by the outer part of the weapon along the placements the art actually drew,
+        each step between two drawn frames subdivided (grip moved linearly, angle the short way round) so it curves like
+        the real tip path instead of cutting a straight chord; older parts fainter, a white edge on the tip side."""
+        L = w.length
+        pts = pts[-3:]
+        path = []
+        for a, b in zip(pts, pts[1:]):
+            da = ((b[3] - a[3]) + 180.0) % 360.0 - 180.0
+            n = max(2, int(abs(da) / 8.0) + 1)
+            for k in range(n):
+                t = k / float(n)
+                path.append((_lerp(a[1], b[1], t), _lerp(a[2], b[2], t), a[3] + da * t))
+        path.append((pts[-1][1], pts[-1][2], pts[-1][3]))
+        tips = [(x + math.cos(math.radians(a)) * L, y + math.sin(math.radians(a)) * L) for x, y, a in path]
+        mids = [(x + math.cos(math.radians(a)) * L * 0.62, y + math.sin(math.radians(a)) * L * 0.62) for x, y, a in path]
+        q = lambda v: int(v // 4) * 4
+        key = ('smear', id(w), which, tuple((q(x), q(y)) for x, y in tips[::3]), q(tips[-1][0]), q(tips[-1][1]))
         if not hasattr(w, 'art_glow'):
             w.art_glow = self.glow_of(w.slot)
-        im, ox, oy = self._cache.get_or(key, make)
-        return (im, int(gx - ox), int(gy - oy))
+
+        def make():
+            xs = [x for x, y in tips + mids]
+            ys = [y for x, y in tips + mids]
+            x0, y0 = int(min(xs)) - 6, int(min(ys)) - 6
+            im = Image.new('RGBA', (int(max(xs)) - x0 + 7, int(max(ys)) - y0 + 7), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            T = [(x - x0, y - y0) for x, y in tips]
+            M = [(x - x0, y - y0) for x, y in mids]
+            m = len(T)
+            for k in range(m - 1):                                  # faint at the tail, strong behind the weapon
+                a = int(40 + 120 * ((k + 1) / float(m - 1)) ** 1.5)
+                d.polygon([M[k], T[k], T[k + 1], M[k + 1]], fill=tuple(w.art_glow) + (a,))
+            d.line(T[m // 3:], fill=(255, 255, 255, 220), width=3, joint='curve')
+            return im, x0, y0
+        im, x0, y0 = self._cache.get_or(key, make)
+        return (im, x0, y0)
 
     def state(self):
         """Numbers only (the heartbeat): never a pixel, a region or a window id."""
