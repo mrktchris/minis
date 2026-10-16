@@ -134,7 +134,7 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
     fighter's right-click menu.
   - Expected: the check mark follows the state in both menus.
 
-- [ ] **MAC-20 (2026-10-16) The forged weapon is held in the hand, frame by frame (Retina check).**
+- [ ] **MAC-21 (2026-10-16) The forged weapon is held in the hand, frame by frame (Retina check).**
   - PC change: while a fighter holds a forged weapon the arena draws it from its unarmed sheet (`Atlas.unarmed_frame`) and
     attaches the weapon at that frame's `grip` (and `grip2` for dual-wielders: gemini, codex, kunoichi, monk, nomad,
     generic), rotated to the grip angle with the pivot at the grip point (`forge.Forge.placement`, `held`); the smear is a
