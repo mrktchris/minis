@@ -70,6 +70,9 @@ class MacTrayApi:
         btn.setTarget_(self.target)
         btn.setAction_('clicked:')
         btn.sendActionOn_(LEFT_UP | RIGHT_UP)
+        # The badge check runs on its own timer: the director pumps the tray only when there is no scoreboard (minis.py), so a
+        # check inside pump() never ran with the default scoreboard and the badge never appeared.
+        self._check_timer = shell._timer(shell._ticker(self._check_badge), CHECK_S, True)
         return 1                                       # a non-None handle (Tray only checks it is set)
 
     def _clicked(self):
@@ -113,14 +116,17 @@ class MacTrayApi:
         m.popUpMenuPositioningItem_atLocation_inView_(None, NSMakePoint(0, btn.bounds().size.height + 4), btn)
         return int(getattr(target, 'picked', 0) or 0)
 
-    def pump(self):
+    def _check_badge(self):
         now = time.monotonic()
         if self.item is not None and now >= self._next_check:
-            self._next_check = now + CHECK_S
+            self._next_check = now + CHECK_S - 0.5
             try:
                 self.update_badge(shell.menubar_icon_shown(os.getpid()))
             except Exception:
                 log.exception('menu-bar badge check failed')
+
+    def pump(self):
+        self._check_badge()                            # also from pump: tests and loops without a run loop timer
         return shell.pump_or_true()
 
     def update_badge(self, shown):
@@ -162,6 +168,10 @@ class MacTrayApi:
         return ov
 
     def destroy_window(self, hwnd):
+        t = getattr(self, '_check_timer', None)
+        if t is not None:
+            t.invalidate()
+            self._check_timer = None
         if self.badge is not None:
             self.badge.close()
             self.badge = None
