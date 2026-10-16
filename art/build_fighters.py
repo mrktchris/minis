@@ -43,6 +43,20 @@ SCHEMA_NOTES = {                                 # V5 keys the engine may read; 
     'hit': 'V7, per move: slash / blunt / pierce: which contact spark the engine draws.',
     'height': 'V7, per move: high / mid / low / back: which directional reaction the defender plays.',
     'combo': "V7, top level: the character's 3-hit string, played with cancel timing.",
+    'grip': 'V8 forge, per move: one entry per frame for the front (main) weapon hand, [x, y, angle_deg, hand] or null '
+            'when no weapon is held (a thrown chakram).  x = px right of the anchor column CENTRE (anchor.R + 0.5) in the '
+            'right-facing sheet; y = px below the top of the ground_y row (negative = up); for the left-facing sheet negate '
+            'x and use 180 - angle.  angle = screen degrees of the rendered weapon axis from the grip toward the tip '
+            '(0 = forward, -90 = up; a bow: the arrow direction, the bow stands across it; a chakram: toward the ring centre).  '
+            "hand 'f' (front) / 'b'.  Pair it with sheet_unarmed*.png to draw another weapon in the hand.",
+    'grip2': "V8 forge, per move: the same for the back hand when it holds a second weapon (dual) or the grip of a "
+             "two-handed weapon (same angle as grip), else null per frame.",
+    'sheets_unarmed': 'V8 forge, top level: the same cells, rows and frames with the held weapon(s), their swing crescents '
+                      'and streaks and a nocked string / arrow not drawn (the hands still close round the empty grip).',
+    'air': 'V8, per airborne move: the trajectory the engine draws, [[t_ms, h], [t_ms, h, ease], ...]; t_ms on the row clock '
+           '(frame starts from the ms values), h = RES 1 design px above the floor (the same at every res; multiply by res), '
+           "ease of the segment ending at that key: 'o' rise, 'i' fall, 'h' hang, else linear.  Before the first key the first h, "
+           'after the last key the last h (a row may end in the air).  The frames carry only the pose.',
 }
 CAPS = {1: 32, 2: 64}                            # colours incl. transparency per RES
 OUT_DIRS = {1: 'assets', 2: 'assets_hd'}
@@ -405,6 +419,25 @@ def projectile(ch):
     return strip
 
 
+# ---------------------------------------------------------------- V8 forge: grip data
+def grips(body, pose):
+    """-> (grip, grip2) for one frame at the current RES (see SCHEMA_NOTES 'grip')."""
+    S = rig.RES
+    sk = rig.skeleton(body, pose)
+    ax, gy = rig.hip_x_px() + 0.5, rig.ground_px()
+
+    def entry(hand, ang, side):
+        return [round(hand[0] * S - ax, 1), round(hand[1] * S - gy, 1), round(((ang + 180.0) % 360.0) - 180.0, 1), side]
+    wf = sk['wf']
+    g1 = entry(wf['hand'], wf['a'], 'f') if wf is not None else None
+    g2 = None
+    if sk['wb'] is not None:
+        g2 = entry(sk['wb']['hand'], sk['wb']['a'], 'b')
+    elif (wf is not None and wf['spec'].grip2 and body.weapon_b is None and not pose.free_b and pose.doc != 'hb'):
+        g2 = entry(sk['hb'], wf['a'], 'b')
+    return g1, g2
+
+
 # ---------------------------------------------------------------- build
 def render_move(ch, name, mv, idle_pts=None):
     """-> list of dict(r, l, pose, ms, buf, meta, scarf) for one move (hand overrides applied)."""
@@ -426,7 +459,7 @@ def render_move(ch, name, mv, idle_pts=None):
             im_r = ghost_prev(im_r, body, prev, False, pose)
             im_l = ghost_prev(im_l, body, prev, True, pose)
         hp = os.path.join(hand_dir(), ch.name, f'{name}_{i}.png')
-        if os.path.exists(hp):                           # an artist's frame (same palette, same cell size) replaces the generated one
+        if os.path.exists(hp) and not rig.UNARMED:       # an artist's frame (same palette, same cell size) replaces the generated one
             hand = Image.open(hp).convert('RGBA')
             if hand.size == (rig.cell_px(), rig.cell_px()):
                 im_r = hand
@@ -448,12 +481,27 @@ def build(character, out_root, res=1, cap=None, with_fx=True):
     idle_pts = idle_scarf(ch) if body.has_tail else None
     sheet_r = Image.new('RGBA', (COLS * cw, len(names) * cw), (0, 0, 0, 0))
     sheet_l = Image.new('RGBA', (COLS * cw, len(names) * cw), (0, 0, 0, 0))
+    unarmed_r = Image.new('RGBA', (COLS * cw, len(names) * cw), (0, 0, 0, 0))
+    unarmed_l = Image.new('RGBA', (COLS * cw, len(names) * cw), (0, 0, 0, 0))
+    unarmed_frames = []
     anim, all_frames, hands = {}, [], {}
     for r, name in enumerate(names):
         mv = moves[name]
         assert len(mv['frames']) <= COLS, f'{ch.name}/{name}: more than {COLS} frames'
         frames, reach, proj_from = [], None, None
+        grip, grip2 = [], []
+        rig.UNARMED = True                               # V8 forge: the same frames without the held weapon(s)
+        try:
+            for i, f in enumerate(render_move(ch, name, mv, None if name == 'idle' else idle_pts)):
+                unarmed_r.paste(f['r'], (i * cw, r * cw))
+                unarmed_l.paste(f['l'], (i * cw, r * cw))
+                unarmed_frames += [f['r'], f['l']]
+        finally:
+            rig.UNARMED = False
         for i, f in enumerate(render_move(ch, name, mv, None if name == 'idle' else idle_pts)):
+            g1, g2 = grips(body, f['pose'])
+            grip.append(g1)
+            grip2.append(g2)
             sheet_r.paste(f['r'], (i * cw, r * cw))
             sheet_l.paste(f['l'], (i * cw, r * cw))
             all_frames += [f['r'], f['l']]
@@ -468,7 +516,7 @@ def build(character, out_root, res=1, cap=None, with_fx=True):
         if mv.get('loop_range'):
             entry['loop_range'] = list(mv['loop_range'])
         for k in ('hit_frame', 'proj_frame', 'release_frame', 'grab_frame', 'power', 'hitstop_ms',
-                  'type', 'family', 'input', 'armor', 'pull_frame', 'catch_frame', 'cancel_frame', 'lock_frame', 'hit', 'height'):    # V7 keys after the V3-V6 ones
+                  'type', 'family', 'input', 'armor', 'pull_frame', 'catch_frame', 'cancel_frame', 'lock_frame', 'hit', 'height', 'air'):    # V7 keys after the V3-V6 ones; V8 `air`
             if k in mv:
                 entry[k] = mv[k]
         if 'stride' in mv:
@@ -488,19 +536,27 @@ def build(character, out_root, res=1, cap=None, with_fx=True):
             entry['fx'] = [dict(name=f'{name}_burst', at=int(at))]
         if mv.get('support'):
             entry['support'] = mv['support']
+        entry['grip'] = grip                             # V8 forge (after every older key)
+        entry['grip2'] = grip2
         anim[name] = entry
     cols = palette_of(all_frames)
     if len(cols) + 1 > cap:
         raise SystemExit(f'{ch.name} @RES {S}: {len(cols)} colours + transparency exceeds the cap of {cap}')
+    ucols = palette_of(unarmed_frames)
+    if len(ucols) + 1 > cap:
+        raise SystemExit(f'{ch.name} @RES {S}: unarmed sheets use {len(ucols)} colours + transparency, over the cap of {cap}')
     d_out = os.path.join(out_root, ch.name)
     os.makedirs(d_out, exist_ok=True)
     sheet_r.save(os.path.join(d_out, 'sheet.png'))
     sheet_l.save(os.path.join(d_out, 'sheet_l.png'))
+    unarmed_r.save(os.path.join(d_out, 'sheet_unarmed.png'))
+    unarmed_l.save(os.path.join(d_out, 'sheet_unarmed_l.png'))
     projectile(ch).save(os.path.join(d_out, 'proj.png'))
     meta = dict(who=ch.name, character=ch.name, display=ch.display, tag=ch.tag, accent=ch.accent,
                 signature=dict(ch.signature),
                 cell=[cw, cw], cols=COLS, ground_y=ground, anchor={'R': hipx, 'L': cw - 1 - hipx},
                 sheets={'R': 'sheet.png', 'L': 'sheet_l.png'},
+                sheets_unarmed={'R': 'sheet_unarmed.png', 'L': 'sheet_unarmed_l.png'},
                 projectile=dict(file='proj.png', frames=PROJ_FRAMES, w=PROJ_W * S, h=PROJ_H * S, speed=130 * S,
                                 kind=ch.projectile['kind'], move=ch.signature['special'], style=ch.projectile['style']),
                 palette=['#%02X%02X%02X' % c for c in sorted(cols)], colors=len(cols), anims=anim, res=S,

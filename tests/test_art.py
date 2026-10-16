@@ -217,9 +217,154 @@ class Motion(unittest.TestCase):
                 self.assertLessEqual(diff(fr[-1], fr[0]), step * 1.5 + 40, f'{ch}/{name} pops at the loop point')
 
     def test_jump_actually_leaves_the_ground(self):
+        """V8: the trajectory is anim.json `air` (the engine lifts the sprite); the neutral jump really goes up."""
         for ch in CHARS:
-            tops = [bbox(im)[1] for im in Sheet(ch).frames('jump')]
-            self.assertLess(min(tops), tops[0] - 5, ch)
+            a = Sheet(ch).anim['jump']
+            self.assertGreaterEqual(max(k[1] for k in a['air']), 18, ch)
+
+
+class AirV8(unittest.TestCase):
+    """V8 air contract (docs/ANIMATION-NOTES.md section 9): every airborne row carries `air`, the frames carry the pose."""
+    LEAPS = ('jump', 'air_slash', 'spike', 'vault_kick', 'pole_vault', 'leap_shot')   # + the pound signature
+    REACT = ('launched', 'air_hit', 'spiked', 'thrown')
+
+    @staticmethod
+    def headroom():
+        try:
+            from minis_core.config import JUMP_HEADROOM
+            return JUMP_HEADROOM
+        except Exception:                                   # noqa: BLE001
+            return 30
+
+    def leaps(self, ch):
+        s = Sheet(ch)
+        out = [n for n in self.LEAPS if n in s.anim]
+        out += [n for n, (tpl, _d, _o) in roster.get(ch).sig_moves.items() if tpl == 'pound']
+        return out
+
+    @staticmethod
+    def starts(a):
+        ms = [f['ms'] for f in a['frames']]
+        return ms, [sum(ms[:i]) for i in range(len(ms))]
+
+    def test_every_air_row_has_keys_inside_the_headroom_with_the_right_eases(self):
+        top = self.headroom() - 4
+        for ch in CHARS:
+            s = Sheet(ch)
+            for n in self.leaps(ch) + list(self.REACT):
+                a = s.anim[n]
+                keys = a.get('air')
+                self.assertTrue(keys, (ch, n))
+                ms, st = self.starts(a)
+                self.assertEqual([k[0] for k in keys], sorted(k[0] for k in keys), (ch, n))
+                self.assertLessEqual(keys[-1][0], sum(ms), (ch, n))
+                for k in keys:
+                    self.assertTrue(0 <= k[1] <= top, (ch, n, k))
+                for k0, k1 in zip(keys, keys[1:]):
+                    e = k1[2] if len(k1) > 2 else 'l'
+                    if k0[1] == 0 and k1[1] > 0:
+                        self.assertEqual(e, 'o', (ch, n, 'leaving the floor rises like a thrown body', k1))
+                    elif k0[1] > 0 and k1[1] == 0:
+                        self.assertEqual(e, 'i', (ch, n, 'reaching the floor falls', k1))
+                    elif k1[1] > k0[1]:
+                        self.assertIn(e, ('o', 'h'), (ch, n, k1))
+                    elif k1[1] < k0[1]:
+                        self.assertIn(e, ('i', 'h'), (ch, n, k1))
+
+    def test_leaps_load_push_off_hang_and_land_with_weight(self):
+        """2-3 squash frames before the push-off, the push-off still on the floor with dust, a hang ('h') of 12-40 % of
+        the airtime, the frame at the apex held longer than the push-off, the fall landing at least as hard as the rise
+        left, a squash + dust frame exactly at touchdown, and the row inside 1.1 s."""
+        for ch in CHARS:
+            s = Sheet(ch)
+            mv = M.build_moves(ch)
+            for n in self.leaps(ch):
+                a = s.anim[n]
+                keys = a['air']
+                ms, st = self.starts(a)
+                poses = [f[0] for f in mv[n]['frames']]
+                up = next(k[0] for i, k in enumerate(keys) if k[1] == 0 and keys[i + 1][1] > 0)
+                down = next(k[0] for k in keys if k[0] > up and k[1] == 0)
+                self.assertIn(up, st, (ch, n, 'take-off is a frame boundary'))
+                push = st.index(up) - 1                                  # the push-off frame ends where the air starts
+                self.assertGreaterEqual(push, 2, (ch, n))
+                squash = [i for i in range(push) if poses[i].sq < 0.97]
+                self.assertGreaterEqual(len(squash), 2, (ch, n, 'anticipation squash frames'))
+                self.assertGreater(poses[push].sq, 1.05, (ch, n, 'push-off stretch'))
+                self.assertTrue(any(f[0] == 'dust' for f in poses[push].fx), (ch, n, 'dust on the push-off'))
+                air = down - up
+                hang = sum(k1[0] - k0[0] for k0, k1 in zip(keys, keys[1:]) if len(k1) > 2 and k1[2] == 'h')
+                self.assertTrue(0.12 <= hang / air <= 0.40, (ch, n, hang, air))
+                rise = next(k[0] for k in keys if len(k) > 2 and k[2] == 'o') - up
+                apex_k = max(keys, key=lambda k: k[1])
+                k0, k1 = [(k0, k1) for k0, k1 in zip(keys, keys[1:]) if k1[1] == 0 and k0[1] > 0][0]
+                v_rise = 2.0 * apex_k[1] / rise
+                v_fall = 2.0 * k0[1] / (k1[0] - k0[0])
+                self.assertGreater(v_fall, v_rise * 0.95, (ch, n, 'the landing is as hard as the take-off', v_rise, v_fall))
+                hs = [(k0[0], k1[0]) for k0, k1 in zip(keys, keys[1:]) if len(k1) > 2 and k1[2] == 'h']
+                over = [i for i in range(len(st)) if st[i] < hs[-1][1] and st[i] + ms[i] > hs[0][0]]
+                apex_f = max(over, key=lambda i: ms[i])                  # the longest frame drawn during the hang
+                self.assertGreater(ms[apex_f], ms[push], (ch, n, 'the apex frame is held longer than the push-off'))
+                self.assertIn(down, st, (ch, n, 'touchdown is a frame boundary'))
+                land = st.index(down)
+                self.assertLessEqual(poses[land].sq, 0.9, (ch, n, 'landing squash'))
+                self.assertTrue(any(f[0] in ('dust', 'shock') for f in poses[land].fx), (ch, n, 'landing dust'))
+                self.assertLessEqual(sum(ms), 1100, (ch, n, sum(ms)))
+            j = s.anim['jump']['air']
+            ground = [k[0] for k in j if k[1] == 0]
+            self.assertTrue(450 <= ground[-1] - ground[0] <= 520, (ch, 'neutral jump airtime', ground))
+            self.assertTrue(18 <= max(k[1] for k in j) <= 20, (ch, 'neutral jump apex'))
+
+    def test_airborne_frames_keep_the_hips_at_standing_height_in_the_cell(self):
+        """The trajectory is the engine's: a frame drawn while lifted more than 4 px keeps its hips within 2 px of the
+        standing hips (spiked / thrown only until they start to flatten out for the floor)."""
+        for ch in CHARS:
+            body = roster.get(ch).body
+            stand = body.hip_y0 + body.kl * M.S0.dy                   # the stance's hips (before a planted foot sinks them)
+            mv = M.build_moves(ch)
+            for n in self.leaps(ch) + list(self.REACT):
+                keys = mv[n]['air']
+                ms = [f[1] for f in mv[n]['frames']]
+                st = [sum(ms[:i]) for i in range(len(ms))]
+                last = {'spiked': 0, 'thrown': 2}.get(n, len(ms) - 1)
+                for i, (ps, m) in enumerate(mv[n]['frames'][:last + 1]):
+                    if M.air_at(keys, st[i] + m / 2.0) > 4:
+                        hip = rig.body_frame(body, ps)['hip'][1]
+                        # the key right before touchdown may start to sink into the slam (pound's diving smear)
+                        lim = 4.0 if i + 1 < len(st) and any(k[1] == 0 and k[0] == st[i + 1] for k in keys) else 2.0
+                        self.assertLessEqual(abs(hip - stand), lim, (ch, n, i, hip, stand))
+
+    def test_the_juggle_chain_is_continuous_and_the_strikes_meet_it(self):
+        for ch in CHARS:
+            s = Sheet(ch)
+            hang = s.anim['launched']['air'][-1][1]
+            self.assertEqual(hang, 21, ch)
+            self.assertEqual(s.anim['air_hit']['air'][0][1], hang, ch)
+            self.assertEqual(s.anim['air_hit']['air'][-1][1], hang, ch)
+            self.assertEqual(s.anim['spiked']['air'][0][1], hang, ch)
+            ms, st = self.starts(s.anim['launched'])
+            self.assertGreaterEqual(M.air_at(s.anim['launched']['air'], st[3]), 20, (ch, 'launched is up within 3 frames'))
+            for n in ('air_slash', 'spike'):
+                a = s.anim[n]
+                ms, st = self.starts(a)
+                h = M.air_at(a['air'], st[a['hit_frame']])
+                self.assertLessEqual(abs(h - hang), 3, (ch, n, h))
+            sp = s.anim['spiked']
+            ms, st = self.starts(sp)
+            flat = next(i for i, f in enumerate(M.build_moves(ch)['spiked']['frames']) if f[0].lean <= -89)
+            self.assertEqual(M.air_at(sp['air'], st[flat]), 0, (ch, 'spiked is on the floor on its impact frame'))
+            self.assertTrue(2 <= max(k[1] for k in sp['air'] if k[0] > st[flat]) <= 3, (ch, 'one small bounce'))
+            th = s.anim['thrown']
+            ms, st = self.starts(th)
+            self.assertEqual(M.air_at(th['air'], st[th['hit_frame']]), 0, (ch, 'thrown is slammed onto the floor at hit_frame'))
+            self.assertTrue(12 <= max(k[1] for k in th['air']) <= 16, ch)
+
+    def test_both_resolutions_carry_identical_air_keys(self):
+        for ch in CHARS:
+            lo, hi = Sheet(ch), Sheet(ch, 'assets_hd')
+            for n, a in lo.anim.items():
+                self.assertEqual(a.get('air'), hi.anim[n].get('air'), (ch, n))
+            self.assertIn('air', lo.meta['schema_notes'])
 
 
 class Scarf(unittest.TestCase):
@@ -1106,6 +1251,170 @@ class HD128(unittest.TestCase):
             rig.set_res(1)
         buf1, _ = rig.render_parts(c.body, pose, None)
         self.assertEqual(buf1.tobytes().count(bytes([rig.PID['crease']])), 0)      # nothing of it at 64 px
+
+
+
+class ForgeV8(unittest.TestCase):
+    """V8 forge: sheet_unarmed*.png (the same frames without the held weapon) and per-frame `grip` / `grip2`, so the
+    arena can draw a forged weapon in the fighter's hand."""
+    WEAPON_IDS = {rig.PID[n] for n in ('wpn_f', 'wpn_b', 'hilt_f', 'hilt_b', 'blade_hl', 'string')}
+
+    @staticmethod
+    def sample(a):
+        """Frames worth checking in a row: the first, the contact (and the smear before it) and the last."""
+        n = len(a['frames'])
+        out = {0, n - 1}
+        for k in ('hit_frame', 'proj_frame', 'grab_frame'):
+            if k in a:
+                out.add(a[k])
+        out |= set(a.get('smear_frames') or [])
+        return sorted(i for i in out if 0 <= i < n)
+
+    @staticmethod
+    def render(ch, name, i, res=1, unarmed=False, facing=1):
+        c = roster.get(ch)
+        mv = M.build_moves(c)[name]
+        poses = [f[0] for f in mv['frames']]
+        prev, prev2 = BF.frame_history(poses, i, mv['loop'])
+        rig.set_res(res)
+        rig.UNARMED = unarmed
+        try:
+            buf, meta = rig.render_parts(c.body, poses[i], None, prev=prev, hist=(prev2, prev))
+            if facing < 0:
+                buf = rig.mirror_parts(buf, meta, c.body)
+        finally:
+            rig.UNARMED = False
+            rig.set_res(1)
+        return buf, poses[i]
+
+    def test_unarmed_sheets_and_grip_lists_exist_for_every_row_at_both_resolutions(self):
+        for root in ('assets', 'assets_hd'):
+            for ch in CHARS:
+                s = Sheet(ch, root)
+                self.assertEqual(s.meta['sheets_unarmed'], {'R': 'sheet_unarmed.png', 'L': 'sheet_unarmed_l.png'})
+                for side, fn in s.meta['sheets_unarmed'].items():
+                    im = Image.open(ROOT / root / ch / fn)
+                    self.assertEqual(im.size, s.sheets[side].size, (root, ch, fn))
+                    self.assertLessEqual(len(im.convert('RGBA').getcolors(1 << 16) or []), CAP if root == 'assets' else 64)
+                for n, a in s.anim.items():
+                    self.assertEqual(len(a['grip']), len(a['frames']), (root, ch, n))
+                    self.assertEqual(len(a['grip2']), len(a['frames']), (root, ch, n))
+                    for g in a['grip'] + a['grip2']:
+                        self.assertTrue(g is None or (len(g) == 4 and g[3] in ('f', 'b')), (root, ch, n, g))
+                self.assertIn('grip', s.meta['schema_notes'])
+
+    def test_unarmed_frames_draw_no_weapon(self):
+        """No weapon part is rendered in unarmed mode, and on the real unarmed sheets every pixel where the armed frame
+        has its weapon (away from the body) is empty, in both facings."""
+        for ch in CHARS:
+            s, u = Sheet(ch), {k: Image.open(ROOT / 'assets' / ch / v).convert('RGBA') for k, v in Sheet(ch).meta['sheets_unarmed'].items()}
+            held = 0
+            for n, a in s.anim.items():
+                for i in self.sample(a):
+                    for facing in (1, -1):
+                        arm, _ = self.render(ch, n, i, facing=facing)
+                        un, pose = self.render(ch, n, i, unarmed=True, facing=facing)
+                        ap, up = arm.load(), un.load()
+                        self.assertFalse(set(un.tobytes()) & self.WEAPON_IDS, (ch, n, i, facing))
+                        if rig.is_smear(pose) or pose.ghost:
+                            continue                             # a ghosted previous arm / an afterimage may lie there
+                        side = 'R' if facing > 0 else 'L'
+                        r = a['row']
+                        px = u[side].crop((i * 64, r * 64, (i + 1) * 64, (r + 1) * 64)).load()
+                        for y in range(64):
+                            for x in range(64):
+                                if ap[x, y] not in self.WEAPON_IDS:
+                                    continue
+                                if any(up[xx, yy] for xx in range(max(0, x - 2), min(64, x + 3))
+                                       for yy in range(max(0, y - 2), min(64, y + 3))):
+                                    continue                     # next to the body: the outline may sit here
+                                held += 1
+                                self.assertEqual(px[x, y][3], 0, (ch, n, i, side, x, y))
+            self.assertGreater(held, 50, ch)
+
+    def test_grips_sit_on_the_hand_and_follow_the_rendered_weapon(self):
+        """The grip point is on (within 1 px of) the gripping hand's pixels, and the grip angle matches the axis of the
+        weapon pixels actually drawn (5 degrees at RES 2, 7 at RES 1 where a 12-18 px blade is quantised; long weapons
+        only, smear frames skipped), in both facings."""
+        import numpy as np
+        for res, root in ((1, 'assets'), (2, 'assets_hd')):
+            for ch in CHARS:
+                s = Sheet(ch, root)
+                body = roster.get(ch).body
+                cw = s.cell
+                angled = 0
+                for n, a in s.anim.items():
+                    for i in self.sample(a)[:2 if res == 2 else None]:
+                        for facing in (1, -1):
+                            buf, pose = self.render(ch, n, i, res=res, facing=facing)
+                            px = np.array(buf)
+                            ax = s.meta['anchor']['R' if facing > 0 else 'L'] + 0.5
+                            for key, hand_part, wpn in (('grip', 'hand_f', ('wpn_f', 'hilt_f')),
+                                                        ('grip2', 'hand_b', ('wpn_b', 'hilt_b'))):
+                                g = a[key][i]
+                                if g is None:
+                                    continue
+                                gx = ax + (g[0] if facing > 0 else -g[0])
+                                gy = s.meta['ground_y'] + g[1]
+                                hid = rig.PID['hand_f' if g[3] == 'f' else 'hand_b']
+                                ys, xs = np.nonzero(px == hid)
+                                r_ = int(math.ceil(1.5 * res))
+                                win = px[max(0, int(gy) - r_):int(gy) + r_ + 1, max(0, int(gx) - r_):int(gx) + r_ + 1]
+                                covered = any(v and rig.Z[int(v)] > rig.Z[hid] for v in np.unique(win))
+                                if len(xs) and not covered:          # a hand behind the arm / weapon / body is not checked
+                                    d = np.min(np.hypot(xs + 0.5 - gx, ys + 0.5 - gy))
+                                    # on the hand: within one RES 1 px of a hand pixel's edge
+                                    self.assertLessEqual(d, 0.5 * res + 1.0 * res, (root, ch, n, i, facing, key, g, d))
+                                spec = body.weapon if key == 'grip' else (body.weapon_b or body.weapon)
+                                # bows / rings / fans have no long axis; an axe head skews the pixel axis off the haft
+                                if (rig.is_smear(pose) or spec.kind in ('bow', 'chakram', 'fan', 'axe') or spec.length < 12
+                                        or key == 'grip2'):
+                                    continue
+                                ids = [rig.PID[w] for w in wpn]
+                                ys, xs = np.nonzero(np.isin(px, ids))
+                                if len(xs) < 12 * res:
+                                    continue
+                                pts = np.stack([xs + 0.5, ys + 0.5], 1)
+                                c = pts.mean(0)
+                                ev, vec = np.linalg.eigh(np.cov((pts - c).T))
+                                axis = vec[:, -1]
+                                if ev[-1] < 4 * ev[0]:
+                                    continue                         # foreshortened to a blob: no axis to measure
+                                if np.dot(axis, c - (gx, gy)) < 0:
+                                    axis = -axis
+                                want = g[2] if facing > 0 else 180.0 - g[2]
+                                got = math.degrees(math.atan2(axis[1], axis[0]))
+                                err = abs((got - want + 180) % 360 - 180)
+                                if spec.slide:                       # a pole held near its middle: the axis, either way
+                                    err = min(err, 180.0 - err)
+                                # 12-30 px of blade quantised to the pixel grid: 5 deg at 128 px, 7 at 64 px
+                                self.assertLessEqual(err, 5.0 if res == 2 else 7.0, (root, ch, n, i, facing, want, got))
+                                angled += 1
+                if body.weapon.kind not in ('bow', 'chakram', 'fan', 'axe') and body.weapon.length >= 12:
+                    self.assertGreater(angled, 20, (root, ch))
+
+
+    def test_the_atlas_serves_unarmed_frames_and_mirrored_grips(self):
+        from minis_core.atlas import Atlas
+        a = Atlas('knight')
+        s = Sheet('knight')
+        r = s.anim['cross']['row']
+        for facing, side in ((1, 'R'), (-1, 'L')):
+            want = Image.open(ROOT / 'assets' / 'knight' / s.meta['sheets_unarmed'][side]).convert('RGBA').crop((128, r * 64, 192, (r + 1) * 64))
+            self.assertEqual(a.unarmed_frame('cross', 2, facing).tobytes(), want.tobytes())
+            self.assertNotEqual(a.unarmed_frame('cross', 2, facing).tobytes(), a.frame_image('cross', 2, facing).tobytes())
+        g = s.anim['cross']['grip'][3]
+        self.assertEqual(a.grip('cross', 3, 1), (g[0], g[1], g[2], 'f'))
+        x, y, ang, hand = a.grip('cross', 3, -1)
+        self.assertEqual((x, y), (-g[0], g[1]))
+        self.assertAlmostEqual((ang - (180 - g[2]) + 180) % 360 - 180, 0.0)
+        self.assertIsNotNone(a.grip2('cross', 3, 1))                    # the greatsword is two-handed
+        up = Atlas('knight', ROOT / 'assets' / 'knight', hd=True)       # RES 1 standing in for HD: grips scale with it
+        self.assertEqual(up.grip('cross', 3, 1)[:2], (g[0] * 2, g[1] * 2))
+        self.assertEqual(up.unarmed_frame('cross', 2, 1).size, (128, 128))
+        nm = Atlas('nomad')
+        boom = next(n for n, v in nm.anim.items() if v.get('type') == 'boomerang')
+        self.assertTrue(any(nm.grip(boom, i, 1) is None for i in range(len(nm.anim[boom]['frames']))))   # thrown: not held
 
 
 def frame_hashes():

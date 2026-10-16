@@ -13,6 +13,8 @@ __pycache__/
 /minis.json
 /art/hand/
 /qa/local/
+# art/qa_jump.py strips, GIFs and film strips (~90 MB): regenerate with `python art/qa_jump.py strips|gifs all`
+/qa/jump/
 
 # Large preview reels: anything over ~5 MB is regenerated with tools/make_previews.py,
 # not committed. (git cannot filter by size; add a path here if a reel grows past that.)

@@ -9,6 +9,7 @@ smear (one frame, 40 ms, the limb drawn as its arc) -> contact hold (`hit_frame`
 stretch (`sq` > 1), the chest breathes (`chest`), the head leads a hit and the arms follow a frame later.
 """
 from __future__ import annotations
+import math
 from dataclasses import replace
 from rig import Pose
 
@@ -28,6 +29,125 @@ def M(frames, loop=False, cat='', desc='', **meta):
     if 'hit_frame' in meta and 'hitstop_ms' not in meta:
         meta['hitstop_ms'] = HITSTOP.get(meta.get('power', 1), 150)
     return dict(frames=frames, loop=loop, cat=cat, desc=desc, **meta)
+
+
+# ---------------------------------------------------------------------- V8: the air contract
+# The engine draws an airborne row's TRAJECTORY: it lifts the whole sprite by anim.json `air` (RES 1 px above the floor,
+# eased per segment) every redraw.  So an airborne key carries only the POSE (squash, stretch, tuck, reach) with the
+# hips near standing height (dy -1..0), and the move carries `air_spec`: (frame, fraction into that frame, h[, ease]).
+# Fractions (not ms) so `heavier` can stretch a row's frames and the keys stretch with them; resolve_air turns them into
+# `air` = [[t_ms, h], [t_ms, h, ease], ...] on the row's own clock once the frame timings are final.
+# Ease of the segment ending at a key: 'o' rise (fast, slowing), 'i' fall (slow, faster), 'h' hang (in-out).
+def _ease(e, u):
+    if e == 'o':
+        return 1.0 - (1.0 - u) * (1.0 - u)
+    if e == 'i':
+        return u * u
+    if e == 'h':
+        return u * u * (3.0 - 2.0 * u)
+    return u
+
+
+def air_at(keys, t):
+    """Height of an `air` curve at t ms (the same function as the engine's air_lift)."""
+    if not keys:
+        return 0.0
+    if t <= keys[0][0]:
+        return float(keys[0][1])
+    for k0, k1 in zip(keys, keys[1:]):
+        if t < k1[0]:
+            u = (t - k0[0]) / max(1e-6, float(k1[0] - k0[0]))
+            return k0[1] + (k1[1] - k0[1]) * _ease(k1[2] if len(k1) > 2 else 'l', u)
+    return float(keys[-1][1])
+
+
+def _angdiff(a, b):
+    """a - b wrapped to (-180, 180]."""
+    return (a - b + 180.0) % 360.0 - 180.0
+
+
+def trail_weapons(body, frames, lag=0.35):
+    """The weapon follows the arc instead of snapping: a key that leaves the weapon to the rig (wa / wb None) gets the
+    angle the forearm gives it, dragged `lag` of the way back toward where the weapon was on the previous key (one frame
+    of overlap).  Explicit keys (the strike frames) are left as authored.  fit_weapons then keeps every angle exactly."""
+    out, prev = [], {}
+    for ps, ms in frames:
+        sk = rig.skeleton(body, ps)
+        kw = {}
+        for side, field_, spec in (('f', 'wa', body.weapon), ('b', 'wb', body.weapon_b)):
+            w = sk['w' + side]
+            if w is None or spec is None:
+                continue
+            want = getattr(ps, field_)
+            if want is None:
+                hand, el = sk['h' + side], sk['el_' + side]
+                nat = math.degrees(math.atan2(hand[1] - el[1], hand[0] - el[0])) + spec.rel
+                if side in prev:                       # drag behind the forearm, and never swing more than 55 deg a key
+                    d = _angdiff(nat, prev[side]) * (1.0 - lag)
+                    want = prev[side] + max(-55.0, min(55.0, d))
+                else:
+                    want = nat
+                kw[field_] = round(want, 1)
+            prev[side] = want
+        out.append((replace(ps, **kw) if kw else ps, ms))
+    return out
+
+
+def _nearest_fit(body, ps):
+    """A key fit_weapons could not fit (a long two-handed blade held up at the top of the cell): instead of letting the
+    rig turn it toward the side it leans (often 70+ degrees), aim it at the NEAREST angle that fits, either way."""
+    if not _turned(body, ps):
+        return ps
+    sk = rig.skeleton(body, ps)
+    kw = {}
+    for side, field_, spec in (('f', 'wa', body.weapon), ('b', 'wb', body.weapon_b)):
+        want = getattr(ps, field_)
+        if spec is None or want is None or sk['w' + side] is None:
+            continue
+        hand = sk['h' + side]
+        for k in range(1, 31):
+            hit = None
+            for sgn in (1, -1):
+                a = want + sgn * 3 * k
+                b_, t_ = rig._wends(spec, hand, a, spec.grip)
+                if rig._wfits(b_, t_):
+                    hit = a
+                    break
+            if hit is not None:
+                kw[field_] = hit
+                break
+    return replace(ps, **kw) if kw else ps
+
+
+def resolve_air(body, mv):
+    """air_spec -> `air` (ms keys) on the final frame timings, plus each pose's `vy` (the world vertical motion since the
+    previous frame, so the hanging bits trail the trajectory the engine draws).  Weapons trail and are fitted first."""
+    mv['frames'] = trail_weapons(body, mv['frames'])
+    fit_weapons(body, mv)
+    mv['frames'] = [(_nearest_fit(body, ps), m) for ps, m in mv['frames']]
+    ms = [m for _, m in mv['frames']]
+    st = [sum(ms[:i]) for i in range(len(ms))]
+    keys = []
+    for k in mv.pop('air_spec'):
+        f, fr, h = k[0], k[1], k[2]
+        t = int(round(st[f] + fr * ms[f]))
+        keys.append([t, h] if len(k) < 4 or k[3] is None else [t, h, k[3]])
+    mv['air'] = keys
+    mids = [air_at(keys, st[i] + ms[i] / 2.0) for i in range(len(ms))]
+    fr = []
+    for i, (ps, m) in enumerate(mv['frames']):
+        vy = 0.0 if i == 0 else max(-6.0, min(6.0, -(mids[i] - mids[i - 1])))
+        fr.append((replace(ps, vy=round(vy, 2)), m))
+    mv['frames'] = fr
+    return mv
+
+
+def push_dust():
+    return (('dust', 'ff', 3, 1), ('dust', 'fb', -4, 1))
+
+
+def land_dust():
+    return (('dust', 'ff', 5, 1), ('dust', 'fb', -6, 1))
 
 
 # ---------------------------------------------------------------------- signature templates
@@ -53,18 +173,21 @@ def sig_spin(desc, **_):
 
 
 def sig_pound(desc, **_):
-    """Leaping slam: squash, leap with the weapon overhead, hang, smash it down in one smear, shake, hold the landing."""
+    """Leaping slam: load with the weapon back over the shoulder, push off, hang at the top with it raised, smash it down
+    in one smear as the body drops, the landing IS the hit (shock + dust), hold it, recover.  V8: the leap is `air`."""
     return M([
-        (p(dy=4, lean=14, sq=0.90, hf=(5, 4), wa=-130), 150),
-        (p(dy=-8, lean=0, sq=1.10, hf=(6, -9), eb_f='up', wa=-140, ff=(4, 6), fb=(-3, 5)), 60),
-        (p(dy=-12, lean=-6, sq=1.0, hf=(5, -11), eb_f='up', wa=-150, ff=(5, 7), fb=(-4, 6)), 180),
-        (p(dy=6, lean=40, sq=0.96, head=(2, 2), hf=(9, 7), wa=55, fist_f=4, ff=(9, 2), fb=(-6, 2), dx=4, smear_f=(5, -11)), 40),
+        (p(dy=3, lean=12, sq=0.93, hf=(5, 3), wa=-118), 110),
+        (p(dy=6, lean=17, sq=0.87, head=(2, 1), hf=(3, 5), wa=-128, face='g'), 120),
+        (p(dy=-1, lean=2, sq=1.10, hf=(6, -6), eb_f='up', wa=-140, ff=(5, 0), fb=(-5, 1), ang_f=22, ang_b=22, fx=push_dust()), 60),
+        (p(dy=-1, lean=-6, sq=1.02, chest=1.04, hf=(5, -10), eb_f='up', wa=-152, ff=(5, 7), fb=(-4, 6), face='o'), 200),
+        (p(dy=3, lean=40, sq=0.98, head=(2, 2), hf=(9, 7), wa=55, fist_f=4, ff=(8, 3), fb=(-6, 2), dx=4, smear_f=(5, -10)), 40),
         (p(dy=10, lean=45, sq=0.88, head=(2, 2), hf=(9, 7), wa=62, fist_f=4, ff=(9, 0), fb=(-6, 0),
            fx=(('shock', 'abs', 38, 56), ('dust', 'ff', 4, -1), ('dust', 'fb', -5, -1))), 160),
         (p(dy=9, lean=42, sq=0.92, head=(2, 2), hf=(9, 7), wa=64, fist_f=4, ff=(9, 0), fb=(-6, 0),
            fx=(('dust', 'ff', 6, -2), ('dust', 'fb', -7, -2))), 280),
-        (p(dy=5, lean=20, hf=(7, 5)), 110), (p(dy=2, lean=12), 130)],
-        cat='strike', desc=desc, hit_frame=4, power=3, shake=dict(frames=4, amp=2))
+        (p(dy=4, lean=18, hf=(7, 5)), 120)],
+        cat='strike', desc=desc, hit_frame=5, power=3, shake=dict(frames=4, amp=2),
+        air_spec=[(3, 0, 0), (3, 0.6, 16, 'o'), (3, 0.825, 15.5, 'h'), (5, 0, 0, 'i')])
 
 
 def sig_throw(desc, **_):
@@ -349,15 +472,24 @@ def build_moves(character):
                       (p(dy=6, lean=18, sq=0.92, hf=(7, 2), hb=(3, 3), ff=(9, 0), fb=(-8, 0)), 120),
                       (p(dy=7, lean=18, sq=0.91, hf=(7, 2), hb=(3, 3), ff=(9, 0), fb=(-8, 0)), 120)],
                      loop=True, loop_range=(1, 2), cat='locomotion', desc='Low stance.')
+    # V8 jump: the engine lifts the sprite along `air`; these keys are the pose only.  Two loading keys (arms swing back,
+    # deepest squash held), a push-off stretch with the toes still on the floor (dust), the rise (arms lead up, legs
+    # trail pointed), the apex tuck held longest, the fall (legs reach for the floor, arms lag up), the landing squash
+    # (arms still coming down) and an overshoot back to the stance.
+    wpn = body.weapon
+    lh = 5 if (wpn is not None and wpn.length >= 18 and not wpn.slide) else 0   # a long blade cannot stand up at the cell top
     mv['jump'] = M([
-        (p(dy=5, lean=15, sq=0.86, hf=(2, 4), hb=(-2, 4), ff=(8, 0), fb=(-7, 0)), 90),
-        (p(dy=-5, lean=5, sq=1.12, hf=(6, -6), hb=(3, -7), ff=(4, 4), fb=(-3, 3)), 50),
-        (p(dy=-10, lean=2, sq=1.04, hf=(7, -9), hb=(4, -10), ff=(5, 6), fb=(-4, 5)), 90),
-        (p(dy=-12, lean=0, sq=1.0, hf=(7, -9), hb=(4, -10), ff=(5, 7), fb=(-4, 6), face='w'), 140),
-        (p(dy=-6, lean=2, sq=1.04, hf=(8, -3), hb=(4, -4), ff=(6, 3), fb=(-5, 3)), 70),
-        (p(dy=5, lean=14, sq=0.86, hf=(6, 2), hb=(2, 2), ff=(8, 0), fb=(-7, 0), fx=(('dust', 'ff', 5, 1), ('dust', 'fb', -6, 1))), 70),
-        (p(dy=2, lean=10, sq=1.02), 90)],
-        cat='locomotion', desc='Neutral jump: squash, stretch, hang, squash on landing.')
+        (p(dy=3, lean=13, sq=0.94, head=(1, 1), hf=(4, 4), hb=(0, 5), ff=(8, 0), fb=(-7, 0)), 80),
+        (p(dy=6, lean=20, sq=0.86, head=(2, 1), hf=(-1, 6), hb=(-4, 5), free_b=True, ff=(8, 0), fb=(-7, 0), face='g'), 100),
+        (p(dy=-1, lean=6, sq=1.10, head=(1, -1), hf=(8, -2 + lh), hb=(-3, 0), free_b=True, ff=(5, 0), fb=(-5, 1), ang_f=22, ang_b=22,
+           fx=push_dust()), 60),
+        (p(dy=-1, lean=3, sq=1.06, hf=(11, -6 + lh), hb=(-5, -6), eb_b='up', free_b=True, ff=(3, 3), fb=(-4, 2), ang_f=30, ang_b=30), 140),
+        (p(dy=-1, lean=4, hf=(11, -2 + lh * 0.6), hb=(-6, -2), free_b=True, ff=(5, 8), fb=(-1, 7), face='w'), 170),
+        (p(dy=0, lean=6, sq=1.04, hf=(10, -7 + lh), hb=(-6, -7), eb_b='up', free_b=True, ff=(7, 2), fb=(-5, 1), ang_f=-8), 160),
+        (p(dy=6, lean=18, sq=0.86, head=(2, 2), hf=(9, 1), hb=(2, 3), free_b=True, ff=(8, 0), fb=(-7, 0), fx=land_dust()), 90),
+        (p(dy=2, lean=11, sq=1.02, hf=(7, 3), hb=(3, 4)), 130)],
+        cat='locomotion', desc='Neutral jump: load, push off, rise, tuck at the apex, reach for the floor, squash on landing.',
+        air_spec=[(3, 0, 0), (4, 0.353, 19, 'o'), (5, 0, 18, 'h'), (6, 0, 0, 'i')])
 
     # ------------------------------------------------------------------ strikes (V6: weapon swings, section-6 timing)
     # wind-up held over two keys -> one smear (the crescent) -> contact hold (hitstop) -> held follow-through -> settle
@@ -575,6 +707,9 @@ def build_moves(character):
     import ultimates
     ultimates.add_ultimate(mv, ch)
     mv.update(weapon_moves(ch))                    # V7 rows come after every older row, so no row index ever moves
+    for m in mv.values():                          # V8: airborne rows get their `air` keys on the final timings
+        if 'air_spec' in m:
+            resolve_air(body, m)
     return annotate_contact(ch, mv)
 
 
@@ -643,33 +778,41 @@ def blade_thrust(desc):
 
 # ---------------------------------------------------------------- shared move types (every family, weapon angles adapt)
 def t_air_slash(desc):
-    """Air juggle: hop after the launched opponent, wind the weapon back at the apex, one falling slash, land squashed."""
+    """Air juggle: load, push off after the launched opponent, cock the weapon back over the shoulder on the rise with the
+    knees up, one slash at the top (it meets the defender hanging at 21), follow through as the body falls with the legs
+    reaching down, land squashed.  V8: the leap is `air`; hit_frame 5."""
     return W([
-        (p(dy=5, lean=14, sq=0.88, hf=(4, 3), wa=-60, ff=(8, 0), fb=(-7, 0)), 90),
-        (p(dy=-6, lean=4, sq=1.05, hf=(1, -5), eb_f='up', wa=-140, ff=(4, 5), fb=(-4, 4)), 50),
-        (p(dy=-8, lean=-6, hf=(-3, -6), eb_f='up', wa=-160, ff=(5, 8), fb=(-4, 7), face='g'), 120),
-        (p(dy=-9, lean=24, hf=(11, 3), wa=36, ff=(7, 7), fb=(-5, 6), face='o', smear_f=(-3, -6)), 40),
-        (p(dy=-9, lean=26, hf=(11, 4), wa=42, ff=(7, 6), fb=(-5, 5), face='o', fx=(('spark', 'hf', 3, 0),)), 150),
-        (p(dy=-5, lean=20, hf=(10, 6), wa=58, ff=(7, 3), fb=(-5, 3), face='g'), 80),
-        (p(dy=5, lean=14, sq=0.88, hf=(8, 5), wa=50, ff=(9, 0), fb=(-8, 0), fx=(('dust', 'ff', 4, 1), ('dust', 'fb', -5, 1))), 100),
-        (p(dy=2, lean=10, sq=1.02), 120)],
-        desc=desc, hit_frame=4, power=2, type='air', input='up + Strike (air)')
+        (p(dy=3, lean=12, sq=0.93, hf=(4, 3), hb=(1, 4), ff=(8, 0), fb=(-7, 0)), 70),
+        (p(dy=6, lean=18, sq=0.87, head=(2, 1), hf=(0, 6), hb=(-3, 5), wa=-70, ff=(8, 0), fb=(-7, 0), face='g'), 100),
+        (p(dy=-1, lean=4, sq=1.10, hf=(5, -4), hb=(2, -4), eb_f='up', wa=-105, ff=(5, 0), fb=(-5, 1), ang_f=22, ang_b=22, face='g',
+           fx=push_dust()), 50),
+        (p(dy=-1, lean=-6, sq=1.03, hf=(-3, -6), hb=(5, -2), eb_f='up', wa=-155, ff=(5, 7), fb=(-3, 6), face='g'), 170),
+        (p(dy=-1, lean=24, hf=(11, 3), wa=36, hb=(-2, 1), ff=(7, 6), fb=(-5, 5), face='o', smear_f=(-3, -6)), 40),
+        (p(dy=-1, lean=26, hf=(11, 4), wa=42, hb=(-3, 1), ff=(7, 5), fb=(-5, 4), face='o', fx=(('spark', 'hf', 3, 0),)), 150),
+        (p(dy=0, lean=18, sq=1.04, hf=(9, 7), wa=62, hb=(-2, -4), ff=(7, 2), fb=(-5, 1), face='g'), 110),
+        (p(dy=6, lean=16, sq=0.86, head=(2, 2), hf=(8, 5), wa=52, hb=(2, 3), ff=(9, 0), fb=(-8, 0), fx=land_dust()), 140)],
+        desc=desc, hit_frame=5, power=2, type='air', input='up + Strike (air)',
+        air_spec=[(3, 0, 0), (4, 0.25, 22, 'o'), (5, 0, 21, 'h'), (5, 0.733, 20, 'h'), (7, 0, 0, 'i')])
 
 
 def t_spike(desc):
-    """Air spike: leap, weapon raised in both hands at the apex (held), smash DOWN through the airborne opponent and
-    land with a ground shock."""
+    """Air spike: load, push off, rise with the weapon raised in both hands and hover at the top (held), smash DOWN through
+    the airborne opponent on the way down (the contact stops the drop: hitstop), drop to the floor and land with a ground
+    shock, recover.  V8: the leap is `air`; hit_frame 5, the landing shock is frame 6."""
     return W([
-        (p(dy=5, lean=12, sq=0.88, hf=(4, 4), wa=-80, ff=(8, 0), fb=(-7, 0)), 100),
-        (p(dy=-6, lean=0, sq=1.05, hf=(3, -6), eb_f='up', wa=-130, ff=(4, 6), fb=(-4, 5)), 60),
-        (p(dy=-8, lean=-10, hf=(1, -7), eb_f='up', wa=-150, ff=(5, 8), fb=(-4, 7), face='o'), 160),
-        (p(dy=-6, lean=36, hf=(10, 7), wa=72, ff=(6, 6), fb=(-5, 5), face='o', smear_f=(1, -7)), 40),
-        (p(dy=-3, lean=40, hf=(10, 8), wa=80, ff=(6, 4), fb=(-5, 4), face='o', fx=(('spark', 'hf', 2, 2),)), 140),
-        (p(dy=7, lean=34, sq=0.86, hf=(9, 8), wa=82, ff=(9, 0), fb=(-8, 0), face='o',
-           fx=(('shock', 'abs', 40, 56), ('dust', 'ff', 4, -1), ('dust', 'fb', -5, -1))), 240),
-        (p(dy=4, lean=18, hf=(8, 4), wa=40, ff=(9, 0), fb=(-8, 0)), 110),
-        (S0, 100)],
-        desc=desc, hit_frame=4, power=3, type='spike', input='(air) down + Strike', shake=dict(frames=3, amp=1))
+        (p(dy=3, lean=12, sq=0.93, hf=(4, 4), hb=(1, 4), wa=-80, ff=(8, 0), fb=(-7, 0)), 80),
+        (p(dy=6, lean=18, sq=0.87, head=(2, 1), hf=(2, 6), hb=(-2, 5), wa=-95, ff=(8, 0), fb=(-7, 0), face='g'), 110),
+        (p(dy=-1, lean=2, sq=1.10, hf=(4, -6), hb=(2, -5), eb_f='up', eb_b='up', wa=-125, ff=(5, 0), fb=(-5, 1),
+           ang_f=22, ang_b=22, fx=push_dust()), 60),
+        (p(dy=-1, lean=-10, sq=1.02, chest=1.04, hf=(1, -8), hb=(0, -7), eb_f='up', eb_b='up', wa=-150, ff=(5, 8), fb=(-3, 7),
+           face='o'), 190),
+        (p(dy=-1, lean=36, hf=(10, 7), wa=72, hb=(6, 5), ff=(6, 5), fb=(-4, 4), face='o', smear_f=(1, -8)), 40),
+        (p(dy=-1, lean=40, hf=(10, 8), wa=80, hb=(7, 6), ff=(6, 3), fb=(-4, 2), face='o', fx=(('spark', 'hf', 2, 2),)), 140),
+        (p(dy=7, lean=34, sq=0.86, head=(2, 2), hf=(9, 8), wa=82, hb=(7, 7), ff=(9, 0), fb=(-8, 0), face='o',
+           fx=(('shock', 'abs', 40, 56), ('dust', 'ff', 4, -1), ('dust', 'fb', -5, -1))), 230),
+        (p(dy=2, lean=14, sq=1.02, hf=(8, 4), wa=40, ff=(8, 0), fb=(-7, 0)), 120)],
+        desc=desc, hit_frame=5, power=3, type='spike', input='(air) down + Strike', shake=dict(frames=3, amp=1),
+        air_spec=[(3, 0, 0), (3, 0.842, 22, 'o'), (5, 0, 19.5, 'h'), (6, 0, 0, 'i')])
 
 
 def t_dash_slash(desc):
@@ -833,17 +976,19 @@ def pole_sweep(desc):
 
 
 def pole_vault(desc):
-    """Vault kick: plant the pole ahead, ride up it with both legs tucked (held), whip a flying kick off the top, land."""
+    """Vault kick: plant the pole ahead, sink onto it, spring up it (dust), ride up with both legs tucked (held), whip a
+    flying kick off the top, drop with the legs reaching down, land.  V8: the ride is `air`; hit_frame 5."""
     return W([
-        (p(dy=4, lean=18, sq=0.94, hf=(8, 5), wa=64, ff=(9, 0), fb=(-8, 0), face='g'), 110),
-        (p(dy=-5, lean=-8, sq=1.05, hf=(6, 6), wa=74, ff=(6, 7), fb=(-3, 6), face='o'), 80),
-        (p(dy=-8, lean=-20, hf=(5, 7), wa=78, ff=(5, 9), fb=(1, 9), face='o'), 150),
-        (p(dy=-8, lean=-26, sq=1.04, hf=(4, 7), wa=80, ff=(15, 12), fb=(0, 8), ang_f=-12, dx=4, face='o', smear_ff=(5, 9)), 40),
-        (p(dy=-8, lean=-26, hf=(4, 7), wa=80, ff=(16, 12), fb=(0, 8), ang_f=-12, face='o', fx=(('spark', 'ff', 4, -1),)), 160),
-        (p(dy=-6, lean=-20, hf=(4, 7), wa=78, ff=(15, 11), fb=(0, 7), ang_f=-10, face='g'), 200),
-        (p(dy=5, lean=12, sq=0.88, hf=(6, 4), wa=40, ff=(9, 0), fb=(-8, 0), fx=(('dust', 'ff', 4, 1), ('dust', 'fb', -5, 1))), 100),
-        (S0, 110)],
-        desc=desc, hit_frame=4, power=3, type='string', input='fwd, up + Kick')
+        (p(dy=4, lean=18, sq=0.93, hf=(8, 5), wa=64, ff=(9, 0), fb=(-8, 0), face='g'), 100),
+        (p(dy=6, lean=22, sq=0.88, hf=(9, 6), wa=66, ff=(8, 0), fb=(-8, 0), face='g'), 90),
+        (p(dy=-1, lean=-6, sq=1.08, hf=(6, 5), wa=72, ff=(5, 2), fb=(-4, 1), ang_f=22, ang_b=22, face='o', fx=push_dust()), 70),
+        (p(dy=-1, lean=-20, hf=(5, 6), wa=78, ff=(5, 9), fb=(1, 9), face='o'), 160),
+        (p(dy=-1, lean=-26, sq=1.04, hf=(4, 6), wa=80, ff=(15, 12), fb=(0, 8), ang_f=-12, dx=4, face='o', smear_ff=(5, 9)), 40),
+        (p(dy=-1, lean=-26, hf=(4, 6), wa=80, ff=(16, 12), fb=(0, 8), ang_f=-12, face='o', fx=(('spark', 'ff', 4, -1),)), 160),
+        (p(dy=0, lean=-12, sq=1.03, hf=(5, 4), wa=72, ff=(9, 3), fb=(-3, 2), face='g'), 100),
+        (p(dy=6, lean=14, sq=0.86, head=(2, 2), hf=(6, 4), wa=40, ff=(9, 0), fb=(-8, 0), fx=land_dust()), 130)],
+        desc=desc, hit_frame=5, power=3, type='string', input='fwd, up + Kick',
+        air_spec=[(3, 0, 0), (4, 0.25, 17.5, 'o'), (5, 0.6875, 16.5, 'h'), (7, 0, 0, 'i')])
 
 
 def pole_spin(desc):
@@ -944,19 +1089,22 @@ def bow_volley(desc):
 
 
 def bow_leap_shot(desc):
-    """Leaping back-shot: crouch, spring backwards, draw at the top of the leap (held), loose, land skidding."""
+    """Leaping back-shot: load, spring backwards off the front foot (dust), draw on the rise with the knees up, loose at the
+    top of the leap (held), drop with the legs reaching, land skidding back.  V8: the leap is `air`; hit_frame 5."""
     return W([
-        (p(dy=5, lean=14, sq=0.88, hf=(6, 3), wa=10, hb=(3, 3), ff=(8, 0), fb=(-7, 0), face='g'), 100),
-        (p(dx=-8, dy=-6, lean=-14, sq=1.06, hf=(9, -2), wa=0, hb=(3, -1), wb=150, ff=(5, 6), fb=(-5, 5), face='o', nock=True,
-           fx=(('dust', 'ff', 4, 1),)), 60),
-        (p(dx=-4, dy=-8, lean=-18, chest=1.05, hf=(10, -1), wa=0, hb=(-2, -2), wb=150, ff=(5, 8), fb=(-4, 7), face='o', nock=True), 150),
-        (p(dy=-8, lean=-18, hf=(10, -1), wa=0, hb=(-6, 1), wb=150, ff=(5, 8), fb=(-4, 7), face='o', smear_b=(-2, -2),
+        (p(dy=3, lean=12, sq=0.93, hf=(6, 3), wa=10, hb=(3, 3), ff=(8, 0), fb=(-7, 0), face='g'), 90),
+        (p(dy=6, lean=18, sq=0.87, head=(2, 1), hf=(5, 5), wa=14, hb=(2, 5), ff=(8, 0), fb=(-7, 0), face='g'), 100),
+        (p(dx=-5, dy=-1, lean=-12, sq=1.08, hf=(8, -1), wa=4, hb=(3, 0), wb=150, ff=(6, 0), fb=(-4, 1), ang_f=22, ang_b=22,
+           face='o', nock=True, fx=push_dust()), 60),
+        (p(dx=-5, dy=-1, lean=-18, chest=1.05, hf=(10, -1), wa=0, hb=(-2, -2), wb=150, ff=(5, 7), fb=(-3, 6), face='o', nock=True), 150),
+        (p(dx=-2, dy=-1, lean=-18, hf=(10, -1), wa=0, hb=(-6, 1), wb=150, ff=(5, 7), fb=(-3, 6), face='o', smear_b=(-2, -2),
            fx=(('arrow', 'hf', 9, 1),)), 40),
-        (p(dy=-7, lean=-16, hf=(10, -1), wa=0, hb=(-6, 1), wb=150, ff=(5, 7), fb=(-4, 6), face='o',
+        (p(dx=-1, dy=-1, lean=-16, hf=(10, -1), wa=0, hb=(-6, 1), wb=150, ff=(5, 6), fb=(-3, 5), face='o',
            fx=(('arrow', 'hf', 19, 2), ('spark', 'hf', 21, 2))), 140),
-        (p(dx=-3, dy=5, lean=10, sq=0.88, hf=(8, 2), wa=0, hb=(2, 3), ff=(9, 0), fb=(-8, 0), fx=(('dust', 'ff', 4, 1), ('dust', 'fb', -5, 1))), 110),
-        (S0, 100)],
-        desc=desc, hit_frame=4, power=2, type='string', input='back, back + Shoot')
+        (p(dx=-2, dy=0, lean=-6, sq=1.03, hf=(8, 0), wa=2, hb=(2, 1), wb=150, ff=(7, 2), fb=(-3, 1), face='g'), 110),
+        (p(dx=-3, dy=6, lean=8, sq=0.86, head=(2, 2), hf=(8, 2), wa=4, hb=(2, 3), wb=150, ff=(9, 0), fb=(-8, 0), fx=land_dust()), 130)],
+        desc=desc, hit_frame=5, power=2, type='string', input='back, back + Shoot',
+        air_spec=[(3, 0, 0), (4, 0.25, 14, 'o'), (5, 0.714, 13.5, 'h'), (7, 0, 0, 'i')])
 
 
 def bow_bash(desc):
@@ -1069,55 +1217,66 @@ def _lying(body):
 
 
 def r_launched(body):
-    """Popped into the air by a launcher: white flash, the hips leave the ground, the body tips back and hangs."""
+    """Popped into the air by a launcher: white flash on the ground, then the trajectory (`air`) pops it to 21 while the
+    body tips back with the head leading and the legs trailing, and it hangs there (last key held) for the juggle."""
+    W_ = dict(wa=165, wb=170)
     return W([
         (p(flash=True, lean=-16, cx=1, head=(-3, -1), hf=(7, -1), hb=(3, 1), face='h', dx=-2), 50),
-        (p(wa=165, wb=170, dy=-8, lean=-34, cx=1, sq=1.06, head=(-4, -1), hf=(4, -6), hb=(0, -5), ff=(5, 6), fb=(-3, 5), face='h', dx=-3), 70),
-        (p(wa=165, wb=170, dy=-13, lean=-52, cx=3, head=(-4, 0), hf=(2, -4), hb=(-3, -2), ff=(7, 9), fb=(1, 8), face='h', dx=-2), 90),
-        (p(wa=165, wb=170, dy=-14, lean=-62, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 10), fb=(2, 9), face='x', dx=-1), 160),
-        (p(wa=165, wb=170, dy=-14, lean=-66, cx=3, head=(-3, 1), hf=(1, -1), hb=(-4, 1), ff=(8, 10), fb=(2, 8), face='x'), 220)],
-        cat='reaction', desc='Launched: popped up and hanging in the air, open for a juggle.', type='launched')
+        (p(**W_, dy=-1, lean=-30, cx=1, sq=1.06, head=(-4, -1), hf=(4, -6), hb=(0, -5), ff=(4, 3), fb=(-3, 2), ang_f=20, face='h', dx=-3), 70),
+        (p(**W_, dy=-1, lean=-50, cx=2, head=(-4, 0), hf=(2, -4), hb=(-3, -2), ff=(6, 6), fb=(1, 5), face='h', dx=-2), 90),
+        (p(**W_, dy=-1, lean=-62, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 8), fb=(2, 7), face='x', dx=-1), 160),
+        (p(**W_, dy=-1, lean=-66, cx=3, head=(-3, 1), hf=(1, -1), hb=(-4, 1), ff=(8, 8), fb=(2, 6), face='x'), 220)],
+        cat='reaction', desc='Launched: popped up and hanging in the air, open for a juggle.', type='launched',
+        air_spec=[(1, 0, 0), (3, 0, 21, 'o'), (4, 0, 22, 'h'), (4, 1, 21, 'h')])
 
 
 def r_air_hit(body):
-    """Struck again in the air: flash, the body spins further back and stays up."""
+    """Struck again in the air: flash, popped up to ~25 as the body spins further back, settles back to 21 (held)."""
+    W_ = dict(wa=165, wb=170)
     return W([
-        (p(wa=165, wb=170, flash=True, dy=-14, lean=-70, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 10), fb=(2, 9), face='h', dx=-2), 50),
-        (p(wa=165, wb=170, dy=-15, lean=-86, cx=3, head=(-3, 1), hf=(-2, -4), hb=(-6, -2), ff=(10, 9), fb=(4, 10), face='h', dx=-3), 80),
-        (p(wa=165, wb=170, dy=-14, lean=-80, cx=3, head=(-2, 1), hf=(-1, -3), hb=(-5, -1), ff=(9, 10), fb=(3, 9), face='x', dx=-1), 140),
-        (p(wa=165, wb=170, dy=-13, lean=-76, cx=3, head=(-2, 1), hf=(0, -2), hb=(-4, 0), ff=(9, 9), fb=(3, 9), face='x'), 180)],
-        cat='reaction', desc='Juggled: hit again while airborne.', type='air_hit')
+        (p(**W_, flash=True, dy=-1, lean=-70, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 9), fb=(2, 8), face='h', dx=-2), 50),
+        (p(**W_, dy=-1, lean=-86, cx=3, head=(-3, 1), hf=(-2, -4), hb=(-6, -2), ff=(10, 8), fb=(4, 9), face='h', dx=-3), 80),
+        (p(**W_, dy=-1, lean=-80, cx=3, head=(-2, 1), hf=(-1, -3), hb=(-5, -1), ff=(9, 9), fb=(3, 8), face='x', dx=-1), 140),
+        (p(**W_, dy=-1, lean=-76, cx=3, head=(-2, 1), hf=(0, -2), hb=(-4, 0), ff=(9, 8), fb=(3, 8), face='x'), 180)],
+        cat='reaction', desc='Juggled: hit again while airborne.', type='air_hit',
+        air_spec=[(1, 0, 21), (2, 0.286, 25, 'o'), (3, 1, 21, 'h')])
 
 
 def r_spiked(body):
-    """Slammed out of the air: a short fall, flat impact with dust, one bounce, lying (then `getup`)."""
+    """Slammed out of the air: flash at 21, the trajectory drops it fast while the body flattens out (the hips come down
+    in the cell over two quick falling keys), flat impact with dust on the floor, one small bounce, lying (then `getup`)."""
     lying, ldy = _lying(body), body.lie_dy
+    W_ = dict(wa=165, wb=170)
     return W([
-        (p(wa=165, wb=170, flash=True, dy=-12, lean=-70, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 10), fb=(2, 9), face='h', dx=-1), 50),
-        (p(wa=165, wb=170, dy=-4, lean=-84, head=(-3, -1), hf=(-2, 1), hb=(-6, 0), ff=(10, 6), fb=(6, 6), face='h', cx=3, dx=-2), 50),
+        (p(**W_, flash=True, dy=-1, lean=-70, cx=3, head=(-3, 0), hf=(1, -2), hb=(-4, 0), ff=(8, 9), fb=(2, 8), face='h', dx=-1), 50),
+        (p(**W_, dy=ldy * 0.3, lean=-80, cx=3, head=(-3, -1), hf=(-1, -1), hb=(-5, -1), ff=(9, 8), fb=(4, 7), face='h', dx=-1), 40),
+        (p(**W_, dy=ldy * 0.65, lean=-86, cx=4, head=(-3, -1), hf=(-2, 1), hb=(-6, 0), ff=(10, 6), fb=(6, 6), face='h', dx=-1), 40),
         (p(**{**lying, 'dy': ldy + 0.5}, sq=0.86, fx=(('shock', 'abs', 32, 56), ('dust', 'hip', -4, 5), ('dust', 'hip', 8, 4))), 90),
-        (p(**{**lying, 'dy': ldy - 3}, sq=1.0), 70),
+        (p(**{**lying, 'dy': ldy - 0.5}, sq=1.0), 70),
         (p(**lying, sq=0.94, fx=(('dust', 'hip', -6, 4),)), 110),
         (p(**lying), 200)],
         cat='reaction', desc='Spiked: slammed out of the air, bounces once and lies there.', type='spiked',
-        shake=dict(frames=3, amp=1))
+        shake=dict(frames=3, amp=1),
+        air_spec=[(0, 0, 21), (0, 0.6, 21), (3, 0, 0, 'i'), (4, 0, 0), (4, 0.5, 3, 'o'), (5, 0, 0, 'i')])
 
 
 def r_thrown(body):
-    """Thrown: grabbed (frame 0 = the attacker's grab_frame), lifted off its feet, flipped overhead, slammed flat on the
-    attacker's hit_frame (frame 4), one bounce, lying.  Same clock as t_throw."""
+    """Thrown: grabbed (frame 0 = the attacker's grab_frame), hoisted off its feet to ~14 (`air`), flipped overhead,
+    driven down and slammed flat on the attacker's hit_frame (frame 4, h = 0), one bounce, lying.  Same clock as t_throw."""
     lying, ldy = _lying(body), body.lie_dy
     ms = THROW_MS
+    W_ = dict(wa=165, wb=170)
     return W([
         (p(lean=22, head=(2, 1), hf=(9, 2), hb=(6, 3), ff=(9, 0), fb=(-6, 0), face='h'), ms[1]),
-        (p(wa=165, wb=170, dy=-6, lean=6, sq=1.04, head=(1, 0), hf=(6, -2), hb=(3, -1), ff=(4, 5), fb=(-3, 4), face='h'), ms[2]),
-        (p(wa=165, wb=170, dy=-13, lean=-40, head=(-2, 0), hf=(4, -6), hb=(0, -5), ff=(6, 10), fb=(0, 9), face='h'), ms[3]),
-        (p(wa=165, wb=170, dy=-6, lean=-78, head=(-3, 0), hf=(-1, -4), hb=(-5, -3), ff=(10, 8), fb=(5, 8), face='x', cx=3), ms[4]),
+        (p(**W_, dy=-1, lean=4, sq=1.04, head=(1, 0), hf=(6, -3), hb=(3, -2), ff=(3, 3), fb=(-3, 2), ang_f=20, face='h'), ms[2]),
+        (p(**W_, dy=-1, lean=-46, head=(-2, 0), hf=(4, -6), hb=(0, -5), ff=(6, 9), fb=(0, 8), face='h'), ms[3]),
+        (p(**W_, dy=ldy * 0.55, lean=-80, head=(-3, 0), hf=(-1, -4), hb=(-5, -3), ff=(10, 7), fb=(5, 7), face='x', cx=3), ms[4]),
         (p(**{**lying, 'dy': ldy + 0.5}, flash=True, sq=0.86, fx=(('shock', 'abs', 32, 56), ('dust', 'hip', -4, 5), ('dust', 'hip', 8, 4))), ms[5]),
-        (p(**{**lying, 'dy': ldy - 2}, sq=1.0), 80),
+        (p(**{**lying, 'dy': ldy - 0.5}, sq=1.0), 80),
         (p(**lying), 220)],
         cat='reaction', desc='Thrown: grabbed, hoisted overhead and slammed flat.', type='thrown', grab_frame=0, hit_frame=4,
-        shake=dict(frames=3, amp=1))
+        shake=dict(frames=3, amp=1),
+        air_spec=[(1, 0, 0), (2, 0.41, 14, 'o'), (2, 0.88, 14, 'h'), (4, 0, 0, 'i'), (5, 0, 0), (5, 0.5, 2, 'o'), (6, 0, 0, 'i')])
 
 
 def r_pulled(body):
@@ -1321,7 +1480,8 @@ def weapon_moves(ch):
         out[name] = fn(desc)
         out[name]['family'] = fam
         if fam == 'heavy' and fn is not t_throw:       # a heavy weapon winds up longer and follows through longer
-            out[name] = heavier(out[name])
+            air = 'air_spec' in out[name]              # V8: a leap stays inside ~1.1 s (its rise is already slow)
+            out[name] = heavier(out[name], *((1.15, 1.1) if air else ()))
     out['taunt2'] = taunt_twirl(TAUNT_DESC[fam], TAUNT_END[fam])
     for name in combo_for(ch):                     # a string member can be cut short right after its contact hold
         mv = out[name]

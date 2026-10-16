@@ -327,3 +327,95 @@ hand, missile reach, the drawn bow string, HD faces / knuckles / folds and nothi
 defender hanging, the boomerang's return on the catch frame, the dash-through swap and vault, both fighters locking on a
 clash, string cancel timing, set pieces deterministic and 1-3 per match).  `qa/v7/<character>-moves-4x.png` and
 `qa/v7/reactions-4x.png` are the 4x review sheets (1x taskbar strip, silhouettes, every frame with its timing).
+
+## 9. V8: the engine draws the jump, the frames draw the body (2026-10-15)
+
+Owner: the fighters "look very stiff when they jump".  Cause: a jump was 7 frames with the rise baked into the cell (hips up
+to 5 px, `KJ` = 0.42 so nothing clipped the cell top), so the whole flight was a few 70-140 ms steps of ~2 px and the
+sprite never left the taskbar.  V8 splits it:
+
+- **The engine owns the trajectory.**  Every airborne row carries `air` in anim.json: `[[t_ms, h], [t_ms, h, ease], ...]`
+  on the row's own clock, h in RES 1 px above the floor (the same keys at both resolutions), ease of the segment ending at
+  the key: `o` rise (fast, slowing), `i` fall (slow, faster), `h` hang (in-out).  `minis_core` lifts the whole sprite by
+  that curve every redraw (30 fps) into `JUMP_HEADROOM` (30 px) above the cell, so the flight is smooth at the redraw rate
+  whatever the frame count.  Before the first key the first h holds, after the last key the last h (launched / air_hit end
+  in the air on purpose).
+- **The frames carry the pose only.**  Airborne keys keep the hips at standing height (`dy` -1..0: the test allows 2 px);
+  tucks lift the feet, the landing and the load squash with positive `dy`.  Authored in `art/moves.py` as `air_spec`
+  (frame, fraction of that frame, h, ease), so `heavier` stretches the keys with the frames; `resolve_air` turns it into ms.
+- **Every leap has the same skeleton** (jump, air_slash, spike, vault_kick / pole_vault, leap_shot, the pound signature):
+  two loading keys (squash 0.93 then 0.86-0.88, arms swing back), a push-off stretch (sq 1.08-1.10) with the toes still on
+  the floor and dust - the air starts at the END of that frame, so the dust is drawn on the floor - the rise (arms lead,
+  legs trail pointed), the apex held longest (a hang of 12-40 % of the airtime), the fall with the legs reaching for the
+  floor and the arms lagging up, touchdown exactly on a frame boundary with a squash (0.86) and dust.  The fall lands at
+  least as fast as the rise left (weight).  Neutral jump: 930 ms, airtime 470 ms, apex 19.
+- **Hits meet in the air.**  Juggle heights: launched pops 0 -> 21 in its first three frames and hangs at 21; air_hit
+  pops to 25 and settles at 21; spiked falls 21 -> 0 by its flat impact frame, bounces 3.  air_slash strikes at 21, spike
+  at 19.5 on the way down: the contact ends an `h` segment, so the body is momentarily still at the moment hitstop freezes
+  it.  thrown rises to 14 and is on the floor exactly at its hit_frame (THROW_MS unchanged).
+- **A body that ends lying cannot fall from standing-height hips** (a horizontal body at lift 0 is still 16 px above the
+  floor), so spiked and thrown drop their hips in the cell over the falling keys while the lift runs out - the in-cell
+  steps happen during the fastest part of the fall.
+- **Secondary motion follows the trajectory.**  `Pose.vy` (new, default 0) is the world vertical motion since the previous
+  key; the hanging bits (rig `bit_points`) trail it, so a topknot or tassel hangs down on the rise and floats up on the
+  fall even though the in-cell anchor barely moves.
+- **The weapon follows the arc.**  `trail_weapons` gives every key that leaves the weapon to the rig the forearm's angle
+  dragged 35 % back toward the previous key and never more than 55 degrees per key; `_nearest_fit` aims a weapon that
+  cannot fit at the nearest angle that does (either way) instead of the rig's turn toward the side it leans.  A long
+  one-handed / two-handed blade (length >= 18, not a pole) keeps its hands 5 px lower in the jump.
+
+Checks: `tests/test_art.py` `AirV8` (keys inside the headroom with the right eases, the leap skeleton above, airborne
+hips at standing height, the juggle chain continuous and the strikes meeting it, identical keys at both resolutions).
+`python art/qa_jump.py strips all` writes `qa/jump/<char>-strips-res<1|2>.png` (every air row with ms, lift, HIT / smear,
+silhouettes and the h(t) curve); `python art/qa_jump.py gifs all [--film]` writes 30 fps GIFs at real timing with the
+engine's lift and hitstop to `qa/jump/gif/` (git-ignored).
+
+## 10. Lock-on, jump physics in the engine, HUD at every size (2026-10-15)
+
+Owner's live screenshot: two 128 px fighters, the left one facing AWAY with its bow aimed at empty space while the right one
+was mid-jump ("make them lock on to each other better"). Measured with `tests/test_lockon.py` (two Brains wired like the two
+slot processes: bus read every 0.2 s, written at most every 0.25 s, 30 fps redraws, 26 seeded matches + spars + clashes over
+the roster at 128 px; `python tests/test_lockon.py audit 26` prints it).
+
+**Root cause** (three, all in the engine):
+1. Inside a bout a fighter faced its partner's *bus copy*, which is 0.2-0.45 s old. After every crossover (a dash-through,
+   the vault back over the opponent, a throw) it kept facing the old side, and the next timeline attack - planned facing
+   the right way - went off backwards. The screenshot is exactly that: the opponent's vault back after a dash-through, and
+   the bow shot that followed it.
+2. The shared timeline let a bout spread 110 px either side of its centre (`SPAN_PX`), but at 128 px the brain's zone is
+   only ~75 px either side, and the brain clamped every slide to it. The two fighters then were no longer where the plan
+   said: crossed over, overlapping, striking from the wrong distance.
+3. Facing was set before the same redraw's slide (one stale frame), and at home only for awake states: a sleeping or KO'd
+   fighter that walked home facing the way it walked stayed turned away.
+Plus a pre-existing step-in bug found on the way: `int(max(60, seconds) * 1000)` made every strike step-in a 60 000 ms
+slide, so strikers barely closed in.
+
+**Fix.** `brain.Track` replays one slot's row of the shared timeline - x, the hitstop / slow-motion clock, the row and its
+`air` height - applying every entry at its own time. The Brain plays its own row through one and replays the opponent's
+row through a second one (the *ghost*), so it knows where the opponent is on every redraw, with no lag; the property test
+checks the ghost equals the real opponent on every frame. `Brain.lock_on` runs last in every tick: face the opponent;
+on the ground from idle / walk a short `turn` pivot, in the air or mid-move an immediate flip (a cross-up). Explicit
+exceptions only: a dash-through pass until its cut lands (and the fighter it passes, cut from behind first), `hit_back`,
+the walk home, the Shift-drag throw - and it turns back the instant they end. The plan's `span` is now half the brain's
+zone (`Bout.clamp` lets the span win over `apart`), a strike closes in to its own `reach + BODY_FRONT` (even closer than
+the two idle silhouettes with weapons out), and a dash / jump-in lands where the strike after it reaches.
+Projectiles leave toward the opponent and climb to its height when it is airborne (`Brain.proj_lift`).
+
+**Jump physics.** The trajectory belongs to the engine (section 9 is the art side): the sprite is lifted by the row's `air`
+curve on the animation clock every redraw, into `JUMP_HEADROOM` (30 RES 1 px x size/64) of window above the cell; a jump
+travels only while airborne, at constant speed, from its take-off to its planned landing spot (`Bout.travel`); a jump-in
+strike starts at the apex read from the curve; a row cut off in the air keeps falling (`GRAVITY` 640 px/s^2); sparks on an
+airborne fighter sit on its body; ground dust stays on the ground.
+
+**HUD at 128 px.** `config.fight_zone(cfg, size)` keeps a whole sprite (`SPRITE_REACH` 34 x size/64) + 4 px between any hip
+and a plate or the scoreboard (64 px: 338-708, 128 px: 372-674 screen px), and `render.compose` clips every fighter frame
+and effect to `config.fight_band` (plate strip end .. scoreboard edge), so a beam or a spark cannot reach a HUD either.
+
+| measured (`tests/test_lockon.py`) | before | after |
+| --- | ---: | ---: |
+| frames facing away outside the whitelist (of ~100 000 bout frames) | 237 | 0 |
+| ... of which after a dash-through / vault / throw (`dash_slash`, `shadow_step`, `idle`, `jump`, `walk_back`) | 227 | 0 |
+| melee contacts from outside the move's reach (of ~560, whiffs and blade locks excluded) | 201 | 0 |
+| projectiles fired with the opponent behind / arriving on empty space | 0 / 0 | 0 / 0 |
+| frames reaching over a plate or the scoreboard at 64 / 96 / 128 px (of 4 050 each) | 91 / 100 / 361 | 0 / 0 / 0 |
+| ghost vs real opponent position (frames off by > 0.5 px) | - | 0 |

@@ -75,6 +75,10 @@ def _upscale_meta(meta, k):
     for a in m['anims'].values():
         if isinstance(a.get('hand'), (list, tuple)) and len(a['hand']) == 2:
             a['hand'] = [float(a['hand'][0]) * k, float(a['hand'][1]) * k]
+        for key in ('grip', 'grip2'):                   # V8 forge: per-frame grips, px relative to anchor / ground
+            if isinstance(a.get(key), list):
+                a[key] = [[float(g[0]) * k, float(g[1]) * k] + list(g[2:]) if isinstance(g, list) and len(g) >= 4 else None
+                          for g in a[key]]
     m['res'] = k
     m['upscaled'] = True
     return m
@@ -112,6 +116,9 @@ class Atlas:
         self.cell = tuple(self.meta['cell'])
         self.anim = self.meta['anims']
         self.sheets = {s: self._scaled(Image.open(d / v).convert('RGBA'), k) for s, v in self.meta['sheets'].items()}
+        self._dir, self._k = d, k
+        self._unarmed = None                             # V8 forge: sheet_unarmed*.png, loaded on first use
+        self._ucrop = {}
         pm = self.meta.get('projectile') or {}
         self.proj = self._scaled(Image.open(d / pm['file']).convert('RGBA'), k) if pm.get('file') else None
         self.ground_y = int(self.meta.get('ground_y', self.cell[1] - 7 * self.res))
@@ -189,6 +196,60 @@ class Atlas:
             im = sheet.crop((i * w, r * h, (i + 1) * w, (r + 1) * h))
             self._crop[key] = im
         return im
+
+    def _unarmed_sheets(self):
+        if self._unarmed is None:
+            self._unarmed = {}
+            for s, v in (self.meta.get('sheets_unarmed') or {}).items():
+                try:
+                    self._unarmed[s] = self._scaled(Image.open(self._dir / v).convert('RGBA'), self._k)
+                except OSError:
+                    self._unarmed = {}
+                    break
+        return self._unarmed
+
+    def unarmed_frame(self, name: str, i: int, facing: int) -> Image.Image:
+        """V8 forge: the frame without its held weapon(s) (the hands still close round the grip), for drawing a forged
+        weapon in the hand.  Falls back to frame_image when the atlas was built without the unarmed sheets."""
+        sheets = self._unarmed_sheets()
+        side = 'R' if facing >= 0 else 'L'
+        if side not in sheets:
+            return self.frame_image(name, i, facing)
+        if name not in self.anim:
+            name, i = 'idle', 0
+        n = len(self.anim[name]['frames'])
+        i = max(0, min(n - 1, int(i)))
+        key = (name, i, side)
+        im = self._ucrop.get(key)
+        if im is None:
+            w, h = self.cell
+            r = self.anim[name]['row']
+            im = sheets[side].crop((i * w, r * h, (i + 1) * w, (r + 1) * h))
+            self._ucrop[key] = im
+        return im
+
+    def _grip(self, key, name, i, facing):
+        gl = (self.anim.get(name) or {}).get(key)
+        if not isinstance(gl, list) or not gl:
+            return None
+        g = gl[max(0, min(len(gl) - 1, int(i)))]
+        if not isinstance(g, (list, tuple)) or len(g) < 4:
+            return None
+        x, y, ang = float(g[0]), float(g[1]), float(g[2])
+        if facing < 0:                                   # the left sheet is the mirror about the anchor column centre
+            x, ang = -x, 180.0 - ang
+        return x, y, ((ang + 180.0) % 360.0) - 180.0, str(g[3])
+
+    def grip(self, name: str, i: int, facing: int):
+        """V8 forge: (x, y, angle_deg, hand) of the main weapon's grip on frame i in this atlas's px, for the sheet of
+        that facing: x right of the anchor column centre (anchor(facing) + 0.5), y below the top of the ground_y row
+        (negative = up), angle in screen degrees of the weapon axis from the grip toward the tip (0 = screen-right,
+        -90 = up).  None when no weapon is held on that frame or the atlas carries no grip data."""
+        return self._grip('grip', name, i, facing)
+
+    def grip2(self, name: str, i: int, facing: int):
+        """The back hand's grip (a second weapon, or the second hand on a two-handed one), same shape as grip(), or None."""
+        return self._grip('grip2', name, i, facing)
 
     def proj_image(self, i: int, facing: int) -> Image.Image:
         k = (int(i) % self.proj_frames, facing >= 0)

@@ -27,6 +27,8 @@ RES = 1                # resolution factor: 1 = 64 px cell, 2 = 128 px cell
 KJ = 0.42              # rises (negative dy) are scaled by this: a 52 px fighter has ~6 px of headroom
 XMIN, XMAX, YMIN, YMAX = 2.0, 59.0, 3.0, 55.0     # where a weapon's ends may go (design, facing right)
 TOP_CLEAR = 2          # rows 0..1 stay empty (the outline then never touches the top edge)
+UNARMED = False        # V8 forge: True draws the held weapon(s), their swing crescent / streak and the nocked string+arrow
+                       # NOT at all (the hands still close round the empty grip); build_fighters writes sheet_unarmed*.png
 
 
 def set_res(k):
@@ -321,6 +323,9 @@ class Pose:
     # ---- V7
     nowf: bool = False      # the front weapon has left the hand (a thrown chakram before it comes back)
     nock: bool = False      # a bow's string is drawn back to the rear hand with an arrow nocked
+    # ---- V8 (air contract): the engine lifts an airborne sprite along anim.json `air`, so the in-cell anchors barely move;
+    # vy is that world vertical motion since the previous frame (design px, + = down) so the hanging bits still trail it
+    vy: float = 0.0
 
 
 def is_smear(pose):
@@ -820,7 +825,7 @@ def bit_points(body, pose, bit, prev=None):
         return (bf['hip'][0] + v[0] * a_ + u[0] * b_, bf['hip'][1] + v[1] * a_ + u[1] * b_)
     a = anchor(pose)
     pa = anchor(prev) if prev is not None else a
-    vel = (a[0] - pa[0] + pose.dx * 0.5, a[1] - pa[1])
+    vel = (a[0] - pa[0] + pose.dx * 0.5, a[1] - pa[1] + pose.vy)
     g = (math.cos(math.radians(bit.rest)), math.sin(math.radians(bit.rest)))
     pts = [a]
     for k in range(bit.n):
@@ -1255,7 +1260,9 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None, prev: Pose = None, hist
         for side in ('f', 'b'):
             if getattr(pose, 'smear_' + side):
                 w, pw = sk['w' + side], psk['w' + side]
-                if w is not None and pw is not None:
+                if w is not None and pw is not None and UNARMED:
+                    pass                                 # the forged weapon draws its own swing
+                elif w is not None and pw is not None:
                     draw_swoosh(pen, sk['sh_' + side], weapon_point(pw, 0.96), weapon_point(w, 0.96), max(4.0, w['spec'].length * 0.5))
                 else:
                     draw_swoosh(pen, sk['sh_' + side], psk['h' + side], sk['h' + side], 3.6)
@@ -1266,7 +1273,9 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None, prev: Pose = None, hist
         for side in ('f', 'b'):
             if getattr(hist[-1], 'smear_' + side):
                 w0, w1 = a_sk['w' + side], b_sk['w' + side]
-                if w0 is not None and w1 is not None:
+                if w0 is not None and w1 is not None and UNARMED:
+                    pass
+                elif w0 is not None and w1 is not None:
                     draw_streak(pen, b_sk['sh_' + side], weapon_point(w0, 0.96), weapon_point(w1, 0.96))
                 else:
                     draw_streak(pen, b_sk['sh_' + side], a_sk['h' + side], b_sk['h' + side])
@@ -1325,7 +1334,7 @@ def render_parts(body: Body, pose: Pose, scarf_pts=None, prev: Pose = None, hist
             pen.taper(el, hand, limb + (1.4 if loose else 0.0), thin, fo)
             pen.line(_add(hand, dir_, -2.0), _add(hand, dir_, -0.9), limb, cuff)
         w = sk['w' + side]
-        if w is not None:
+        if w is not None and not UNARMED:
             draw_weapon(pen, w, side, sk['hb'] if (pose.nock and side == 'f') else None)
         if S > 1:                                        # V7 HD: a crease where a bent elbow folds the sleeve
             _crease_bend(pen, base, el, hand, 1.4)
