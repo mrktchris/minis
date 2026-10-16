@@ -38,6 +38,48 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
     Dock side / auto-hide and full-screen Spaces need System Settings changes the owner has to make; no second display or
     Intel Mac here.
 
+- [ ] **MAC-17 (2026-10-15) Fighter windows are taller: jump headroom above the cell.**
+  - PC change: a fighter now really leaves the ground (anim.json `air` curves, drawn by the engine every redraw), so each
+    fighter window reaches `headroom_px(size)` = 30 x size/64 points above its cell (128 px fighters: 60 pt). `Fighter.geometry`
+    moves the window's `y` up by that much; `render.compose` draws the cell at the bottom of the taller image. Files: `minis.py`
+    (`Fighter.geometry`), `minis_core/config.py` (`JUMP_HEADROOM`, `headroom_px`), `minis_core/render.py`, `minis_core/brain.py`.
+  - Test: `python minis.py selftest-gui` at sizes 128, 96 and 64 (`python minis.py size N`), then `python minis.py demo match`
+    a few times at 128. Click on an app window just above a fighter's head while it stands still.
+  - Expected: feet still on the Dock's top edge at every size (unchanged), PASS; in a match the fighters jump visibly above
+    their standing height and are never cut off at the top; the transparent headroom does not swallow clicks meant for the
+    window behind it (if it does, report it: macOS hit-testing may need `update_ignore` to treat alpha 0 as click-through).
+
+- [ ] **MAC-18 (2026-10-15) The fight zone and a hard clip now scale with fighter_size.**
+  - PC change: `config.fight_zone(cfg, size)` keeps a whole sprite (34 x size/64) plus 4 px between any hip and a plate /
+    the scoreboard, and every fighter frame is clipped to `config.fight_band` (plate strip end .. scoreboard left edge), so a
+    knocked-down 128 px fighter, a beam or a spark can no longer paint over the right plate (seen live on Windows). Files:
+    `minis_core/config.py`, `minis_core/brain.py` (`band`, `view['clip']`), `minis_core/render.py`, `minis.py` (`logic_zone`).
+  - Test: at 64, 96 and 128 run `python minis.py demo match` twice; watch the knockdowns near the ends of the strip.
+  - Expected: no fighter, weapon, spark or beam ever overlaps a plate or the scoreboard. On the Mac the scoreboard sits at
+    the right end of the strip (`Scoreboard.left` uses the screen width), not at `scoreboard.left_x(cfg)`: if a fighter's
+    beam is cut off far from the widget, or reaches over it, report where (the band is computed from cfg, not the moved widget).
+
+- [ ] **MAC-19 (2026-10-15) Own-window dump for docs (`tools/own_capture.py`).**
+  - PC change: every fighter / plate / scoreboard window writes its own image only while
+    `~/Library/Application Support/minis/dump/request.json` is active (`minis_core/dump.py`, one `dump.watch(...)` line per
+    window in `minis.py`); with no request the cost is one stat every 0.5 s and one idle thread per process. Retina HUD images
+    carry `density: 2` (png twice the window size; `w`/`h` in points). The tool reads the Dock band from
+    `minis_mac.shell.taskbar_rect()` (an AppKit query, not a capture). No Screen Recording permission is involved.
+  - Test: `python minis.py start`, then `python tools/own_capture.py --out /tmp/cap --seconds 10 --demo spar --keep`; check the
+    plate / scoreboard records in the dump folder (`density` 2, `w`/`h` = on-screen size); once more with `minis.py plates menubar`.
+  - Expected: no permission prompt; `/tmp/cap/live-bout.gif` and `live-taskbar.png` show whole fighters over flat grey with a
+    dark bar at the Dock band, plates sharp and correctly sized; `request.json` is gone afterwards. Risk: the tool assumes
+    `Overlay.x/y` and `taskbar_rect()` share one top-left, y-down coordinate system; if windows land off the bar, say so.
+
+- [ ] **MAC-20 (2026-10-15) Lock-on and the new jumps (shared engine, look only).**
+  - PC change: inside a bout each fighter replays its opponent's row of the shared timeline (`brain.Track`) and faces it on
+    every redraw (a short `turn` pivot on the ground); bouts stay inside the zone; strikes close in to their own reach;
+    projectiles climb to an airborne opponent; jump / juggle / vault rows rebuilt with take-off, hang and landing.
+  - Test: `python minis.py fighters set a generic`, `set b codex`, then `python minis.py demo match` three times; `fighters auto`.
+  - Expected: no fighter ever aims its bow or swings at empty space with its back to the other one, except the dash-through
+    pass (back turned until its cut lands) and the walk home; jumps arc smoothly with a squash on landing; both fighters
+    stay in sync (a hit and its reaction land together).
+
 - [ ] **MAC-13 (2026-10-15) Desktop weapons: Screen Recording preflight, real pixels, no prompt.**
   - PC change: the arena forges weapons from a screen grab taken ONCE into RAM at start (minis_core/forge.py; on by default,
     `python minis.py forge off|on`, menu *Desktop weapons*). On macOS `minis_mac/shell.py` `grab_screen(rect)` calls

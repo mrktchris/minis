@@ -42,6 +42,7 @@ import json, random, time
 from pathlib import Path
 
 from . import choreo, config as cfgmod, setpieces
+from .choreo import air_window
 from .bus import write_json_atomic
 from .effects import EffectPlayer
 
@@ -245,18 +246,40 @@ class Bout:
             return self.facing[s]
         return 1 if self.pos[o] > self.pos[s] else -1
 
-    def clamp(self, s, x, order=True):
-        """Inside the bout's span and (order=True) never closer than `apart` on the fighter's own side of the opponent."""
+    def clamp(self, s, x, order=True, near=None):
+        """Inside the bout's span and (order=True) never closer than `apart` (or `near`) on the fighter's own side of the
+        opponent."""
         lo, hi = self.mid - self.span, self.mid + self.span
         x = max(lo, min(hi, x))
         if not order:
             return x
         o = self.other(s)
+        gap = self.apart if near is None else near
         if self.face(s) > 0:
-            x = min(x, self.pos[o] - self.apart)
+            x = min(x, self.pos[o] - gap)
         else:
-            x = max(x, self.pos[o] + self.apart)
-        return x
+            x = max(x, self.pos[o] + gap)
+        # V7.1: the span wins (it is the zone the brains really move in): a fighter knocked toward the edge stops there,
+        # a little closer than `apart`, instead of being planned outside the zone and clamped there by the brain alone
+        return max(lo, min(hi, x))
+
+    def travel(self, s, anim, t, x, dur):
+        """Slide options for a locomotion row that moves the fighter to x.  V7.1: a row with an `air` curve (a jump) only
+        travels while it is in the air, at a constant speed (a body in flight), so it takes off from where it crouched
+        and comes down on its planned landing spot; everything else slides over the whole row, easing out."""
+        up, down = air_window(self.A[s].anim.get(anim))
+        if up is not None and down is not None and down > up:
+            return {'to': x, 'slide_ms': int(down - up), 'slide_at': round(t + up / 1000.0, 4), 'ease': 'lin'}
+        return {'to': x, 'slide_ms': int(dur * 1000)}
+
+    def apex_s(self, s, anim, default):
+        """Seconds from the start of an airborne row to its highest point (the hang), from its `air` curve."""
+        keys = (self.A[s].anim.get(anim) or {}).get('air')
+        if not keys:
+            return default
+        top = max(float(k[1]) for k in keys)
+        at = [float(k[0]) for k in keys if float(k[1]) >= top - 1e-6]
+        return (at[0] + at[-1]) / 2000.0
 
     def fx_reach(self, name):
         if self.fx is None:
@@ -310,18 +333,28 @@ class Bout:
             if b['kind'] == 'move':
                 t = max(t, em.free[who])
                 dur = tot(who, b['anim'])
-                if b['dx'] > 0:
+                nb = beats[bi + 1] if bi + 1 < len(beats) else None
+                near = None
+                if b['dx'] > 0 and nb is not None and nb.get('who') == b['who'] and nb.get('kind') in ('strike', 'counter'):
+                    # V7.1: a dash / jump-in lands where the strike that follows it reaches (an air exchange never steps in
+                    # again, so a jump-in that landed at the bout gap kicked at nothing)
+                    near = min(self.apart, max(MIN_APART, choreo.reach_of(self.A[who], nb['anim']) + BODY_FRONT))
+                    x = self.pos[tgt] - self.face(who) * near
+                elif b['dx'] > 0:
                     x = self.pos[tgt] - self.face(who) * self.gap
                 elif b['dx'] == 0:                             # a juggle jump: straight up after the launched defender
                     x = self.pos[who]
                 else:
                     x = self.pos[who] - self.face(who) * (FAR_EXTRA if b['anim'] == 'backdash' else FAR_EXTRA * 0.75)
-                x = self.clamp(who, x)
-                em.play(who, t, b['anim'], {'to': x, 'slide_ms': int(dur * 1000)}, dur)
+                x = self.clamp(who, x, near=near)
+                em.play(who, t, b['anim'], self.travel(who, b['anim'], t, x, dur), dur)
                 self.pos[who] = x
                 if b['anim'] in ('dash', 'backdash') and self.fx is not None:
                     em.directive(who, t, '@fx', {'fx': 'dust', 'anchor': 'ground'})
-                t = t + dur * (0.45 if b['anim'] == 'jump' else 1.0) + 0.03     # a jump-in kick leaves the apex, not the landing
+                if b['anim'] == 'jump':                        # a jump-in strike leaves the apex and lands on the way down
+                    t = t + self.apex_s(who, 'jump', dur * 0.45) + 0.03
+                else:
+                    t = t + dur + 0.03
                 self.beats[who].append(b)
                 continue
             if b['kind'] == 'emote':
@@ -367,15 +400,19 @@ class Bout:
                 step = {'to': behind, 'slide_ms': int(max(60.0, (tc - t_sl) * 1000)), 'slide_at': round(t_sl, 4), 'through': True}
                 self.pos[who] = behind
             elif kind in ('strike', 'counter') and not air and not b.get('pull'):
-                want = max(self.apart, choreo.reach_of(Aw, move) + BODY_FRONT)
+                # V7.1: a strike lands from inside its own measured reach (+ the defender's body front), even when that is
+                # closer than the two idle silhouettes (weapons held out) would stand; never closer than MIN_APART (bodies)
+                want = max(MIN_APART, choreo.reach_of(Aw, move) + BODY_FRONT)
+                near = min(self.apart, want)
                 if b.get('throw'):
-                    want = self.apart + 2                      # a throw needs the opponent within arm's reach
+                    want = near = self.apart + 2               # a throw needs the opponent within arm's reach
                 elif b.get('outcome') == 'clash':
-                    want = self.apart + CLASH_GAP              # a weapon lock: blades meet between two bodies that do not touch
+                    want = near = self.apart + CLASH_GAP       # a weapon lock: blades meet between two bodies that do not touch
                 if lunge or abs(self.dist() - want) > 3:
-                    x = self.clamp(who, self.pos[tgt] - self.face(who) * want)
+                    x = self.clamp(who, self.pos[tgt] - self.face(who) * want, near=near)
                     if abs(x - self.pos[who]) > 1:
-                        step = {'to': x, 'slide_ms': int(max(60, cont * (LUNGE_FRAC if lunge else 0.6)) * 1000)}
+                        # (V7.1 fix: this was int(max(60, seconds) * 1000) - a 60 000 ms slide, so step-ins barely moved)
+                        step = {'to': x, 'slide_ms': int(max(60.0, cont * (LUNGE_FRAC if lunge else 0.6) * 1000))}
                         self.pos[who] = x
             proj = None
             if kind == 'special':
@@ -599,6 +636,9 @@ class Bout:
             x = self.clamp(att, x, order=False)
             tj = max(em.free[att], em.free[o]) + 0.15
             dur = tot(att, 'jump')
+            up, down = air_window(self.A[att].anim.get('jump'))
+            if up is not None and down is not None:
+                tj = max(tj, max(em.free[att], em.free[o]) + 0.15)
             side = -1 if att == self.left else 1               # where the attacker belongs relative to the defender
             if abs(x - self.pos[o]) < self.apart - 0.5 or (x - self.pos[o]) * side < 0:
                 # the bout's edge leaves no room there: the defender gives ground so the two still stand `apart`
@@ -608,7 +648,7 @@ class Bout:
                 if back and abs(xo - self.pos[o]) > 1:
                     em.play(o, tj - 0.02, back, {'to': xo, 'slide_ms': int(dur * 900)}, dur)
                 self.pos[o] = xo
-            em.play(att, tj, 'jump', {'to': x, 'slide_ms': int(dur * 900), 'vault': True}, dur)
+            em.play(att, tj, 'jump', dict(self.travel(att, 'jump', tj, x, dur * 0.9), vault=True), dur)
             self.pos[att] = x
         t_next = max(em.free[att], em.free[dfn]) + (0.25 if ex['range_after'] == 'close' else 0.5)
         self.last_att = att

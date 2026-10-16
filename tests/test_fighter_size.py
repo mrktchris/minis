@@ -49,18 +49,19 @@ class FighterAtSize(Isolated):
             f = self.make(size)
             drop = cfgmod.feet_drop(size)
             self.assertEqual(f.cell, size)
-            self.assertEqual(f.ov.y, 1440 - size + drop, size)              # taskbar bottom 1440, scale 1
+            hr = cfgmod.headroom_px(size)                                    # V7.1: jump headroom above the cell
+            self.assertEqual(f.ov.y, 1440 - size + drop - hr, size)         # taskbar bottom 1440, scale 1
             self.assertTrue(f.ov.presented, size)
             (w, h), x = f.ov.presented[-1]
-            self.assertEqual(h, size)
-            feet = f.ov.y + Atlas('claude').ground_y * size // 64            # ground_y scales with the art
+            self.assertEqual(h, size + hr)
+            feet = f.ov.y + hr + Atlas('claude').ground_y * size // 64       # ground_y scales with the art
             self.assertLessEqual(abs(feet - (1440 - 64 + Atlas('claude').ground_y)), 1, size)
             plates.add((f.pov.x, f.pov.y))
         self.assertEqual(len(plates), 1)                                     # plates do not move with the size
 
     def test_brain_works_in_res1_px_inside_the_scaled_zone(self):
-        z0, z1 = cfgmod.fight_zone(dict(CFG))
         for size in (64, 96, 128):
+            z0, z1 = cfgmod.fight_zone(dict(CFG), size)
             f = self.make(size)
             k = size / 64.0
             if size == 64:

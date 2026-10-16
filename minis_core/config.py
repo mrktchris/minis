@@ -83,8 +83,25 @@ def feet_drop(size) -> int:
     return int(round(7 * (size / 64.0 - 1)))
 
 
+JUMP_HEADROOM = 30                         # RES 1 px of window above the 64 px cell: a jump's `air` lift draws into it (x size/64)
+
+
+def headroom_px(size) -> int:
+    """Logical px a size-`size` fighter window reaches above its cell so an airborne fighter is never cut off."""
+    return int(round(JUMP_HEADROOM * size / 64.0))
+
+
 PLATE_W, PLATE_H, PLATE_SPACING = 128, 26, 4
-PLATE_CLEAR_PX = 40                        # plate strip end -> lowest hip x; sprites reach at most 33 px from the hip
+PLATE_CLEAR_PX = 40                        # (64 px look) plate strip end -> lowest hip x; superseded by clearance_px(size)
+SPRITE_REACH = 34                          # RES 1 px: no frame of any fighter reaches further than this from its hip
+                                           # (the 64 px cell is 30 px behind / 34 px in front of the hip anchor)
+HUD_GAP = 4                                # logical px between the fight's drawing band and a plate / the scoreboard
+
+
+def clearance_px(size=64) -> int:
+    """Logical px from a plate / the scoreboard to the nearest hip a size-`size` fighter may stand at: its whole sprite
+    (SPRITE_REACH, scaled with the size) plus HUD_GAP.  64 px -> 38, 96 -> 55, 128 -> 72."""
+    return int(round(SPRITE_REACH * size / 64.0)) + HUD_GAP
 
 
 def plate_left(cfg, slot) -> int:
@@ -93,16 +110,33 @@ def plate_left(cfg, slot) -> int:
     return int(cfg['zone'][0]) + (0 if slot == 'a' else PLATE_W + PLATE_SPACING)
 
 
-def fight_zone(cfg) -> tuple:
-    """Where fighters may stand (hip x): the roam zone minus the plate strip, so a sprite never covers a plate."""
+def fight_band(cfg) -> tuple:
+    """(x0, x1) logical screen px the fight may draw into: from the end of the plate strip to the scoreboard's left edge
+    (or the roam zone's end without one), HUD_GAP inside both.  Every fighter frame and effect is clipped to it, so a
+    beam, a spark or a knocked-down body can never paint over a plate or the scoreboard at any fighter size."""
+    z0, z1 = cfg['zone']
+    x0 = z0 + 2 * PLATE_W + PLATE_SPACING
+    if cfg.get('scoreboard', True):
+        from . import scoreboard
+        z1 = min(z1, scoreboard.left_x(cfg))
+    return float(x0 + HUD_GAP), float(z1 - HUD_GAP)
+
+
+def fight_zone(cfg, size=64) -> tuple:
+    """Where fighters may stand (hip x, logical screen px) at fighter size `size`: the drawing band minus a whole sprite
+    (clearance_px) at both ends, so a sprite never covers a plate or the scoreboard.  V7.1: the clearance scales with
+    the size (at 128 px a sprite reaches twice as far as at 64 px; the old fixed 40 px let a knocked-down 128 px fighter
+    reach over the right plate).  cfg['fight_zone'] (screen px) overrides it."""
     if cfg.get('fight_zone'):
         z0, z1 = cfg['fight_zone']
         return float(z0), float(z1)
-    z0, z1 = cfg['zone']
-    if cfg.get('scoreboard', True):                                # the widget sits at the right end: stay clear of it too
-        from . import scoreboard
-        z1 = min(z1, scoreboard.left_x(cfg) - PLATE_CLEAR_PX)
-    return float(z0 + 2 * PLATE_W + PLATE_SPACING + PLATE_CLEAR_PX), float(z1)
+    b0, b1 = fight_band(cfg)
+    c = clearance_px(size) - HUD_GAP
+    z0, z1 = b0 + c, b1 - c
+    if z1 - z0 < 48 * size / 64.0:                                 # a tiny zone (odd minis.json): keep room for a bout
+        mid = (z0 + z1) / 2.0
+        z0, z1 = mid - 24 * size / 64.0, mid + 24 * size / 64.0
+    return float(z0), float(z1)
 
 
 def data_base(platform=None, environ=None, home=None) -> Path:

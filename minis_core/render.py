@@ -217,7 +217,11 @@ def compose(style, atlas, view, snap, t, cfg, bounds=(0, 4000), show_plate=True)
     if isinstance(style, str) and style == getattr(atlas, 'character', None):
         style = atlas
     cell_h = atlas.cell[1] if hasattr(atlas, 'cell') else CELL
+    res = int(getattr(atlas, 'res', 1) or 1)
+    top = int(round(float(view.get('headroom') or 0) * res))     # V7.1: window rows above the cell (airborne fighters)
+    lift = int(round(float(view.get('lift') or 0.0) * res))      # V7.1: how high the fighter is (the `air` trajectory)
     sdx, sdy = view.get('shake') or (0, 0)
+    sdy += top
     parts = []                                    # (image, screen_x, y)
     for im, lx, ty, layer, *_ in (view.get('fx') or []):
         if layer == 'back':
@@ -231,30 +235,40 @@ def compose(style, atlas, view, snap, t, cfg, bounds=(0, 4000), show_plate=True)
         fr = fr.copy()
         fr.putalpha(fr.getchannel('A').point(lambda v: int(v * 0.55)))
     hip = int(round(view['x']))
-    parts.append((fr, hip - atlas.anchor(view['facing']) + sdx, sdy))
+    parts.append((fr, hip - atlas.anchor(view['facing']) + sdx, sdy - lift))
     if view.get('proj') and atlas.proj is not None:
         p = view['proj']
         pf = atlas.proj_image(p['frame'], p['dir'])
-        parts.append((pf, int(round(p['x'] - pf.width / 2)) + sdx, cell_h // 2 - pf.height // 2 + sdy))
+        pdy = int(round(float(p.get('dy') or 0.0) * res))        # V7.1: aimed at the opponent's height
+        parts.append((pf, int(round(p['x'] - pf.width / 2)) + sdx, cell_h // 2 - pf.height // 2 + sdy + pdy))
     for im, lx, ty, layer, *_ in (view.get('fx') or []):
         if layer != 'back':
             parts.append((im, lx + sdx, ty + sdy))
     if view.get('banner'):
         bim, bx = view['banner']
-        parts.append((bim, int(round(bx - bim.width / 2)), 0))
+        parts.append((bim, int(round(bx - bim.width / 2)), top))
     n_fight = len(parts)                          # everything so far belongs to the fight; the plate is never flashed over
     if show_plate and cfg.get('plate', True):
         pl = plate(style, snap, t)
         parts.append((pl, plate_x(hip, view['facing'], pl.width, bounds), 27))
-    x0 = min(p[1] for p in parts)
-    x1 = max(p[1] + p[0].width for p in parts)
+    fx0 = min(p[1] for p in parts[:n_fight])
+    fx1 = max(p[1] + p[0].width for p in parts[:n_fight])
+    clip = view.get('clip')
+    if clip:                                      # V7.1: never draw over a plate or the scoreboard (fight band, RES 1 px)
+        c0, c1 = int(round(clip[0] * res)), int(round(clip[1] * res))
+        fx0, fx1 = max(fx0, c0), min(fx1, c1)
+        if fx1 <= fx0:
+            fx0, fx1 = c0, c0 + 1
+    x0 = min([fx0] + [p[1] for p in parts[n_fight:]])
+    x1 = max([fx1] + [p[1] + p[0].width for p in parts[n_fight:]])
+    cell_h += top
     canvas = Image.new('RGBA', (x1 - x0, cell_h), (0, 0, 0, 0))
+    fight = Image.new('RGBA', (fx1 - fx0, cell_h), (0, 0, 0, 0))
     for im, sx, sy in parts[:n_fight]:
-        _paste_clipped(canvas, im, sx - x0, sy)
+        _paste_clipped(fight, im, sx - fx0, sy)
+    _paste_clipped(canvas, fight, fx0 - x0, 0)
     flash = float(view.get('flash') or 0.0)
     if flash > 0:                                 # V5: one-frame white flash over the fighter and its effects (plate-safe)
-        fx0 = min(p[1] for p in parts[:n_fight])
-        fx1 = max(p[1] + p[0].width for p in parts[:n_fight])
         white = Image.new('RGBA', (fx1 - fx0, cell_h), (255, 255, 255, 255))
         white.putalpha(_flash_mask(canvas, fx0 - x0, white.size, min(1.0, flash)))
         canvas.alpha_composite(white, (fx0 - x0, 0))

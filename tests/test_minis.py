@@ -6,7 +6,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import ROOT, CFG, Isolated  # noqa: E402
 import minis  # noqa: E402
-from minis_core import bus, control, director, lineup as L  # noqa: E402
+from minis_core import bus, config as cfgmod, control, director, lineup as L  # noqa: E402
 from minis_core.sources import Activity  # noqa: E402
 
 PY = r'C:\Python314\pythonw.exe'
@@ -333,7 +333,7 @@ class FighterLoop(Isolated):
         self.go(2.1)
         self.assertEqual(self.f.ov.scale, 2)
         self.assertEqual(self.f.g['scale'], 2)
-        self.assertEqual(self.f.ov.y, 1440 - 128)
+        self.assertEqual(self.f.ov.y, 1440 - (64 + cfgmod.headroom_px(64)) * 2)   # the cell + the jump headroom, scaled
         self.assertEqual(self.f.ov.presented[-1][1] % 2, 0)       # window x is in scaled pixels
 
     def test_menu_keeps_the_heartbeat_and_can_pause_everyone(self):

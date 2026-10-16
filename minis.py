@@ -1532,8 +1532,10 @@ class Fighter:
         band = max(24, b - t)
         sc = cfgmod.ui_scale(band)
         py = b - band + max(0, (band - cfgmod.PLATE_H * sc) // 2)          # plate: vertically centred in the taskbar band
-        # the window's bottom stays at the taskbar bottom (feet on the same line at every size); a bigger fighter reaches higher
-        return dict(scale=sc, y=b - (self.cell - cfgmod.feet_drop(self.size)) * sc, bottom=b, usable=ok, plate_y=py)
+        # the window's bottom stays at the taskbar bottom (feet on the same line at every size); a bigger fighter reaches higher.
+        # V7.1: the window also reaches headroom_px above the cell, where an airborne fighter (the `air` lift) is drawn
+        top = self.cell - cfgmod.feet_drop(self.size) + cfgmod.headroom_px(self.size)
+        return dict(scale=sc, y=b - top * sc, bottom=b, usable=ok, plate_y=py)
 
     def plate_x(self):
         return cfgmod.plate_left(self.cfg, self.slot) * self.g['scale']
@@ -1558,11 +1560,12 @@ class Fighter:
             self.hd = Library(hd=True)
 
     def logic_zone(self):
-        """Where the brain may stand, in RES 1 px: the fight zone divided by k, so spacing, reach and walking keep the art's
-        real proportions at every size.  None at 64 px (the brain's own default, unchanged)."""
+        """Where the brain may stand, in RES 1 px: the fight zone at this fighter size divided by k, so spacing, reach and
+        walking keep the art's real proportions at every size and the whole sprite stays clear of the plates and the
+        scoreboard (config.fight_zone scales its clearance with the size).  None at 64 px (the brain's own default)."""
         if self.k == 1:
             return None
-        z0, z1 = cfgmod.fight_zone(self.cfg)
+        z0, z1 = cfgmod.fight_zone(self.cfg, self.size)
         return (z0 / self.k, z1 / self.k)
 
     def compose(self, v, now):

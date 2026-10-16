@@ -598,3 +598,52 @@ def tally(beats_by_slot):
                 c[b['anim']] += 1
         out[slot] = c
     return out
+
+
+# ---------------------------------------------------------------- V7.1: the `air` curve of an airborne row
+def _ease(kind, u):
+    """The segment shapes of an `air` curve: 'o' rises like a thrown body (fast, then slowing toward the apex), 'i' falls
+    like one (slow, then faster), 'h' eases in and out (a hang / float), anything else is linear."""
+    if kind == 'o':
+        return 1.0 - (1.0 - u) * (1.0 - u)
+    if kind == 'i':
+        return u * u
+    if kind == 'h':
+        return u * u * (3.0 - 2.0 * u)
+    return u
+
+
+def air_lift(anim, el_ms):
+    """Height (RES 1 px above the floor) of a row's `air` curve `el_ms` into its animation clock (the clock its frames run
+    on: hitstop stands still, slow motion slows).  anim.json `air` = [[t_ms, h], [t_ms, h, ease], ...]: before the first
+    key the first height, after the last key the last height (a launched fighter keeps hanging), and between two keys
+    the later key's ease (_ease).  No `air`: 0.  The art draws the pose (crouch, stretch, tuck, reach); this curve is the
+    trajectory, so the motion is smooth at the redraw rate whatever the frame count."""
+    keys = (anim or {}).get('air') if isinstance(anim, dict) else None
+    if not keys:
+        return 0.0
+    if el_ms <= keys[0][0]:
+        return float(keys[0][1])
+    for k0, k1 in zip(keys, keys[1:]):
+        if el_ms < k1[0]:
+            u = (el_ms - k0[0]) / max(1e-6, float(k1[0] - k0[0]))
+            return float(k0[1]) + (float(k1[1]) - float(k0[1])) * _ease(k1[2] if len(k1) > 2 else 'l', u)
+    return float(keys[-1][1])
+
+
+def air_window(anim):
+    """-> (t_up, t_down) ms of a row's flight: the last key on the floor before it leaves it, and the first key back on
+    the floor after it was up (None when the row ends in the air).  (None, None) for a row without `air`."""
+    keys = (anim or {}).get('air') if isinstance(anim, dict) else None
+    if not keys:
+        return None, None
+    up = down = None
+    for i, k in enumerate(keys):
+        if up is None and float(k[1]) <= 0.0 and i + 1 < len(keys) and float(keys[i + 1][1]) > 0.0:
+            up = float(k[0])
+        elif up is not None and float(k[1]) <= 0.0:
+            down = float(k[0])
+            break
+    if up is None and keys and float(keys[0][1]) > 0.0:
+        up = float(keys[0][0])                                    # a row that starts in the air (air_hit, spiked)
+    return up, down

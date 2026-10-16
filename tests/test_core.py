@@ -838,13 +838,14 @@ class Render(unittest.TestCase):
         a_l, b_l = cfgmod.plate_left(CFG, 'a'), cfgmod.plate_left(CFG, 'b')
         self.assertEqual(a_l, CFG['zone'][0])
         self.assertGreaterEqual(b_l, a_l + render.PLATE_W)                  # side by side, not overlapping
-        z0, z1 = cfgmod.fight_zone(CFG)
-        reach = 33                                                          # widest sprite pixel from the hip, any character
-        self.assertGreater(z0 - reach, b_l + render.PLATE_W)
         from minis_core import scoreboard
-        self.assertEqual(z1, scoreboard.left_x(CFG) - cfgmod.PLATE_CLEAR_PX)   # the scoreboard sits at the right end
-        self.assertLess(z1 + reach, scoreboard.left_x(CFG))
-        self.assertEqual(cfgmod.fight_zone(dict(CFG, scoreboard=False))[1], CFG['zone'][1])
+        for size in (64, 96, 128):                                          # V7.1: the clearance scales with the fighter size
+            z0, z1 = cfgmod.fight_zone(CFG, size)
+            reach = cfgmod.SPRITE_REACH * size / 64.0                       # widest sprite pixel from the hip, any character
+            self.assertGreater(z0 - reach, b_l + render.PLATE_W, size)
+            self.assertLess(z1 + reach, scoreboard.left_x(CFG), size)      # the scoreboard sits at the right end
+            self.assertEqual(round(z1 + reach + cfgmod.HUD_GAP), scoreboard.left_x(CFG), size)
+        self.assertEqual(cfgmod.fight_zone(dict(CFG, scoreboard=False))[1], CFG['zone'][1] - cfgmod.clearance_px(64))
         self.assertEqual(scoreboard.left_x(CFG) + scoreboard.W, CFG['zone'][1] + 36)   # just left of the icon cluster
 
 

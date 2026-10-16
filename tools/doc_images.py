@@ -127,7 +127,8 @@ def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), 
     from minis_core.brain import LEFT, RIGHT
     from minis import hd_view
     k = size // 64
-    H = 64 if k == 1 else size + 16
+    hr = cfgmod.headroom_px(size)                                   # V7.1: room above the cell for airborne fighters
+    H = (64 if k == 1 else size + 16) + hr
     drop = cfgmod.feet_drop(size)
     hdl = Library(hd=True) if k > 1 else None
     cfg = dict(cfgmod.DEFAULTS)
@@ -136,7 +137,7 @@ def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), 
             RIGHT: sim.FakeTelemetry(RIGHT, [(0, 'idle', 31.0)])}
     cfg, atl, brains = sim.make(seed, cfg, 1000.0, chars={LEFT: chars[0], RIGHT: chars[1]})
     if k > 1:
-        z0, z1 = cfgmod.fight_zone(cfg)
+        z0, z1 = cfgmod.fight_zone(cfg, size)
         for w in (LEFT, RIGHT):
             brains[w].zone = (z0 / k, z1 / k)
     for w, x in ((LEFT, 420), (RIGHT, 610)):
@@ -160,11 +161,12 @@ def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), 
             hd = hdl[brains[w].character] if hdl is not None else None
             if hd is None or v['anim'] not in hd.anim:
                 fr = render.compose_full(atl[w], atl[w], v, brains[w].snap, now, 940, cfg, win_x=0, show_plate=False)
-                im.alpha_composite(fr, (0, H - 64))
+                im.alpha_composite(fr, (0, H - fr.height))
             else:                                                   # Fighter.compose at 128: the HD atlas, view mapped to its px
                 fr = render.compose_full(hd, hd, hd_view(v, hd, brains[w].atlas), brains[w].snap, now, 940, cfg, win_x=0, show_plate=False)
                 layer = Image.new('RGBA', (940, H), (0, 0, 0, 0))
-                layer.paste(fr.crop((0, 0, 940, min(fr.height, H - (H - size + drop)))), (0, H - size + drop))
+                y0 = H - size + drop - hr                               # the window top: the cell top minus the headroom
+                layer.paste(fr.crop((0, 0, 940, min(fr.height, H - y0))), (0, y0))
                 im.alpha_composite(layer)
         for i, w in enumerate((LEFT, RIGHT)):
             bg.alpha_composite(render.plate(atl[w], brains[w].snap, now, name=names[i]), (cfgmod.plate_left(cfg, w), H - 37))
@@ -222,9 +224,73 @@ def hero():
     save_gif([frame(f, meta[a + i]) for i, f in enumerate(clip[::2])], 'hero-bout.gif', ms=200, colors=64)
 
 
+def _frame_dir(src):
+    """-> (frames dir, manifest or None) when src is tools/own_capture.py output (own-capture.json + frames/) or a plain
+    folder of numbered PNG frames; None for a tools/taskbar_capture.py folder."""
+    man = src / 'own-capture.json'
+    if man.is_file() and (src / 'frames').is_dir():
+        try:
+            return src / 'frames', json.loads(man.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return src / 'frames', None
+    if (src / 'frames').is_dir():
+        return src / 'frames', None
+    if any(src.glob('[0-9]*.png')) and not any(src.glob('*-[0-9].png')):
+        return src, None
+    return None
+
+
+def annotate_live_frames(fdir, man):
+    """Annotate own_capture frames: whole fighters (any size) over a neutral desktop; callouts follow the window rects."""
+    files = sorted(fdir.glob('[0-9]*.png'))
+    if not files:
+        print(f'no frames in {fdir}')
+        return
+    man = man or {}
+    fps = float(man.get('fps') or 10)
+    rects_all = man.get('rects') or []
+    si = int(man.get('still_index', len(files) // 2))
+    si = min(max(0, si), len(files) - 1)
+    with Image.open(files[0]) as im0:
+        w0 = im0.width
+    K = 2 if w0 <= 700 else 1
+
+    def frame(im, rects):
+        strip = up(im.convert('RGBA'), K)
+        c, (ox, oy) = card(strip, 'Live: a bout on the real taskbar',
+                           'Each window\'s own image, composited by tools/own_capture.py (no screen capture)', mt=78, mb=30)
+        d = ImageDraw.Draw(c)
+        plate = rects.get('a-plate') or rects.get('b-plate')
+        if plate:
+            callout(d, (ox + (plate[0] + 30) * K, oy + plate[1] * K), (ox + 20, oy - 72), 'HUD plates', YEL)
+        fs = [rects[r] for r in ('a', 'b') if r in rects]
+        if fs:
+            cx = sum((r[0] + r[2]) / 2 for r in fs) / len(fs)
+            cy = min(r[1] for r in fs) + 16
+            callout(d, (ox + int(cx * K), oy + int(cy * K)), (ox + int(cx * K), oy - 72), 'fighters', CYA, anchor='ct')
+        sb = rects.get('scoreboard')
+        if sb:
+            callout(d, (ox + (sb[0] + sb[2]) // 2 * K, oy + sb[1] * K), (ox + strip.width, oy - 72), 'scoreboard', PNK, anchor='rt')
+        return c
+
+    def rects_at(i):
+        r = rects_all[i] if i < len(rects_all) and isinstance(rects_all[i], dict) else {}
+        return {k: tuple(v) for k, v in r.items() if isinstance(v, (list, tuple)) and len(v) == 4}
+
+    save_png(frame(Image.open(files[si]), rects_at(si)), 'live-taskbar.png')
+    step = 2 if fps > 6 else 1
+    fr = [frame(Image.open(f), rects_at(i)) for i, f in enumerate(files)][::step]
+    save_gif(fr, 'live-bout.gif', ms=int(round(1000.0 * step / fps)), colors=64)
+
+
 def annotate_live(src):
-    """Annotate captures from tools/taskbar_capture.py (taskbar rows only, bbox 4,1392,936,1440)."""
+    """Annotate captures from tools/taskbar_capture.py (taskbar rows only, bbox 4,1392,936,1440), or a directory of
+    frames from tools/own_capture.py (its --out folder, or a frames/ folder of numbered PNGs)."""
     src = Path(src)
+    fd = _frame_dir(src)
+    if fd:
+        annotate_live_frames(*fd)
+        return
     stills = sorted(src.glob('*-[0-9].png'))
     gif = next(src.glob('*-match.gif'), None)
     K = 2
@@ -1199,7 +1265,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--only', default='')
     ap.add_argument('--out', default=str(OUT))
-    ap.add_argument('--annotate-live', default=None, help='a tools/taskbar_capture.py --out folder')
+    ap.add_argument('--annotate-live', default=None, help='a tools/taskbar_capture.py --out folder, or tools/own_capture.py output (a folder of frames)')
     a = ap.parse_args(argv)
     OUT = Path(a.out)
     OUT.mkdir(parents=True, exist_ok=True)

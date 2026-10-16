@@ -58,10 +58,11 @@ def play(piece, a, b, out, fps=30, every=2, scale=2):
     for i in range(n):
         now = 999.9 + i / fps
         sim.step(brains, tele, now, bus)
-        im = Image.new('RGBA', (int(cfg['zone'][1] - cfg['zone'][0] + 70), 64), (0, 0, 0, 0))
+        im = Image.new('RGBA', (int(cfg['zone'][1] - cfg['zone'][0] + 70), 64 + cfgmod.JUMP_HEADROOM), (0, 0, 0, 0))
         for w in (LEFT, RIGHT):
             v = brains[w].view(now)
-            im.alpha_composite(render.compose_full(atl[w], atl[w], v, brains[w].snap, now, im.width, cfg, win_x=0, show_plate=False))
+            fr = render.compose_full(atl[w], atl[w], v, brains[w].snap, now, im.width, cfg, win_x=0, show_plate=False)
+            im.alpha_composite(fr, (0, im.height - fr.height))
         x0 = mid - W // 2 - zone0 + 35
         frames.append(sim.mock_taskbar(im, (x0, x0 + W), 1, ''))
         labels.append(f"{now - 1000.0:5.2f}s {brains[LEFT].anim[:12]} / {brains[RIGHT].anim[:12]}")

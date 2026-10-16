@@ -98,11 +98,11 @@ def run(seconds, tele, seed=1, cfg_over=None, fps=10, t0=1000.0, place=None, col
         now = t0 + i / fps
         step(brains, tele, now, bus)
         if collect:
-            im = Image.new('RGBA', (zone_w, 64), (0, 0, 0, 0))
-            for w in (LEFT, RIGHT):
-                v = brains[w].view(now)
-                snap = brains[w].snap
-                im.alpha_composite(render.compose_full(atl[w], atl[w], v, snap, now, zone_w, cfg, win_x=0))
+            layers = [render.compose_full(atl[w], atl[w], brains[w].view(now), brains[w].snap, now, zone_w, cfg, win_x=0)
+                      for w in (LEFT, RIGHT)]
+            im = Image.new('RGBA', (zone_w, max(l.height for l in layers)), (0, 0, 0, 0))   # V7.1: + the jump headroom
+            for l in layers:
+                im.alpha_composite(l, (0, im.height - l.height))
             frames.append(mock_taskbar(im, crop, scale, label))
             times.append(i / fps)
             flags.append(dict(script=any(brains[w].script is not None for w in (LEFT, RIGHT)), mode={w: brains[w].mode for w in (LEFT, RIGHT)},
@@ -116,8 +116,9 @@ def mock_taskbar(sprites, crop, scale, label=''):
     w, h = sprites.size
     bg = Image.new('RGBA', (w, h), (24, 24, 30, 255))
     d = ImageDraw.Draw(bg)
-    d.rectangle([0, 16, w, h], fill=(32, 32, 32, 255))
-    d.line([(0, 16), (w, 16)], fill=(58, 58, 62, 255))
+    tb = h - 48                                  # the taskbar is the bottom 48 rows (taller canvases carry jump headroom)
+    d.rectangle([0, tb, w, h], fill=(32, 32, 32, 255))
+    d.line([(0, tb), (w, tb)], fill=(58, 58, 62, 255))
     bg.alpha_composite(sprites)
     if label:
         render.text(d, (4, 2), label, (120, 120, 135), 9, False)
