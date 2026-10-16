@@ -150,6 +150,18 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
     only on the cut, not when the arm returns to guard; after the shatter the own weapon is back on the very next frame.
     Report any frame where the weapon floats off the hand (character, move, roughly when): that is a grip in the art.
 
+- [ ] **MAC-22 (2026-10-16) Confirming a fighter pick must not stop the director (Windows bug found; check macOS).**
+  - PC side: on Windows every overlay posted WM_QUIT when destroyed, so closing the fighter-select popup (hosted by the
+    director) ended the director's message loop: the scoreboard and tray vanished right after every pick, with no error and
+    no fault dump. Fixed in `minis_win/shell.py` (only the last window posts WM_QUIT); regression test
+    `tests/test_shell.py::Overlay::test_closing_one_window_does_not_quit_the_others`.
+  - Test on the Mac: `python minis.py start`, open fighter select (menu-bar menu > Select fighters, or click a name on the
+    scoreboard), pick a program + look, confirm; repeat 3 times, and once cancel with Esc. After each, `python minis.py status`
+    must show `director running` and the menu-bar item / scoreboard must still be there.
+  - Look in `minis_mac/shell.py` / the select window close path for anything equivalent (closing the last NSWindow
+    terminating the app, `applicationShouldTerminateAfterLastWindowClosed_`, `NSApp.stop_`, or a run-loop timer that ends
+    when a window closes). Expected: the director keeps running after every pick.
+
 ## DONE
 
 - [x] **MAC-9 (2026-10-15) DONE 58b3fdd 2026-10-15 Art renders one pixel differently on macOS.**

@@ -212,7 +212,8 @@ def _wndproc(hwnd, msg, wparam, lparam):
         return 0
     if msg == WM_DESTROY:
         _instances.pop(hwnd, None)
-        user32.PostQuitMessage(0)
+        if not _instances:   # only the last window ends the loop: closing the select popup used to quit the director
+            user32.PostQuitMessage(0)
         return 0
     return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 

@@ -20,6 +20,15 @@ class Overlay(unittest.TestCase):
     def visible(self):
         return bool(self.shell.user32.IsWindowVisible(self.ov.hwnd))
 
+    def test_closing_one_window_does_not_quit_the_others(self):
+        """The director hosts the scoreboard AND the fighter-select popup: every WM_DESTROY used to post WM_QUIT, so
+        confirming a pick closed the popup and the scoreboard's pump returned False - the director exited silently."""
+        while not self.ov.pump():   # an earlier test closing its LAST window leaves a real WM_QUIT queued: drain it
+            pass
+        popup = self.shell.Overlay('minis-test-popup', 100, 100, 64, 64)
+        popup.close()
+        self.assertTrue(self.ov.pump(), 'closing another window ended this message loop')
+
     def test_window_is_visible_right_after_creation(self):
         self.assertTrue(self.visible())
 
