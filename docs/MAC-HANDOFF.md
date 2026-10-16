@@ -48,6 +48,10 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - Expected: feet still on the Dock's top edge at every size (unchanged), PASS; in a match the fighters jump visibly above
     their standing height and are never cut off at the top; the transparent headroom does not swallow clicks meant for the
     window behind it (if it does, report it: macOS hit-testing may need `update_ignore` to treat alpha 0 as click-through).
+  - Mac 2026-10-16: still OPEN (partial). selftest-gui PASS at 96 (control.json has size 96); fighter windows are now 141 pt
+    tall (96 + 45 headroom), bottoms at y 1048 as before. Jump arcs and the headroom click-through not judged yet: the demo
+    below did not become a real match (see MAC-20). Click-through of transparent pixels is the same per-pixel alpha test as
+    before (`update_ignore`), so alpha-0 headroom should pass clicks; owner to confirm by clicking above a fighter.
 
 - [ ] **MAC-18 (2026-10-15) The fight zone and a hard clip now scale with fighter_size.**
   - PC change: `config.fight_zone(cfg, size)` keeps a whole sprite (34 x size/64) plus 4 px between any hip and a plate /
@@ -59,17 +63,11 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
     the right end of the strip (`Scoreboard.left` uses the screen width), not at `scoreboard.left_x(cfg)`: if a fighter's
     beam is cut off far from the widget, or reaches over it, report where (the band is computed from cfg, not the moved widget).
 
-- [ ] **MAC-19 (2026-10-15) Own-window dump for docs (`tools/own_capture.py`).**
-  - PC change: every fighter / plate / scoreboard window writes its own image only while
-    `~/Library/Application Support/minis/dump/request.json` is active (`minis_core/dump.py`, one `dump.watch(...)` line per
-    window in `minis.py`); with no request the cost is one stat every 0.5 s and one idle thread per process. Retina HUD images
-    carry `density: 2` (png twice the window size; `w`/`h` in points). The tool reads the Dock band from
-    `minis_mac.shell.taskbar_rect()` (an AppKit query, not a capture). No Screen Recording permission is involved.
-  - Test: `python minis.py start`, then `python tools/own_capture.py --out /tmp/cap --seconds 10 --demo spar --keep`; check the
-    plate / scoreboard records in the dump folder (`density` 2, `w`/`h` = on-screen size); once more with `minis.py plates menubar`.
-  - Expected: no permission prompt; `/tmp/cap/live-bout.gif` and `live-taskbar.png` show whole fighters over flat grey with a
-    dark bar at the Dock band, plates sharp and correctly sized; `request.json` is gone afterwards. Risk: the tool assumes
-    `Overlay.x/y` and `taskbar_rect()` share one top-left, y-down coordinate system; if windows land off the bar, say so.
+
+  - Mac 2026-10-16: still OPEN (partial). In the capture nothing overlapped a plate (plates are in the menu bar here) or the
+    scoreboard. Note: on the Mac the scoreboard is at x 1508 (right end) while `fight_band` is computed from cfg
+    (scoreboard_x None -> zone end + 36 - 190 = 746), so the band's right edge is 746, far left of the widget; fighters are
+    clipped there instead of at the widget. PC side: let the band follow `Scoreboard.left()` on macOS (screen width).
 
 - [ ] **MAC-20 (2026-10-15) Lock-on and the new jumps (shared engine, look only).**
   - PC change: inside a bout each fighter replays its opponent's row of the shared timeline (`brain.Track`) and faces it on
@@ -79,6 +77,9 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - Expected: no fighter ever aims its bow or swings at empty space with its back to the other one, except the dash-through
     pass (back turned until its cut lands) and the walk home; jumps arc smoothly with a squash on landing; both fighters
     stay in sync (a hit and its reaction land together).
+  - Mac 2026-10-16: still OPEN. `fighters set a generic` / `set b codex` + `demo match`: Codex is not running on this Mac, so
+    side b stayed asleep (z's) and no match played; the archer faced its sleeping opponent. Needs a run with both programs
+    active (or a sparring bot on b).
 
 - [ ] **MAC-13 (2026-10-15) Desktop weapons: Screen Recording preflight, real pixels, no prompt.**
   - PC change: the arena forges weapons from a screen grab taken ONCE into RAM at start (minis_core/forge.py; on by default,
@@ -99,40 +100,11 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - Expected for both: no file appears anywhere with screen content (`find ~/Library/Application Support/minis /tmp -newer
     <start marker> -type f` lists only logs / json), `python minis.py arena capture` is refused on macOS as before.
 
-- [ ] **MAC-14 (2026-10-15) Arena CPU (FOUND-2): measure the V8 macOS window.**
-  - PC change: `minis_mac/arena_window.py` uses 128-pt tiles (was 256), skips fully transparent tiles (contents nil, no
-    conversion), shows colour / white flashes as a GPU tint layer (no full-canvas re-upload), keeps the canvas at 1 px per
-    point (Core Animation scales it on Retina), and counts tiles and upload time. `run_arena` logs a profile line every 5 s
-    with `MINIS_ARENA_PROFILE=1`. On the PC the simulated mac work dropped from ~583 k to ~261 k pixels per frame
-    (docs/ARENA.md Performance).
-  - Test: `MINIS_ARENA_PROFILE=1 python minis.py arena --rounds 3 --intensity normal --seconds 60` (repeat with `calm`, `wild`,
-    and once with `python minis.py forge off`); meanwhile `top -pid <arena pid> -stats pid,cpu -l 30` (the pid is in arena.json).
-    Copy the `arena profile:` lines from `~/Library/Application Support/minis/logs/arena.log`.
-  - Expected: CPU <= 10 % of a core at normal (was 15-31 %), no `cpu over budget, 20 fps` line, flashes still visible (a
-    full-screen tint), no tearing between tiles. Report the profile numbers: if `upload` dominates, the next step is bigger
-    tiles for big dirty rects (a per-rect tile size); if `render` dominates, it is the shared compositor; if neither and CPU
-    is still high, it is the AppKit run loop (hover polling at 30 Hz over every panel).
 
-- [ ] **MAC-15 (2026-10-15) Menu-bar icon behind the notch (FOUND-3): the fallback badge.**
-  - PC change: macOS cannot be told where to put a status item; it hides whatever does not fit. `minis_mac/tray.py` now
-    gives the item an `autosaveName` (a Cmd-drag to a visible spot is remembered) and checks every 5 s
-    (`menubar_icon_shown`, bounds only) whether it is shown. While it is hidden, a 22-pt badge with the same icon appears in
-    the free stretch just left of the notch (`geometry.menubar_badge_origin`; left of the HUD plates when they are in the
-    menu bar): left click = fighter select, right click = the tray menu (opens at the mouse). It disappears when the item is
-    visible again.
-  - Test: on the notched MacBook with the full menu bar: `python minis.py start`; within ~5 s look left of the notch.
-    Left-click the badge (select opens), right-click it (menu with *Desktop weapons*), try `python minis.py plates menubar`
-    (badge moves left of the plates after a restart). Then make room (quit a few menu-bar apps): the badge goes away and the
-    icon shows. `python minis.py status` should keep reporting the icon's state.
-  - Expected: badge visible and clickable, crisp on Retina, never over the notch or the app menus' text when the free
-    stretch exists; no permission prompt. Report if `status_item_shown` mistakes the badge for the icon (the badge sits at
-    y >= 2 for exactly that reason).
-
-- [ ] **MAC-16 (2026-10-15) Menu items: Desktop weapons.**
-  - PC change: the tray menu and every fighter's right-click menu have a *Desktop weapons* checkmark (control.json `forge`).
-  - Test: untick it in the menu-bar menu, check `python minis.py status` says `desktop weapons: off`; tick it again from a
-    fighter's right-click menu.
-  - Expected: the check mark follows the state in both menus.
+  - Mac 2026-10-16: not run. The app this session runs in already holds Screen Recording (granted earlier by the owner,
+    not by this session), so everything started from here takes the real-pixels path (`doctor`: "from real screen pixels").
+    Test A (no permission) cannot be reproduced from this shell, and Test B would grab the owner's screen (client mail on
+    it): waiting for the owner's choice. Arena runs here used `forge off`.
 
 - [ ] **MAC-21 (2026-10-16) The forged weapon is held in the hand, frame by frame (Retina check).**
   - PC change: while a fighter holds a forged weapon the arena draws it from its unarmed sheet (`Atlas.unarmed_frame`) and
@@ -150,7 +122,31 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
     only on the cut, not when the arm returns to guard; after the shatter the own weapon is back on the very next frame.
     Report any frame where the weapon floats off the hand (character, move, roughly when): that is a grip in the art.
 
-- [ ] **MAC-22 (2026-10-16) Confirming a fighter pick must not stop the director (Windows bug found; check macOS).**
+
+  - Mac 2026-10-16: not run (needs forged weapons, see MAC-13, and watching the full screen, which this session does not
+    capture).
+
+## DONE
+
+- [x] **MAC-14 (2026-10-15) DONE fdd0803 2026-10-16 Arena CPU (FOUND-2): measure the V8 macOS window.**
+  - PC change: `minis_mac/arena_window.py` uses 128-pt tiles (was 256), skips fully transparent tiles (contents nil, no
+    conversion), shows colour / white flashes as a GPU tint layer (no full-canvas re-upload), keeps the canvas at 1 px per
+    point (Core Animation scales it on Retina), and counts tiles and upload time. `run_arena` logs a profile line every 5 s
+    with `MINIS_ARENA_PROFILE=1`. On the PC the simulated mac work dropped from ~583 k to ~261 k pixels per frame
+    (docs/ARENA.md Performance).
+  - Test: `MINIS_ARENA_PROFILE=1 python minis.py arena --rounds 3 --intensity normal --seconds 60` (repeat with `calm`, `wild`,
+    and once with `python minis.py forge off`); meanwhile `top -pid <arena pid> -stats pid,cpu -l 30` (the pid is in arena.json).
+    Copy the `arena profile:` lines from `~/Library/Application Support/minis/logs/arena.log`.
+  - Expected: CPU <= 10 % of a core at normal (was 15-31 %), no `cpu over budget, 20 fps` line, flashes still visible (a
+    full-screen tint), no tearing between tiles. Report the profile numbers: if `upload` dominates, the next step is bigger
+    tiles for big dirty rects (a per-rect tile size); if `render` dominates, it is the shared compositor; if neither and CPU
+    is still high, it is the AppKit run loop (hover polling at 30 Hz over every panel).
+  - Mac 2026-10-16 (forge off, `MINIS_ARENA_PROFILE=1`, 30 s each): still over budget. `top`: normal 9-25 %, calm 10-26 %, wild
+    13-28 %; profile lines: 19.5 fps, tick ~0.1 ms, render 4.1-10.9 ms of which upload 2.9-7.3 ms (6.8-26.8 tiles up,
+    3-8 skipped per frame), cpu 6-38 %; `cpu ... over budget, 20 fps` still logged. Upload dominates (~0.25 ms per 128-pt
+    tile: crop + RGBa + CGImage each): the per-rect / bigger-tile upload is the next step (FOUND-2 stays open).
+
+- [x] **MAC-22 (2026-10-16) DONE fdd0803 2026-10-16 Confirming a fighter pick must not stop the director (Windows bug found; check macOS).**
   - PC side: on Windows every overlay posted WM_QUIT when destroyed, so closing the fighter-select popup (hosted by the
     director) ended the director's message loop: the scoreboard and tray vanished right after every pick, with no error and
     no fault dump. Fixed in `minis_win/shell.py` (only the last window posts WM_QUIT); regression test
@@ -161,8 +157,55 @@ Item format: `- [ ] MAC-<n> (<date>)` = OPEN, `- [x] MAC-<n> (<date>) DONE <hash
   - Look in `minis_mac/shell.py` / the select window close path for anything equivalent (closing the last NSWindow
     terminating the app, `applicationShouldTerminateAfterLastWindowClosed_`, `NSApp.stop_`, or a run-loop timer that ends
     when a window closes). Expected: the director keeps running after every pick.
+  - Mac 2026-10-16: no equivalent bug. A Scoreboard inside the real `shell.run_loop` opened fighter select 3 times (two
+    confirmed with Enter, one cancelled with Esc via the window's own on_key): the loop ran to its end every time, the
+    board kept stepping. Nothing in minis_mac terminates on a window close (no app delegate, closing a panel never stops
+    the run loop).
 
-## DONE
+- [x] **MAC-19 (2026-10-15) DONE fdd0803 2026-10-16 Own-window dump for docs (`tools/own_capture.py`).**
+  - PC change: every fighter / plate / scoreboard window writes its own image only while
+    `~/Library/Application Support/minis/dump/request.json` is active (`minis_core/dump.py`, one `dump.watch(...)` line per
+    window in `minis.py`); with no request the cost is one stat every 0.5 s and one idle thread per process. Retina HUD images
+    carry `density: 2` (png twice the window size; `w`/`h` in points). The tool reads the Dock band from
+    `minis_mac.shell.taskbar_rect()` (an AppKit query, not a capture). No Screen Recording permission is involved.
+  - Test: `python minis.py start`, then `python tools/own_capture.py --out /tmp/cap --seconds 10 --demo spar --keep`; check the
+    plate / scoreboard records in the dump folder (`density` 2, `w`/`h` = on-screen size); once more with `minis.py plates menubar`.
+  - Expected: no permission prompt; `/tmp/cap/live-bout.gif` and `live-taskbar.png` show whole fighters over flat grey with a
+    dark bar at the Dock band, plates sharp and correctly sized; `request.json` is gone afterwards. Risk: the tool assumes
+    `Overlay.x/y` and `taskbar_rect()` share one top-left, y-down coordinate system; if windows land off the bar, say so.
+  - Mac 2026-10-16 (plates in the menu bar): no prompt; records right: fighters density 1, plates and scoreboard density 2
+    with w/h in points (128x26, 190x44); request.json gone afterwards; windows land where they are on screen. Two things for
+    the PC side: (1) with `plates menubar` live-taskbar.png spans the full screen height (plates at y 6, bar at y 996); crop
+    or place the plates beside the bar. (2) the density-2 plate / scoreboard images are reduced with nearest-neighbour, so
+    their small text breaks up ("warki g"); reduce with a box / LANCZOS filter or keep them at 2x.
+
+- [x] **MAC-16 (2026-10-15) DONE fdd0803 2026-10-16 Menu items: Desktop weapons.**
+  - PC change: the tray menu and every fighter's right-click menu have a *Desktop weapons* checkmark (control.json `forge`).
+  - Test: untick it in the menu-bar menu, check `python minis.py status` says `desktop weapons: off`; tick it again from a
+    fighter's right-click menu.
+  - Expected: the check mark follows the state in both menus.
+  - Mac 2026-10-16: `forge off` -> `status` says `desktop weapons: off`, the tray menu's *Desktop weapons* mark is unchecked
+    (tray_flags -> tray_menu); `forge on` restores it. Both menus handle the item (T.FORGE / L.FORGE). Clicking it is the
+    owner's (MAC-5).
+
+- [x] **MAC-15 (2026-10-15) DONE fdd0803 2026-10-16 Menu-bar icon behind the notch (FOUND-3): the fallback badge.**
+  - PC change: macOS cannot be told where to put a status item; it hides whatever does not fit. `minis_mac/tray.py` now
+    gives the item an `autosaveName` (a Cmd-drag to a visible spot is remembered) and checks every 5 s
+    (`menubar_icon_shown`, bounds only) whether it is shown. While it is hidden, a 22-pt badge with the same icon appears in
+    the free stretch just left of the notch (`geometry.menubar_badge_origin`; left of the HUD plates when they are in the
+    menu bar): left click = fighter select, right click = the tray menu (opens at the mouse). It disappears when the item is
+    visible again.
+  - Test: on the notched MacBook with the full menu bar: `python minis.py start`; within ~5 s look left of the notch.
+    Left-click the badge (select opens), right-click it (menu with *Desktop weapons*), try `python minis.py plates menubar`
+    (badge moves left of the plates after a restart). Then make room (quit a few menu-bar apps): the badge goes away and the
+    icon shows. `python minis.py status` should keep reporting the icon's state.
+  - Expected: badge visible and clickable, crisp on Retina, never over the notch or the app menus' text when the free
+    stretch exists; no permission prompt. Report if `status_item_shown` mistakes the badge for the icon (the badge sits at
+    y >= 2 for exactly that reason).
+  - Mac 2026-10-16: the badge never appeared: the check lived in `MacTrayApi.pump()`, which the director only calls when
+    there is no scoreboard. Fixed (fdd0803): its own 5 s NSTimer. Seen: 22-pt badge at x 469, y 8, left of the menu-bar plates
+    (495..755), crisp; `status` still reports the item hidden (the badge is not mistaken for it). Clicking the badge (left:
+    select, right: menu) is for the owner to try: no synthetic input here.
 
 - [x] **MAC-9 (2026-10-15) DONE 58b3fdd 2026-10-15 Art renders one pixel differently on macOS.**
   - PC change: `tests/test_art.py` `test_left_facing_redraw_never_paints_over_skin_or_hands` failed on the macOS runners
