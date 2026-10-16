@@ -4,9 +4,10 @@
     python packaging/launch_media.py preview    # only the social card
     python packaging/launch_media.py demo       # only the gif + mp4
 
-Built only from what is in the repo: the sprite sheets in assets/ (idle frame 1, nearest-neighbour upscale), the app icon,
-and for the loop the offline taskbar render of tools/doc_images.py (real planner + renderer, DEMO numbers) at 20 fps.
-The mp4 needs ffmpeg on PATH (skipped otherwise).  Never captures the screen.
+Built only from what is in the repo: the 128 px sprite sheets in assets_hd/ (idle frame 1, nearest-neighbour upscale),
+the app icon, and for the loop two offline renders at 2x pixel scale: the taskbar strip of tools/doc_images.py (real
+planner + renderer, DEMO numbers) over a SYNTHETIC desktop, then an arena desktop-weapon forge on doc_images' SYNTHETIC
+busy desktop.  The mp4 needs ffmpeg on PATH (skipped otherwise).  Never captures the screen.
 """
 from __future__ import annotations
 import json, shutil, subprocess, sys, tempfile
@@ -33,12 +34,13 @@ def font(size, weight='black'):
     return ImageFont.load_default()
 
 
-def idle_frame(char, facing='R'):
-    """Idle frame 1 of a character's 64 px sheet, cropped to its pixels, plus the ground line inside the crop.
+def idle_frame(char, facing='R', art='assets_hd'):
+    """Idle frame 1 of a character's sheet (default: the 128 px HD art the app draws at the default fighter_size),
+    cropped to its pixels, plus the ground line inside the crop.
     facing 'L' is the R frame mirrored (exactly what the app draws for a fighter facing left)."""
-    meta = json.loads((ROOT / 'assets' / char / 'anim.json').read_text(encoding='utf-8'))
+    meta = json.loads((ROOT / art / char / 'anim.json').read_text(encoding='utf-8'))
     cw, ch = meta['cell']
-    sheet = Image.open(ROOT / 'assets' / char / meta['sheets']['R']).convert('RGBA')
+    sheet = Image.open(ROOT / art / char / meta['sheets']['R']).convert('RGBA')
     row = meta['anims']['idle']['row']
     cell = sheet.crop((0, row * ch, cw, (row + 1) * ch))
     if facing == 'L':
@@ -129,113 +131,167 @@ def social_preview(out=DOCS / 'social-preview.png'):
 
 
 # ------------------------------------------------------------------ demo loop (gif + mp4)
-# The same offline strip tools/doc_images.py renders for hero-bout.gif (real planner + renderer, DEMO numbers, 128 px HD
-# fighters = the default fighter_size), at 20 fps instead of 5 so the loop is smooth.  Shown: screen x 300..940 (the fight
-# zone and the scoreboard) at 2x = 1280 px wide.
-FPS, STAGE_X = 20, (300, 940)
+# Two acts, both at 2x pixel scale in a 1280x720 frame, both rendered offline (never a screen capture):
+#   1. the taskbar: the offline strip of tools/doc_images.py (real planner + renderer, DEMO numbers, 128 px HD fighters =
+#      the default fighter_size) with a SYNTHETIC desktop above the taskbar, 20 fps: the exchange that ends round 1, K.O.;
+#   2. the arena: a desktop weapon forged out of a window on the SYNTHETIC busy desktop of doc_images (the cut, the lift,
+#      the pixel morph, the weapon in the hand), then two hits with it and the shatter; 30 fps resampled to 20.
+FPS = 20
+W, H = 1280, 720
+ACT1_BEFORE_KO, ACT1_AFTER_KO = 66, 20            # frames before / after the first K.O. of the match
+XFADE = 4
 
 
-def _strip_frames(seconds=34):
-    sys.path.insert(0, str(ROOT))
-    sys.path.insert(0, str(ROOT / 'tools'))
+def _tools():
+    for p in (ROOT, ROOT / 'tools'):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
     import doc_images
-    frames, meta, _cfg = doc_images.taskbar_strip_frames(seconds=seconds, fps=FPS)
-    return frames, meta
+    return doc_images
 
 
-def _best_window(frames, meta, n):
-    """Start index of the n-frame window with the most on-stage motion (frame-to-frame change in the fight zone), preferring
-    windows inside a scripted bout so the loop is all fight."""
-    import numpy as np
-    zone = [np.asarray(f.crop((STAGE_X[0], 0, STAGE_X[1] - 200, f.height)).convert('L'), dtype=np.int16) for f in frames]
-    motion = [0] + [int(np.abs(zone[i] - zone[i - 1]).sum()) for i in range(1, len(zone))]
-    best, best_i = -1, 0
-    for i in range(0, len(frames) - n):
-        if not all(m['script'] for m in meta[i:i + n:4]):
-            continue
-        s = sum(motion[i:i + n])
-        if s > best:
-            best, best_i = s, i
-    return best_i
+def _desk_backdrop(w, h):
+    """The rows above the taskbar: doc_images' synthetic busy desktop at half scale (so at 2x it reads as a normal
+    desktop), dimmed so the fighters stay the subject."""
+    desk = _tools()._busy_desktop().convert('RGB').resize((960, 540), Image.LANCZOS)
+    im = desk.crop((0, 516 - (h - 48), w, 516))
+    im = ImageEnhance.Brightness(im).enhance(0.62)
+    im = im.quantize(colors=40, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert('RGB')  # flat: leaves
+    # the gif palette to the fighters
+    out = Image.new('RGBA', (w, h), (0, 0, 0, 255))
+    out.paste(im, (0, 0))
+    return out
 
 
-CROP = None                                       # set by demo(): the clip's own motion box (+ margin), so the fight is framed
+def _act1():
+    doc_images = _tools()
+    from minis_core import config as cfgmod
+    rows = H // 2                                                    # 360 strip rows at 2x = 720
+    extra = rows - (128 + 16 + cfgmod.headroom_px(128))
+    frames, meta, _cfg = doc_images.taskbar_strip_frames(seconds=40, fps=FPS, backdrop=_desk_backdrop, extra_top=extra)
+    ko = next(i for i, m in enumerate(meta) if m['hp'].get('a') is not None and min(m['hp'].values()) <= 0)
+    a, b = max(0, ko - ACT1_BEFORE_KO), min(len(frames), ko + ACT1_AFTER_KO)
+    print(f'act 1: strip frames {a}..{b - 1} (first K.O. at {ko})')
+    x0 = 940 - W // 2                                                # the fight zone and the scoreboard
+    return [up(f.crop((x0, 0, 940, rows)), 2).convert('RGB') for f in frames[a:b]]
 
 
-def _motion_box(clip, pad=48):
-    """Union box of every pixel that changes across the clip (fighters, effects, banners, scoreboard), padded.  A fixed
-    window went stale when the fight zone started scaling with fighter_size and cut the fighters in half."""
-    from PIL import ImageChops
-    base, box = clip[0].convert('RGB'), None
-    for f in clip[1:]:
-        b = ImageChops.difference(f.convert('RGB'), base).getbbox()
-        if b:
-            box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]), max(box[2], b[2]), max(box[3], b[3]))
-    w, h = clip[0].size
-    if box is None:
-        return (STAGE_X[0], 0, STAGE_X[1], h)
-    return (max(0, box[0] - pad), max(0, box[1] - pad // 2), min(w, box[2] + pad // 4), h)
+def _ease(t):
+    return t * t * (3 - 2 * t)
 
 
-def _compose(strip, W=1280, top=0, bg=(22, 23, 30)):
-    box = CROP or (STAGE_X[0], 0, STAGE_X[1], strip.height)
-    stage = up(strip.crop(box), 2)
-    c = Image.new('RGBA', (W, top + stage.height), bg + (255,))
-    c.alpha_composite(stage, ((W - stage.width) // 2, top))
-    return c
+def _act2():
+    doc_images = _tools()
+    from minis_core import forge as FG
+    ar, surf, comp, now = doc_images._forge_arena(chars=('claude', 'codex'))
+    A, B = ar.f['a'], ar.f['b']
+    B.x = A.x + 250.0                                                # close enough that the forged blade reaches
+    raw = []
+    wide = (160, 360, 1440, 1080)                                    # the window's title bar and both fighters
+
+    def tight():
+        x0 = int(A.x - 230)
+        return (x0, 1080 - 360, x0 + 640, 1080)
+
+    def tick(k=1):
+        nonlocal now
+        for _ in range(k):
+            now += 1 / 30.0
+            ar.tick(now)
+            comp.render(now)
+            raw.append(doc_images._v7_frame(surf, (0, 0, 1920, 1080)).convert('RGB'))
+
+    job = ar.forge.start('a', 'weapon', now)
+    while not job.done and len(raw) < 120:
+        tick()
+    n_forge = len(raw)
+    tick(4)
+    hits = 0
+    for mv in ('cross', 'cross_cut'):
+        mv = mv if mv in A.atlas.anim else 'jab'
+        spec = A.atlas.anim[mv]
+        contact = sum(f['ms'] for f in spec['frames'][:spec.get('hit_frame', 2)]) / 1000.0
+        A.play(mv, now, loop=False, hold='idle')
+        t_hit = now + contact
+        for _ in range(int(A.atlas.total_ms(mv) / 1000.0 * 30) + 2):
+            tick()
+            if t_hit is not None and now >= t_hit:
+                hits += 1
+                B.play('hit_high' if 'hit_high' in B.atlas.anim else 'hit', now, loop=False, hold='idle')
+                ar.forge.on_hit_landed('a', now)
+                if hits == 2:                                        # the second hit breaks it
+                    for _ in range(FG.CRACKS_TO_SHATTER - 2):
+                        ar.forge.on_hit_landed('a', now)
+                t_hit = None
+    tick(10)
+    # camera: wide while the piece is cut out of the window, an eased push-in to 2x while it re-forms, 2x after
+    z0, z1 = max(0, n_forge - 22), n_forge - 4
+    out = []
+    for i, fr in enumerate(raw):
+        t = 0.0 if i < z0 else 1.0 if i >= z1 else _ease((i - z0) / (z1 - z0))
+        tb = tight()
+        box = tuple(int(round(wide[j] + (tb[j] - wide[j]) * t)) for j in range(4))
+        out.append(fr.crop(box).resize((W, H), Image.NEAREST if t >= 1.0 else Image.LANCZOS))
+    print(f'act 2: {len(raw)} arena frames at 30 fps (forged after {n_forge}), {hits} hits')
+    return [out[int(round(i * 1.5))] for i in range(int(len(out) / 1.5))]   # 30 -> 20 fps
 
 
-def demo(gif_out=DOCS / 'demo.gif', mp4_out=DOCS / 'demo.mp4', seconds=8.0):
-    frames, meta = _strip_frames()
-    n = int(seconds * FPS)
-    a = _best_window(frames, meta, n)
-    clip = frames[a:a + n]
-    global CROP
-    CROP = _motion_box(clip)
-    print(f'demo: frames {a}..{a + n - 1} of {len(frames)} ({seconds:.0f} s at {FPS} fps)')
+def _label(im, text, sub=None, xy=(28, 24)):
+    d = ImageDraw.Draw(im, 'RGBA')
+    f, fs = font(30, 'black'), font(19, 'bold')
+    w = max(d.textlength(text, font=f), d.textlength(sub, font=fs) if sub else 0)
+    hgt = 50 + (26 if sub else 0)
+    d.rounded_rectangle([xy[0], xy[1], xy[0] + w + 32, xy[1] + hgt], 10, fill=(10, 11, 16, 205))
+    d.text((xy[0] + 16, xy[1] + 6), text, font=f, fill=INK)
+    if sub:
+        d.text((xy[0] + 16, xy[1] + 48), sub, font=fs, fill=DIM)
 
-    # GIF: the 1280-wide strip; one shared palette, no dither (pixel art), 50 ms frames
-    gif = [_compose(f).convert('RGB') for f in clip]
-    pal = Image.new('RGB', (gif[0].width, gif[0].height * 3))
-    for k, i in enumerate((0, len(gif) // 2, len(gif) - 1)):
-        pal.paste(gif[i], (0, k * gif[0].height))
-    pal = pal.quantize(colors=128, method=Image.Quantize.MEDIANCUT)
-    q = [g.quantize(palette=pal, dither=Image.Dither.NONE) for g in gif]
+
+def demo(gif_out=DOCS / 'demo.gif', mp4_out=DOCS / 'demo.mp4'):
+    a1, a2 = _act1(), _act2()
+    for f in a1:
+        _label(f, 'Claude Code vs Codex, on your taskbar', 'they fight from what your agents are really doing')
+    for f in a2:
+        _label(f, 'Arena mode: weapons forged from your desktop', 'demo render on a synthetic desktop')
+    n1 = len(a1)
+    clip = a1[:-XFADE] + [Image.blend(a1[n1 - XFADE + k], a2[k], (k + 1) / (XFADE + 1)) for k in range(XFADE)] + a2[XFADE:]
+    print(f'demo: {len(clip)} frames, {len(clip) / FPS:.2f} s at {FPS} fps')
+
+    # GIF: 1280x720 like the mp4 (a downscale would blend pixel edges into colours the palette lacks), no dither (pixel art). A palette per act, each built from frames spread
+    # over that act: one shared palette for both acts shifted Claude's coat to red.
+    small = clip
+
+    def palette(frames):
+        pal = Image.new('RGB', (W, H * len(frames)))
+        for k, f in enumerate(frames):
+            pal.paste(f, (0, k * H))
+        return pal.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
+    n2 = len(small) - n1
+    p1 = palette(small[0:n1:max(1, n1 // 8)])
+    p2 = palette(small[n1::max(1, n2 // 8)])
+    q = [f.quantize(palette=p1 if i < n1 - XFADE // 2 else p2, dither=Image.Dither.NONE) for i, f in enumerate(small)]
     q[0].save(gif_out, save_all=True, append_images=q[1:], duration=1000 // FPS, loop=0, optimize=True, disposal=1)
-    print(f'wrote {gif_out.relative_to(ROOT)} {gif[0].size} x{len(q)} {gif_out.stat().st_size // 1024} KB')
+    print(f'wrote {gif_out.relative_to(ROOT)} {small[0].size} x{len(q)} {gif_out.stat().st_size // 1024} KB')
 
-    # MP4 for X: 1280x720 with the title, the same stage + scoreboard, and the repo URL
+    # MP4 for X: 1280x720, the same frames plus the repo URL in the corner
     ff = shutil.which('ffmpeg')
     if not ff:
         print('demo.mp4: skipped (ffmpeg not on PATH)')
         return
-    W, Hh = 1280, 720
-    head = Image.new('RGBA', (W, Hh), BG0 + (255,))
-    d = ImageDraw.Draw(head)
-    icon = Image.open(ROOT / 'assets' / 'icon' / 'minis-256.png').convert('RGBA').resize((80, 80), Image.NEAREST)
-    tf, sf, uf = font(64, 'black'), font(30, 'bold'), font(24, 'bold')
-    tw = d.textlength('Taskbar Fighters', font=tf)
-    x0 = int((W - (80 + 20 + tw)) / 2)
-    head.alpha_composite(icon, (x0, 44))
-    d.text((x0 + 100, 38), 'Taskbar Fighters', font=tf, fill=INK)
-    s = 'Your AI agents fight in your taskbar.'
-    d.text(((W - d.textlength(s, font=sf)) / 2, 132), s, font=sf, fill=ACCENT)
-    u = 'github.com/mrktchris/taskbar-fighters'
-    d.text(((W - d.textlength(u, font=uf)) / 2, 600), u, font=uf, fill=DIM)
     with tempfile.TemporaryDirectory() as td:
         for i, f in enumerate(clip):
-            body = _compose(f)
-            fr = head.copy()
-            y0 = 236
-            ImageDraw.Draw(fr).line([(0, y0 - 2), (W, y0 - 2)], fill=(70, 74, 90, 255), width=2)
-            ImageDraw.Draw(fr).line([(0, y0 + body.height + 1), (W, y0 + body.height + 1)], fill=(70, 74, 90, 255), width=2)
-            fr.alpha_composite(body, (0, y0))
-            fr.convert('RGB').save(Path(td) / f'f{i:04d}.png')
+            fr = f.copy()
+            d = ImageDraw.Draw(fr, 'RGBA')
+            u, uf = 'github.com/mrktchris/taskbar-fighters', font(20, 'bold')
+            tw = d.textlength(u, font=uf)
+            d.rounded_rectangle([W - tw - 52, 22, W - 24, 60], 8, fill=(10, 11, 16, 205))
+            d.text((W - tw - 38, 28), u, font=uf, fill=INK)
+            fr.save(Path(td) / f'f{i:04d}.png')
         cmd = [ff, '-y', '-loglevel', 'error', '-framerate', str(FPS), '-i', str(Path(td) / 'f%04d.png'),
                '-vf', 'fps=30', '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p',
                '-movflags', '+faststart', str(mp4_out)]
         subprocess.run(cmd, check=True)
-    print(f'wrote {mp4_out.relative_to(ROOT)} {W}x{Hh} {mp4_out.stat().st_size // 1024} KB')
+    print(f'wrote {mp4_out.relative_to(ROOT)} {W}x{H} {mp4_out.stat().st_size // 1024} KB')
 
 
 def main(argv=None):

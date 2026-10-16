@@ -117,18 +117,22 @@ def save_gif(frames, name, ms=100, colors=96, hold_last=1200):
 
 
 # ======================================================================== the taskbar strip, offline
-def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), names=('Claude Code', 'Codex'), size=128):
+def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), names=('Claude Code', 'Codex'), size=128,
+                         backdrop=None, extra_top=0):
     """Simulated live strip (screen x 0..940, desktop rows + the 48 taskbar rows at the bottom): plates at the left,
     fighters in the fight zone, the scoreboard at the right - the layout minis.py draws, with DEMO numbers from the real
     planner.  `size` = fighter_size (64 | 128): at 128 the fighters are the HD art, the brain runs in a zone halved the
-    way Fighter.logic_zone does it, and the strip is size + 16 rows tall (64 px: the original 64-row strip)."""
+    way Fighter.logic_zone does it, and the strip is size + 16 rows tall (64 px: the original 64-row strip).
+    extra_top adds desktop rows above; backdrop(w, h) -> RGBA image paints those desktop rows (a SYNTHETIC desktop, for
+    packaging/launch_media.py) instead of the flat colour."""
     from minis_core import sim, render, scoreboard as SB
     from minis_core.atlas import Library
     from minis_core.brain import LEFT, RIGHT
     from minis import hd_view
     k = size // 64
     hr = cfgmod.headroom_px(size)                                   # V7.1: room above the cell for airborne fighters
-    H = (64 if k == 1 else size + 16) + hr
+    H = (64 if k == 1 else size + 16) + hr + extra_top
+    sky = backdrop(940, H).convert('RGBA') if backdrop else None
     drop = cfgmod.feet_drop(size)
     hdl = Library(hd=True) if k > 1 else None
     cfg = dict(cfgmod.DEFAULTS)
@@ -152,7 +156,7 @@ def taskbar_strip_frames(seconds=34, fps=10, seed=7, chars=('claude', 'codex'), 
         now = 1000.0 + i / fps
         sim.step(brains, tele, now, bus)
         im = Image.new('RGBA', (940, H), (0, 0, 0, 0))
-        bg = Image.new('RGBA', (940, H), (24, 26, 34, 255))
+        bg = sky.copy() if sky is not None else Image.new('RGBA', (940, H), (24, 26, 34, 255))
         dd = ImageDraw.Draw(bg)
         dd.rectangle([0, H - 48, 940, H - 1], fill=(32, 32, 32, 255))
         dd.line([(0, H - 48), (940, H - 48)], fill=(58, 58, 62, 255))
