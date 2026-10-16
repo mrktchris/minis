@@ -13,7 +13,10 @@ What it does
   NSApplication.run() instead of a blocking Python sleep loop.  SIGTERM / SIGINT stop it cleanly (finally blocks run).
 - The app is an accessory app (no Dock icon, no menu bar of its own); the director shows a menu-bar status item (tray.py).
 - Geometry: the "taskbar" is a strip on top of the Dock (geometry.dock_strip); coordinates are points, top-left origin.
-- Reads window BOUNDS only (CGWindowListCopyWindowInfo): never a window name or owner name; Screen Recording is never needed.
+- Reads window BOUNDS only (CGWindowListCopyWindowInfo): never a window name or owner name.
+- Screen Recording is never REQUESTED.  Arena desktop weapons (minis_core/forge.py) grab the arena's display once into RAM
+  only when CGPreflightScreenCaptureAccess() says the user has already granted it (grab_screen); otherwise they are forged
+  from window shapes.  CGRequestScreenCaptureAccess is never called; `minis.py doctor` explains how to grant it.
 """
 from __future__ import annotations
 import logging, os, signal, time
@@ -344,6 +347,62 @@ def shift_down():
         return bool(NSEvent.modifierFlags() & SHIFT)
     except Exception:
         return False
+
+
+def screen_capture_allowed():
+    """Has the user ALREADY granted Screen Recording?  CGPreflightScreenCaptureAccess only checks: it never shows a prompt.
+    (CGRequestScreenCaptureAccess, which would prompt, is never called anywhere.)"""
+    fn = getattr(Quartz, 'CGPreflightScreenCaptureAccess', None)
+    if fn is None:
+        return False
+    try:
+        return bool(fn())
+    except Exception:
+        return False
+
+
+def grab_screen(rect):
+    """The arena's ONE grab for desktop weapons: the rect (app points, top-left origin) as an RGBA PIL image in RAM, at
+    1 pixel per point, or None.  Only when screen_capture_allowed(): a capture call without the permission can itself make
+    macOS show the prompt, so it is never attempted.  Nothing touches the disk (PIL's ImageGrab would run `screencapture`
+    into a temp file on macOS, so it is not used)."""
+    if not screen_capture_allowed():
+        return None
+    l, t, r, b = [int(v) for v in rect]
+    w, h = r - l, b - t
+    if w <= 0 or h <= 0:
+        return None
+    cg_rect = Quartz.CGRectMake(l, t, w, h)                 # CG global display coordinates: top-left origin, like app points
+    img = None
+    nominal = _k(Quartz, 'kCGWindowImageNominalResolution', 1 << 4)
+    fn = getattr(Quartz, 'CGWindowListCreateImage', None)
+    if fn is not None:
+        try:
+            img = fn(cg_rect, CG_ONSCREEN, CG_NULL_WINDOW, nominal)
+        except Exception:
+            img = None
+    if img is None:
+        try:
+            img = Quartz.CGDisplayCreateImageForRect(Quartz.CGMainDisplayID(), cg_rect)
+        except Exception:
+            img = None
+    if img is None:
+        return None
+    return pil_from_cgimage(img, (w, h))
+
+
+def pil_from_cgimage(img, size=None):
+    """CGImage -> RGBA PIL image (in memory).  Screen grabs are 32-bit BGRA, little-endian, alpha first-premultiplied."""
+    iw, ih = int(Quartz.CGImageGetWidth(img)), int(Quartz.CGImageGetHeight(img))
+    bpr = int(Quartz.CGImageGetBytesPerRow(img))
+    data = Quartz.CGDataProviderCopyData(Quartz.CGImageGetDataProvider(img))
+    raw = bytes(data)
+    del data
+    out = Image.frombuffer('RGBA', (iw, ih), raw, 'raw', 'BGRA', bpr, 1).copy()
+    out.putalpha(255)                                     # the desktop is opaque
+    if size is not None and out.size != tuple(size):
+        out = out.resize(tuple(size), Image.BOX)          # a Retina grab without the nominal flag: back to points
+    return out
 
 
 def find_own_window(class_name='MinisArena'):
