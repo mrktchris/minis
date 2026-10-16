@@ -15,14 +15,16 @@ Claude Code, Codex, Gemini, Cursor, Ollama, LM Studio and more, auto-detected an
 [![Platform](https://img.shields.io/badge/platform-Windows%2011%20%7C%20macOS%20(experimental)-0078d4)](#install-and-run)
 [![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/downloads/)
 
-<img src="https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/demo.gif" alt="Claude Code and Codex fighting on the Windows taskbar: a clash, a beam, a K.O., with the scoreboard underneath" width="820">
+<img src="https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/demo.gif" alt="Claude Code and Codex fighting on the taskbar to a K.O. with the scoreboard beside them, then arena mode: Claude cuts a blade out of a window title bar, swings it and it shatters" width="820">
 
 </div>
 
 - **Auto-detects your AI tools.** Every agent on your computer gets its own armed fighter (13 in all), with no hooks or
   config edits.
 - **Fights from real usage.** They clash while an agent works, hand off when a task finishes, and get K.O.'d at the
-  context limit. Best-of-3 matches, supers, ultimates and hand-directed cinematic set pieces.
+  context limit. Best-of-3 matches, supers, ultimates and hand-directed cinematic set pieces, always locked on to each other.
+- **Arena mode with desktop weapons.** The fight breaks out onto a whole monitor, and fighters cut weapons out of your
+  windows. Visual only: nothing real happens to your windows.
 - **Private by design.** It reads numbers only, never your prompts or files, and makes no network calls.
 
 <div align="center">
@@ -59,8 +61,8 @@ on macOS `~/Library/Application Support/minis`), so stop one before starting ano
 command below is `taskbar-fighters ...`; in the zip it is `TaskbarFighters-cli.exe ...`.
 
 <sub>The command-line tool is `minis.py`; "minis" is the internal short name you will see in commands, folders and the data
-directory. The loop above is rendered offline by the app's own planner and renderer with DEMO numbers
-(`python packaging/launch_media.py`).</sub>
+directory. The loop above is rendered offline by the app's own planner and renderer with DEMO numbers, on a synthetic
+desktop drawn for the picture, never a screen capture (`python packaging/launch_media.py`).</sub>
 
 ## What it does
 
@@ -96,6 +98,11 @@ network.
   procedural fight. Any pairing plays them.
 - **Battles from real usage.** Clash when either program is working, spar or ranged duel when neither is, a handoff when one
   finishes a task, a KO and a consoling visit when one hits its limit, timed best-of-3 matches.
+- **Locked on.** Fighters always face and aim at each other, even right after a dash-through swaps their sides; strikes
+  land from inside their reach and shots fly at the opponent.
+- **Real jumps.** A crouch, the rise, a hang at the apex and a landing (an 8-frame row for every fighter), drawn with
+  headroom above the taskbar so nothing is cut off. HUD plates and the scoreboard keep clear of the fighters at 64, 96
+  and 128 px.
 - **HUD plates.** Program name, state (`working idle done waiting? sleeping limit`), a 10-segment context meter and the context
   %, plus a plan figure with a reset countdown when it can be trusted. Unknown is always `-`.
 - **Scoreboard.** Names and W-L per program, HP bars during a match, a result line ("CLAUDE WINS 2-1"), a 7-day context
@@ -107,8 +114,10 @@ network.
 - **Fighter select.** Pick which program fights on each side, and which character any program wears, from an arcade-style select
   screen, the right-click menu or the CLI.
 - **Arena mode.** The fight breaks out onto a whole monitor: window edges become walls and ledges, glass cracks and shatters,
-  beams clash, the camera punches in, and fighters rip weapons out of your desktop. Visual only - nothing real happens to your
-  windows.
+  beams clash, the camera punches in. Visual only - nothing real happens to your windows.
+- **Desktop weapons.** In the arena, fighters cut pieces out of your windows and forge them into weapons that crack and
+  shatter. The screen picture they are made from stays in memory and is never saved; `forge off` turns it off
+  ([Desktop weapons](#desktop-weapons)).
 - **Windows and macOS.** Windows 11 is the tested home. macOS (fighters on the Dock, a menu-bar icon) is experimental, and its
   test suite runs in CI on every push.
 - **Tray icon and Start-menu shortcut.** Left-click the tray icon for fighter select, right-click for the menu (Restart, Quit);
@@ -207,13 +216,6 @@ all check out. Process-detected programs have no numbers (`ctx -`).
 (never titles or contents) and paints on itself. No real window is moved, resized, focused, closed or typed into; screen shake
 moves only the overlay. The images here are headless renders on a desktop drawn for the picture, not a screen capture.
 
-**Desktop weapons grab your screen into memory.** When an arena starts it takes ONE picture of its monitor into RAM, and
-fighters cut pieces out of that picture to forge weapons. The picture is never written to disk, a log, a temp file or
-`arena.json`, `arena capture` refuses while it is held, and it is dropped when the arena closes. Turn it off before you share
-your screen or record client work: `python minis.py forge off`, or untick **Desktop weapons** in the tray or fighter menu (a
-running arena drops its picture within 2 seconds). On macOS the picture needs the Screen Recording permission, which Taskbar
-Fighters never asks for; without it the weapons are forged from window shapes instead.
-
 ```
 python minis.py arena [--monitor N] [--rounds 1|3|5|endless] [--endless] [--intensity calm|normal|wild]
                       [--seconds S] [--no-intro] [--no-outro] [--freeze]
@@ -232,14 +234,7 @@ it. Flags you leave out fall back to `"arena": {...}` in `minis.json`, then to t
   full-screen frame.
 - **Beam clashes and set pieces.** Two beams meet and push back and forth; sword scenes with elemental trails play 2-4 times a
   match.
-- **Desktop weapons.** A fighter reaches for a window, a glowing outline cuts a piece out of it, the piece lifts off (a dark
-  hole is painted where it was), shatters into pixels and re-assembles as that fighter's weapon: a blade from a title bar, a
-  greatsword or axe from a window chunk, a spear from a taskbar strip, a club, glass shards. It swings, cracks with every hit
-  and shatters into pixel debris. Slabs get thrown, and chunks knocked off windows can be picked up. 2-4 a match (`calm` 1,
-  `wild` 5 or more).
 - **Intensity.** `calm` halves the effects and turns hazards off; `wild` adds more of everything.
-
-![Desktop weapons on a synthetic desktop: the cut, the hole, the pixel morph, the weapon families, a swing, cracks, the shatter, a thrown slab](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-forge.png)
 
 <details><summary>Stage, air, camera, clash, hazards, intro</summary>
 
@@ -256,6 +251,27 @@ it. Flags you leave out fall back to `"arena": {...}` in `minis.json`, then to t
 ![Intro and outro](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-intro.png)
 
 </details>
+
+### Desktop weapons
+
+![Desktop weapons, animated on a synthetic desktop: a glowing outline cuts a title bar out of a window, the piece shatters into pixels and re-forms as a blade in the fighter's hand, it swings, cracks and shatters](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-forge.gif)
+
+A fighter reaches for a window, a glowing outline cuts a piece out of it, the piece lifts off (a dark hole is painted where
+it was), shatters into pixels and re-assembles as that fighter's weapon: a blade from a title bar, a greatsword or axe from a
+window chunk, a spear from a taskbar strip, a club, glass shards. The weapon sits in the fighter's hand on every frame and
+swings with the arm, cracks with every hit and shatters into pixel debris. Slabs get thrown, and chunks knocked off windows
+can be picked up. 2-4 a match (`calm` 1, `wild` 5 or more). Nothing happens to the real windows: the cut, the hole and the
+weapon are paint on the arena's own overlay.
+
+**Privacy: arena mode grabs the screen into memory to forge weapons, and never saves it.** When an arena starts it takes ONE
+picture of its monitor into RAM, and fighters cut pieces out of that picture. The picture is never written to disk, a log, a
+temp file or `arena.json`, `arena capture` refuses while it is held, and it is dropped when the arena closes. **Run
+`python minis.py forge off` before you share your screen** or record anything private, or untick **Desktop weapons** in the
+tray or fighter menu (a running arena drops its picture within 2 seconds). The taskbar fighters never read the screen. On
+macOS the picture needs the Screen Recording permission, which Taskbar Fighters never asks for; without it the weapons are
+forged from window shapes instead.
+
+![Desktop weapons on a synthetic desktop: the cut, the hole, the pixel morph, the weapon families, a swing, cracks, the shatter, a thrown slab](https://raw.githubusercontent.com/mrktchris/taskbar-fighters/master/docs/img/arena-forge.png)
 
 Every option, effect and number: [docs/ARENA.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/ARENA.md).
 
@@ -504,6 +520,9 @@ minis_platform/   picks minis_win or minis_mac at run time (nothing imports a de
 - At the default 128 px a fighter stands well above the 48 px taskbar, over the bottom of the desktop (its window is
   click-through except the sprite); `size 64` keeps it to about 11 px above the taskbar's top edge. Long weapons tilt to fit
   the cell.
+- On macOS, desktop weapons from real pixels (after you grant Screen Recording yourself), the arena's CPU use, the notch
+  badge and the new jumps and lock-on are CI-tested but not yet checked on a real Mac
+  ([docs/MAC-HANDOFF.md](https://github.com/mrktchris/taskbar-fighters/blob/master/docs/MAC-HANDOFF.md) MAC-13..21).
 - The arena does not get the task-finished super boost the taskbar has; its 30 fps target is not met on the author's PC, so it drops
   itself to 20 fps; platforms are only the top edges of windows.
 - Process sources have no numbers, and "working" is a CPU heuristic (the 15% threshold is a first guess).

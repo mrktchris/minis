@@ -2,10 +2,48 @@
 
 Taskbar Fighters (internal short name: minis). Summarised from the git history and the build logs in [RESULT.md](RESULT.md).
 
-## v1.0.0 (unreleased) - V7
+## v1.0.0 - 2026-10-16 (V6 -> V8)
 
-Not tagged yet: desktop-pixel weapon forging in the arena and a jump-animation fix come first. v1.0.0 will be the first
-tagged release: a Windows zip, a wheel on PyPI (`pip install taskbar-fighters`) and an experimental macOS port.
+The first tagged release: a one-click Windows zip, a wheel on PyPI (`pip install taskbar-fighters`) and an experimental,
+CI-verified macOS port (`pip install "taskbar-fighters[mac]"` or `scripts/setup_mac.sh`). Everything since V6 below; V8 and
+V7.1 first.
+
+### V8 - desktop weapons (arena)
+
+- **Weapons forged from real screen pixels** (`minis_core/forge.py`). The arena grabs its monitor ONCE into RAM at start;
+  a fighter reaches for a window, a glowing outline cuts a piece out, a jagged dark hole is painted where it was, the piece
+  lifts, pixel-shatters in an 8-frame morph and re-forms as that fighter's weapon family (blade, greatsword, axe, spear,
+  club, twin blades, shards). It swings with a smear, cracks with every hit and shatters into pixel debris; slabs get thrown
+  and pieces knocked off windows can be picked up. 2-4 a match at `normal`, 1 at `calm`, 5-7 at `wild`, plus one inside the
+  `stance_finisher` set piece.
+- **Held in the hand.** The weapon sits at every drawn frame's grip point (anim.json `grip` / `grip2`, unarmed sheets for
+  the forging fighter), so it swings with the arm frame by frame.
+- **Privacy.** The grab is never written to disk, a log, a temp file or `arena.json`; `ScreenImage` refuses pickling;
+  `arena capture` refuses while pixels are held; `python minis.py forge on|off` and a **Desktop weapons** item in the tray
+  and fighter menus (a running arena drops the grab within 2 s). Without pixels, weapons are forged from window shapes.
+  `tests/test_forge.py` includes a no-sink privacy test over a real `run_arena`.
+- **macOS.** Real pixels only when Screen Recording is already granted (`CGPreflightScreenCaptureAccess`, never requested;
+  `doctor` explains how), shape fallback otherwise; arena window CPU work (128-pt tiles, transparent tiles skipped, a GPU
+  tint layer for flashes); a badge left of the notch when macOS hides the menu-bar icon.
+
+### V7.1 - lock-on, real jumps, HUD clearance
+
+- **Lock-on.** Fighters always face and aim at each other: facing follows the shared timeline instead of the partner's
+  0.2 s-old bus copy, so a dash-through no longer leaves one facing away; strikes land from inside their reach (the strike
+  step-in was a 60 s slide) and both processes stay on the shared plan. Seeded audit: facing away 237 -> 0 frames,
+  out-of-reach contacts 201 -> 0.
+- **Jumps rebuilt** for all 13 fighters: crouch, rise, apex hang, landing, an 8-frame row (neutral jump 600 -> 930 ms),
+  drawn by the engine at 30 fps with jump headroom above the window's cell.
+- **HUD clearance at 128 px.** Plate and scoreboard clearances scale with `fighter_size`; frames reaching over a plate or
+  the scoreboard 91 / 100 / 361 -> 0 at 64 / 96 / 128 px. The doc render's clip band follows the zone.
+- **Fixes.** Confirming a fighter pick no longer silently stops the director; a never-drawn window answers a dump request
+  as hidden.
+- **Own-window capture** (`tools/own_capture.py`): the running processes dump their own frames on request, so the README's
+  live images show whole 128 px fighters, plates and the scoreboard without any screen capture.
+- **Launch media** rebuilt (`packaging/launch_media.py`): the social card from the 128 px art, and an 8 s loop of a taskbar
+  K.O. followed by an arena forge, both on a synthetic desktop.
+
+### V7 - weapon families, set pieces, arena V7, macOS, packaging
 
 - **Every fighter fights like its weapon (V7 art).** Weapon move families (blade, dual, polearm, staff, chain, bow,
   fans / chakram, heavy): 8-10 new attack moves per character, plus shared air slash, spike, throw, dash-through, guard
@@ -51,8 +89,7 @@ tagged release: a Windows zip, a wheel on PyPI (`pip install taskbar-fighters`) 
   (`<data>/<role>.fault`) for silent native crashes.
 - **Docs.** README top block (demo loop, download buttons, install box for the zip, pip and your AI agent), arena, macOS,
   moves and set-piece sections; every image regenerated from the V7 art (`tools/doc_images.py`, the offline taskbar strip now
-  at 128 px); `packaging/launch_media.py` renders the loop from the 128 px strip (the card and loop are rebuilt after the
-  next features); `docs/MAC-HANDOFF.md` for the Mac session; no franchise names anywhere.
+  at 128 px); `docs/MAC-HANDOFF.md` for the Mac session; no franchise names anywhere.
 
 ## V6 - 2026-10-15 (`744d818`)
 

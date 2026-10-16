@@ -73,7 +73,8 @@ of their taskbar, left of the icons.
 Then show them the basics: right-click a fighter for the menu, click a name on the scoreboard to pick fighters,
 `python minis.py demo match` for a bout right now, `python minis.py pause` / `resume`, `python minis.py size 64|96|128` for the
 fighter height (default 128). If they have a second monitor, they can try `python minis.py arena --rounds 1` themselves (visual
-only; ESC ends it).
+only; ESC ends it). Tell them the arena forges weapons from ONE picture of that monitor, held in RAM and never saved, and that
+`python minis.py forge off` (or the menu's *Desktop weapons*) turns that off before they share their screen.
 
 ## 5. Optional - only with the user's yes
 
@@ -83,7 +84,7 @@ only; ESC ends it).
   Desktop). Ask first. Then tell the user to right-click it in Start > **Pin to taskbar** themselves - Windows does not let a
   program pin itself, so do not try. `python minis.py shortcut remove` deletes only the shortcuts it made.
 - **Tray icon** (no action needed): while it runs, an icon sits in the notification area. Left-click opens fighter select;
-  right-click has Pause, Flash effects, Plates, Rival mode, arena, Bout now, Restart and Quit. `"tray_icon": false` in `minis.json`
+  right-click has Pause, Flash effects, Desktop weapons, Plates, Rival mode, arena, Bout now, Restart and Quit. `"tray_icon": false` in `minis.json`
   turns it off.
 - **Restart:** `python minis.py restart` stops everything and starts it again (use it after editing `minis.json`).
 - **Settings:** a `minis.json` next to `minis.py` overrides defaults (see README "Configuration"), e.g. `zone` if the fighters

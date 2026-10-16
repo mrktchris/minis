@@ -1,6 +1,6 @@
 # Packaging and releases
 
-How Taskbar Fighters ships. Checked on 2026-10-15 for v1.0.0 (Windows 11, Python 3.14, PyInstaller 6, setuptools 77+).
+How Taskbar Fighters ships. Checked on 2026-10-16 for v1.0.0 (Windows 11, Python 3.14, PyInstaller 6, setuptools 77+).
 
 ## What ships
 
@@ -93,8 +93,8 @@ pending publisher: project `taskbar-fighters`, repo `mrktchris/taskbar-fighters`
 
 ## Launch media
 
-`python packaging/launch_media.py` rebuilds `docs/social-preview.png` (1280x640, the sprite sheets' idle frames
-nearest-neighbour upscaled to a fixed on-card height, so it follows the art at any cell size), `docs/demo.gif` and `docs/demo.mp4`. The gif and mp4 are an 8 s window of the same
-offline taskbar render `tools/doc_images.py` uses (128 px HD fighters, the default size), at 20 fps, with DEMO numbers,
-chosen as the window with the most motion inside a scripted bout. The mp4 needs ffmpeg. The script
-never captures the screen.
+`python packaging/launch_media.py` rebuilds `docs/social-preview.png` (1280x640: the 128 px HD sheets' idle frames,
+nearest-neighbour upscaled to a fixed on-card height), `docs/demo.gif` and `docs/demo.mp4` (both 1280x720, 7.6 s at
+20 fps). The loop has two offline acts at 2x pixel scale: the taskbar strip `tools/doc_images.py` renders (real planner and
+renderer, DEMO numbers, 128 px fighters) over a synthetic desktop, ending on round 1's K.O., then an arena desktop-weapon
+forge on doc_images' synthetic busy desktop. The mp4 needs ffmpeg. The script never captures the screen.

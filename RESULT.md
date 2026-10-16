@@ -496,3 +496,47 @@ way: every strike step-in was a 60 000 ms slide (`int(max(60, seconds) * 1000)`)
 - The arena still picks jump frames by number (ledge hang 3, climb 4/5): after the rebuild 3 is the rising pose, 4 the apex,
   6 the landing. Arena files are the arena agent's; told.
 - macOS: MAC-17..20 in docs/MAC-HANDOFF.md (window headroom, zone/clip, own-window dump, lock-on look).
+
+## V8 / v1.0.0 release prep (2026-10-16): desktop weapons, launch media, release checks
+
+V8 itself landed as `39ef5ce` (forge), `a5fcb70` (macOS preflight, arena CPU, notch badge), `e5446f2` and `151064f` (docs),
+`703b980` (the weapon held at every frame's grip); V7.1 is the section above. This pass (Claude, the only writer on the repo)
+prepared the release; the tag is the owner's.
+
+### Built
+
+- **Desktop weapons (V8, summary).** The arena grabs its monitor ONCE into RAM (`minis_core/forge.py` `ScreenImage`, never
+  pickled, never on disk); a fighter cuts a piece out of a window, a hole is painted, the piece morphs into the fighter's
+  weapon family, sits at every frame's grip, cracks per hit and shatters. `minis.py forge on|off` and a **Desktop weapons**
+  menu item; shape fallback without pixels (macOS without Screen Recording, which is preflighted, never requested).
+- **Launch media** (`packaging/launch_media.py`): the card now draws the 128 px HD idle frames; the loop is two offline acts
+  at 2x pixel scale in 1280x720: the taskbar strip (real planner + renderer, DEMO numbers) over a synthetic desktop, from
+  66 frames before round 1's K.O. to 20 after, then an arena forge on doc_images' synthetic busy desktop (cut, lift, morph,
+  an eased push-in to 2x, two hits on the opponent, the shatter). `tools/doc_images.taskbar_strip_frames` takes an optional
+  `backdrop` / `extra_top` for that. The gif gets one palette per act (a shared palette turned Claude's coat red) and is
+  not downscaled (a downscale blended pixel edges into colours the palette lacked).
+- **Docs:** README (lock-on, real jumps, a Desktop weapons subsection with `arena-forge.gif` and the privacy line, macOS
+  known limits), CHANGELOG v1.0.0 dated 2026-10-16, `docs/release-notes/v1.0.0.md`, LAUNCH.md (checklist, tweet drafts),
+  PACKAGING.md, llms.txt, AGENTS.md (`forge off`).
+- **Small fixes:** the `forge off` hints in `doctor` and `arena capture` name the program as started
+  (`taskbar-fighters`, `TaskbarFighters-cli.exe`) instead of always `python minis.py`; the release workflow's PyPI job runs
+  only on a pushed `v*` tag, as its comment already said (a manual re-run no longer tries to upload).
+
+### Verified
+
+| claim | evidence |
+| --- | --- |
+| suite | `python -m unittest discover -s tests`: 631 OK, 14 skipped (Windows, Python 3.14) |
+| franchise names | the `git grep` from the launch checklist over the tree: empty |
+| launch media | `docs/social-preview.png` 1280x640, `docs/demo.gif` 1280x720 7.6 s ~2.1 MB, `docs/demo.mp4` 1280x720 7.6 s; every one viewed (a tile of the mp4 at 4 fps, gif frames from both acts, the card); synthetic desktops only, no screen capture |
+| wheel + sdist | `python -m build` in a fresh venv: `taskbar_fighters-1.0.0-py3-none-any.whl` (51 MB, 265 files, art under `taskbar_fighters_assets/`, the only top-level module `minis.py`) and the sdist; `twine check`: PASSED for both |
+| installed wheel | from another folder: `taskbar-fighters --help`, `doctor --headless` PASS 5/5, `fighters` lists the 13 characters, `paths.bundle_root()` = `site-packages/taskbar_fighters_assets` |
+| Windows bundle | PyInstaller onedir in that venv, run from another folder: `TaskbarFighters-cli.exe --help`, `detect`, `doctor --headless` PASS 5/5 (its hint now names the exe), `fighters` 13 characters, and the release job's `grep -q "barbarian, claude, codex"` matches |
+| release workflow | `pyproject.toml` version 1.0.0; the notes step reads `docs/release-notes/v1.0.0.md` (present); the release attaches `artifacts/windows/*.zip`, `artifacts/macos/*.zip`, `artifacts/python/dist/*` (wheel + sdist) and `artifacts/python/*.zip` (source zip); the `pypi` job uses environment `pypi`, `id-token: write` and `pypa/gh-action-pypi-publish` (trusted publishing). Its build steps were repeated locally: the version-matches-tag check on the built dist, `git archive` source zip and the macOS source zip |
+
+### Not done / not verified
+
+- Not tagged and not released: the owner tags after review.
+- `start` from the Windows bundle (the owner's live copy was running; both share the data folder) - LAUNCH.md has the check.
+- macOS: MAC-5, MAC-8 and MAC-13..21 in `docs/MAC-HANDOFF.md` are still OPEN (real-Mac checks of the V7.1 and V8 work).
+- The wheel is 51 MB (36 MB of it the HD sheets); under PyPI's 100 MB default file limit.
